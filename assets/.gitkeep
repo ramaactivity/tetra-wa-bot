@@ -1,0 +1,2 @@
+# Taruh file pricelist di sini, mis. pricelist.jpg atau pricelist.pdf
+# Lalu isi field `file` di rule pricelist (config.js), contoh: file: 'assets/pricelist.jpg'
