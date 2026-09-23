@@ -217,7 +217,7 @@ async function startBot() {
     live.start(60000); // refresh bot_settings/rules/paused tiap 60 dtk
     startCommandPoller();
     reminder.start(() => currentSock); // pengingat lead belum dibales ke admin
-    followup.start(() => currentSock); // follow-up AI ke lead yang diam 1–7 hari
+    followup.start(() => (isConnected ? currentSock : null)); // jangan kirim saat link belum sehat // follow-up AI ke lead yang diam 1–7 hari
     // Heartbeat: bukti proses bot hidup → dashboard bisa deteksi "bot mati"
     // (kalau bot_status.updated_at basi > beberapa menit = proses mati/VPS down).
     // Field `connection` (open/close/logged_out) tetap menandai status link WA.

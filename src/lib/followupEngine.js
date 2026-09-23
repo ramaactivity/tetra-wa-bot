@@ -26,6 +26,20 @@ const LOOKBACK_MS = 14 * 24 * 3600 * 1000;   // cuma cek lead 2 minggu terakhir
 const RESEND_AFTER_MS = 7 * 24 * 3600 * 1000; // jangan follow-up ulang dalam 7 hari
 const TICK_MS = 6 * 3600 * 1000;             // cek tiap 6 jam
 
+// Pagar anti-blokir. WhatsApp menandai nomor yang mengirim pesan keluar beruntun
+// ke banyak kontak sekaligus, apalagi di luar jam wajar. Follow-up itu pesan
+// yang TIDAK diminta pelanggan, jadi pagarnya harus lebih ketat dari balasan biasa.
+const MAKS_PER_SIKLUS = 10;                  // sisanya menunggu siklus berikutnya
+const JEDA_MIN_MS = 20000;                   // jeda acak 20-45 dtk antar kiriman
+const JEDA_MAKS_MS = 45000;
+const live = require('./liveConfig');
+
+function dalamJamKerja() {
+  const cfg = live.get();
+  const jam = new Date(Date.now() + (cfg.TIMEZONE_OFFSET || 7) * 3600 * 1000).getUTCHours();
+  return jam >= (cfg.BUSINESS_START_HOUR ?? 8) && jam < Math.min(cfg.BUSINESS_END_HOUR ?? 20, 21);
+}
+
 // Nama kontak WA sering ngawur ("F", "rama", "Teman Rama", "test-pdf").
 // Hanya pakai nama kalau benar-benar mirip nama orang; selain itu panggil "Kak".
 function cleanName(raw) {
@@ -104,7 +118,16 @@ async function runFollowupCycle(sock) {
   const now = Date.now();
   let sent = 0;
 
+  if (!dalamJamKerja()) {
+    console.log('[followup] di luar jam kerja — siklus dilewati.');
+    return;
+  }
+
   for (const jid of Object.keys(byJid)) {
+    if (sent >= MAKS_PER_SIKLUS) {
+      console.log(`[followup] batas ${MAKS_PER_SIKLUS} pesan/siklus tercapai — sisanya siklus berikutnya.`);
+      break;
+    }
     const msgs = byJid[jid].sort((a, b) => a._t - b._t);
     const last = msgs[msgs.length - 1];
     const age = now - last._t;
@@ -133,6 +156,9 @@ async function runFollowupCycle(sock) {
     if (!msg || typeof msg !== 'string' || msg.includes('[ADMIN_HANDOFF]')) continue;
 
     try {
+      if (sent > 0) {
+        await new Promise((r) => setTimeout(r, JEDA_MIN_MS + Math.random() * (JEDA_MAKS_MS - JEDA_MIN_MS)));
+      }
       const sentMsg = await sock.sendMessage(jid, { text: msg });
       rememberBotMsg(sentMsg);
       deliveryLog.track(sentMsg, 'followup→customer');
