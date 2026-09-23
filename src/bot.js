@@ -241,7 +241,11 @@ async function startBot() {
     // (kalau bot_status.updated_at basi > beberapa menit = proses mati/VPS down).
     // Field `connection` (open/close/logged_out) tetap menandai status link WA.
     const hb = setInterval(() => {
-      supa.updateStatus({}); // best-effort: cuma bump updated_at
+      // Selain bump updated_at, TEGASKAN ULANG status sebenarnya. Ada instance lain
+      // (kode lama, di luar VPS ini) yang menulis logged_out ke baris yang sama tiap
+      // beberapa detik (terbukti 23 Sep 12:33). Dengan ini, dashboard Tetra Ops paling
+      // lama salah 90 detik, bukan selamanya.
+      supa.updateStatus(isConnected ? { connection: 'open' } : {});
     }, 90000);
     // PENTING: interval ini HARUS tetap "ref" (jangan di-unref). Kalau socket
     // WA tertutup — mis. saat belum terdaftar (menunggu pairing) atau setelah
