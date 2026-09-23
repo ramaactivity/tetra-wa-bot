@@ -28,7 +28,21 @@ function enabled() {
 // params: { date:'YYYY-MM-DD', start:'HH:mm', end:'HH:mm', city?:string }
 // return: objek response Tetra Ops (units_free, available, conflicts,
 //         buffer_applied_minutes, assumptions, ...) ATAU null kalau gagal/OFF.
-async function checkAvailability({ date, start, end, city } = {}) {
+// Model sering mengecek tanggal yang sama berkali-kali dalam satu percakapan
+// (23 Sep: 7x untuk satu tanggal dalam 8 menit). Simpan hasil 5 menit.
+const cache = new Map(); // key -> { ts, data }
+const CACHE_MS = 5 * 60 * 1000;
+
+async function checkAvailability(params = {}) {
+  const key = JSON.stringify([params.date, params.start, params.end, params.city || '']);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_MS) return hit.data;
+  const data = await checkAvailabilityRaw(params);
+  if (data) cache.set(key, { ts: Date.now(), data });
+  return data;
+}
+
+async function checkAvailabilityRaw({ date, start, end, city } = {}) {
   if (!token()) return null; // belum dikonfigurasi → diam (mode admin-confirm)
   if (!date || !start || !end) return null; // param kurang → jangan panggil
 

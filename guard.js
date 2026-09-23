@@ -52,6 +52,7 @@ const RESTART_COOLDOWN_MS = 120000; // maks 1 restart per 2 menit
 const HEARTBEAT_STALE_MS = 240000;  // bot bump updated_at tiap 90 dtk; 4 menit = 2x luput
 const RECONNECT_LOOP_MIN = 8;       // "Koneksi putus" sebanyak ini tanpa 1 pun "tersambung"
 const LOOP_RESTART_COOLDOWN_MS = 600000; // maks 1 restart-bersih per 10 menit untuk loop
+const OFFLINE_RESTART_MS = 300000;       // link WA tidak 'open' 5 menit = restart bersih
 const BADMAC_ALERT_MIN = 20;        // Bad MAC sebanyak ini di 400 baris terakhir = lonjakan
 const ALERT_COOLDOWN_MS = 1800000;  // alert berulang untuk kondisi yang sama: 30 menit
 const REMINDER_MS = 3600000;        // pengingat pairing: 1 jam
@@ -272,6 +273,29 @@ async function tick() {
   if (db && db.connection === 'open') {
     if (state.logoutRestarts || state.authCleared) {
       state.logoutRestarts = 0; state.authCleared = 0; saveState(state);
+    }
+  }
+
+  // 1b. Link WA tidak 'open' terus-menerus (proses hidup, kunci terdaftar, bukan 401,
+  //     bukan 440): reconnect internal bot ternyata tidak jalan -> restart bersih,
+  //     maks 1x per 10 menit. Lahir dari 23 Sep 2026 15:44: bot diam 3+ jam karena
+  //     kode 500 dianggap perlu pairing ulang, dan guard hanya mengirim alert.
+  if (db && !unregistered) {
+    if (db.connection === 'open') {
+      if (state.offlineSince) { state.offlineSince = 0; saveState(state); }
+    } else {
+      if (!state.offlineSince) { state.offlineSince = t; saveState(state); }
+      const lama = t - state.offlineSince;
+      const ada401 = outLines.some((l) => l.includes('di-unlink (401'));
+      const ada440 = outLines.some((l) => l.includes('DIGANTIKAN instance lain (440)'));
+      if (lama > OFFLINE_RESTART_MS && !ada401 && !ada440 &&
+          t - (state.lastOfflineRestart || 0) > LOOP_RESTART_COOLDOWN_MS) {
+        log(`Link WA '${db.connection}' selama ${Math.round(lama / 60000)} menit — restart bersih.`);
+        await restartBersih();
+        state.lastOfflineRestart = t; state.lastRestart = t; saveState(state);
+        await tgAlert(`🔌 *Tetra Guard* — link WhatsApp bot \`${db.connection}\` selama ${Math.round(lama / 60000)} menit (kunci masih terdaftar, bukan 401). Saya restart bersih supaya menyambung lagi.`);
+        return;
+      }
     }
   }
 

@@ -1,5 +1,7 @@
 // Pengiriman balasan dengan perilaku human-like (mitigasi ban + natural):
-// tandai read → delay acak 2–5 dtk → presence "composing" ~1 dtk → kirim.
+// jeda 1–3 dtk → tandai read → "mengetik" sepanjang balasannya (±40 ms per
+// karakter, 2–12 dtk) → kirim. Penundaan utama (menunggu klien selesai mengetik)
+// ada di handlers/messages.js; di sini hanya ritme membaca & mengetik.
 // Mendukung lampiran file (gambar / dokumen) dari folder assets/.
 const fs = require('fs');
 const path = require('path');
@@ -13,10 +15,11 @@ const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 // Mengembalikan objek pesan terkirim (untuk diingat di botSentIds).
 async function sendReply(sock, jid, msgKey, rule, replyText) {
   // --- human-like ---
-  await sock.readMessages([msgKey]);
-  await delay(2000 + Math.floor(Math.random() * 3000));
+  await delay(1000 + Math.floor(Math.random() * 2000));
+  await sock.readMessages([].concat(msgKey));
   await sock.sendPresenceUpdate('composing', jid);
-  await delay(1000);
+  await delay(Math.min(12000, 2000 + String(replyText || '').length * 40));
+  await sock.sendPresenceUpdate('paused', jid);
 
   // --- kirim balasan (teks / file) ---
   const filePath = rule.file ? path.join(__dirname, '..', '..', rule.file) : null;

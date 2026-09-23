@@ -67,7 +67,7 @@ function buildLeadContext(fullText) {
   const lines = [`Persona: ${smart.segmentLabel(seg.segment)}`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
-  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — gali satu per satu, jangan sekaligus.`);
+  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
   else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
   return lines.join('\n');
 }
@@ -85,38 +85,64 @@ function fullUserText(jid, originalText) {
 // Kirim handoff: jawab klien singkat + notif admin + pause bot ke kontak ini.
 async function handoff(sock, msg, alasan, jawabanKlien) {
   const jid = msg.key.remoteJid;
-  await sock.readMessages([msg.key]);
   await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
   await notifyAdmin(sock, phoneDigits(msg), { name: 'HANDOFF' }, getRiwayat(jid), alasan);
   await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
 }
 
+// ── Penundaan balasan (debounce per kontak) ──────────────────────────────────
+// Klien WhatsApp mengetik terpecah: "Untuk hari Minggu" / "Lokasi di kebun su" /
+// "Bogor". Membalas tiap bubble = tiga balasan dengan konteks sepotong-sepotong
+// (23 Sep 2026: 8 balasan dalam 2 menit ke satu klien). Sekarang bubble dikumpulkan
+// dulu; timer mulai ulang tiap bubble baru; kalau klien masih terlihat mengetik,
+// tunggu lagi. Semua bubble digabung jadi SATU giliran user → SATU balasan utuh.
+const TUNGGU_MS = () => (Number(process.env.REPLY_DELAY_SECONDS) || 25) * 1000;
+const MASIH_NGETIK_MS = 10000;  // presence "composing" lebih baru dari ini = masih ngetik
+const TUNGGU_MAKS_MS = 120000;  // batas total menunggu, apa pun yang terjadi
+const PESAN_TERLAMA_MS = 12 * 3600 * 1000; // pesan yang masuk selagi bot offline tetap dibalas (maks 12 jam)
+const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
+const ngetik = new Map();       // jid -> ts terakhir terlihat mengetik
+const sudahSubscribe = new Set();
+
 function registerMessageHandler(sock) {
-  const startedAt = Math.floor(Date.now() / 1000);
+  // Pesan keluar dari perangkat lain (admin bales manual dari HP) → bot diam.
+  const handleFromMe = async (msg) => {
+    const jid = msg.key.remoteJid;
+    if (botSentIds.has(msg.key.id)) {
+      botSentIds.delete(msg.key.id);
+    } else if (!jid.endsWith('@g.us') && jid !== 'status@broadcast') {
+      // Admin bales manual → bot diam 24 jam (PAUSE_HOURS), BUKAN 7 hari.
+      // 7 hari terlalu lama: pelanggan yang chat lagi 2-3 hari kemudian jadi
+      // dibisukan padahal admin belum tentu sempat balas.
+      const adminPauseMs = (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
+      await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
+      // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
+      const q = antrian.get(jid);
+      if (q) { clearTimeout(q.timer); antrian.delete(jid); }
+    }
+  };
 
-  const handleMessage = async (msg) => {
+  // Kalau riwayat kosong (pertama kali / sudah lama), isi dari pesan masuk yang
+  // tersimpan di Supabase. Klien yang isi form website minggu lalu tidak boleh
+  // ditanya ulang jenis/tanggal/lokasi acaranya.
+  const pastikanRiwayat = async (jid) => {
+    if (getRiwayat(jid).length) return;
+    const lama = await supa.fetchLeadMessages(jid, new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString());
+    for (const r of lama) {
+      const tgl = new Date(r.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      tambahRiwayat(jid, 'user', `(pesan ${tgl}) ${r.message}`);
+    }
+    if (lama.length) console.log(`[riwayat] ${jid.split('@')[0]}: ${lama.length} pesan lama dimuat dari database`);
+  };
+
+  // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
+  const handleBatch = async (msgs) => {
     try {
-      if (!msg.message) return;
+      const msg = msgs[msgs.length - 1];
       const jid = msg.key.remoteJid;
-      if (!jid) return;
+      const keys = msgs.map((m) => m.key);
 
-      const ts = Number(msg.messageTimestamp) || 0;
-      if (ts && ts < startedAt) return;
-
-      if (msg.key.fromMe) {
-        if (botSentIds.has(msg.key.id)) {
-          botSentIds.delete(msg.key.id);
-        } else if (!jid.endsWith('@g.us') && jid !== 'status@broadcast') {
-          // Admin bales manual → bot diam 24 jam (PAUSE_HOURS), BUKAN 7 hari.
-          // 7 hari terlalu lama: pelanggan yang chat lagi 2-3 hari kemudian jadi
-          // dibisukan padahal admin belum tentu sempat balas.
-          const adminPauseMs = (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
-          await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
-        }
-        return;
-      }
-
-      // Periksa status pause dari Supabase
+      // Periksa status pause dari Supabase (admin bisa saja membalas selagi kita menunggu)
       const pausedContacts = await supa.fetchPausedContacts();
       const alasanDiam = !live.isEnabled()
         ? 'bot dimatikan di bot_settings.enabled'
@@ -129,27 +155,34 @@ function registerMessageHandler(sock) {
         : null;
       if (alasanDiam) return;
 
-      const originalText = extractText(msg.message);
+      const originalText = msgs.map((m) => extractText(m.message)).filter(Boolean).join('\n');
       if (!originalText) return;
 
-      // [Auto-database logging] — topik/segmen/kategori/lokasi/tanggal acara
-      const createdIso = new Date((ts || Math.floor(Date.now() / 1000)) * 1000).toISOString();
-      const leadData = {
-        wa_jid: jid,
-        phone: phoneDigits(msg),
-        name: msg.pushName || "Klien",
-        topic: classifyTopik(originalText),
-        message: originalText,
-      };
-      const enriched = enrich({ ...leadData, created_at: createdIso });
-      await supa.insertLead({
-        ...leadData,
-        segment: enriched.segmen,
-        category: enriched.kategori,
-        location: enriched.lokasi,
-        event_date: enriched.tanggal_acara || null,
-      });
-      await syncToSheet(enriched);
+      await pastikanRiwayat(jid);
+
+      // [Auto-database logging] — tiap bubble tetap dicatat sendiri-sendiri
+      for (const m of msgs) {
+        const ts = Number(m.messageTimestamp) || 0;
+        const teks = extractText(m.message);
+        if (!teks) continue;
+        const createdIso = new Date((ts || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+        const leadData = {
+          wa_jid: jid,
+          phone: phoneDigits(m),
+          name: m.pushName || 'Klien',
+          topic: classifyTopik(teks),
+          message: teks,
+        };
+        const enriched = enrich({ ...leadData, created_at: createdIso });
+        await supa.insertLead({
+          ...leadData,
+          segment: enriched.segmen,
+          category: enriched.kategori,
+          location: enriched.lokasi,
+          event_date: enriched.tanggal_acara || null,
+        });
+        await syncToSheet(enriched);
+      }
 
       const t = originalText.toLowerCase();
       const fullText = fullUserText(jid, originalText);
@@ -176,16 +209,15 @@ function registerMessageHandler(sock) {
       }
 
       // Command Admin: /stats
-      if (originalText.toLowerCase() === '/stats' && phoneDigits(msg) === '5352849332') {
+      if (t === '/stats' && phoneDigits(msg) === '5352849332') {
         const stats = execSync('node /home/ubuntu/tetra-wa-bot/stats.js').toString();
-        await sendReply(sock, jid, msg.key, { name: 'stats' }, stats);
+        await sendReply(sock, jid, keys, { name: 'stats' }, stats);
         return;
       }
 
       // ── 4. Pricelist / form website → gate kualifikasi ──
       const isForm = smart.isWebsiteForm(originalText);
       if (mintaPricelist(originalText) || isForm) {
-        await sock.readMessages([msg.key]);
         const det = smart.parseLeadDetails(fullText);
         const seg = smart.detectSegment(fullText);
 
@@ -194,7 +226,7 @@ function registerMessageHandler(sock) {
           const reply = smart.buildB2BReply(seg.segment, det, seg.orgName, false);
           tambahRiwayat(jid, 'user', originalText);
           tambahRiwayat(jid, 'assistant', reply);
-          await sendReply(sock, jid, msg.key, { name: 'b2b' }, reply);
+          await sendReply(sock, jid, keys, { name: 'b2b' }, reply);
           return;
         }
 
@@ -206,7 +238,7 @@ function registerMessageHandler(sock) {
           const ai = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
           tambahRiwayat(jid, 'user', originalText);
           tambahRiwayat(jid, 'assistant', ai);
-          await sendReply(sock, jid, msg.key, { name: 'ai-reply' }, ai);
+          await sendReply(sock, jid, keys, { name: 'ai-reply' }, ai);
           return;
         }
 
@@ -214,34 +246,81 @@ function registerMessageHandler(sock) {
         const gate = smart.buildGateReply(det, missing);
         tambahRiwayat(jid, 'user', originalText);
         tambahRiwayat(jid, 'assistant', gate.intro + '\n\n' + gate.form);
-        await sendReply(sock, jid, msg.key, { name: 'gate' }, gate.intro);
-        await sendReply(sock, jid, msg.key, { name: 'gate-form' }, gate.form);
+        await sendReply(sock, jid, keys, { name: 'gate' }, gate.intro + '\n\n' + gate.form);
         return;
       }
 
       // ── 5. Default → AI dengan konteks lead ──
       const aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
 
-      if (aiResponse.includes("[ADMIN_HANDOFF]")) {
-        await notifyAdmin(sock, phoneDigits(msg), { name: 'ADMIN_HANDOFF' }, getRiwayat(jid), "Handoff diminta oleh AI");
-        await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
+      if (aiResponse.includes('[ADMIN_HANDOFF]')) {
+        // Klien tidak boleh ditinggal diam: satu kalimat, lalu admin yang lanjut.
+        tambahRiwayat(jid, 'user', originalText);
+        await handoff(sock, msg, 'Handoff diminta oleh AI',
+          'Untuk yang ini aku sambungkan ke admin ya Kak, biar dijawab langsung sama yang pegang datanya. Ditunggu sebentar 🙏');
         return;
       }
 
       tambahRiwayat(jid, 'user', originalText);
       tambahRiwayat(jid, 'assistant', aiResponse);
-      await sendReply(sock, jid, msg.key, { name: 'ai-reply', file: '' }, aiResponse);
+      await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
 
     } catch (err) {
       console.error('Error memproses pesan:', err.message);
     }
   };
 
+  const jadwalkan = (jid, ms) => {
+    const q = antrian.get(jid);
+    if (!q) return;
+    clearTimeout(q.timer);
+    q.timer = setTimeout(() => flush(jid), ms);
+  };
+
+  const flush = (jid) => {
+    const q = antrian.get(jid);
+    if (!q) return;
+    const masihNgetik = Date.now() - (ngetik.get(jid) || 0) < MASIH_NGETIK_MS;
+    if (masihNgetik && Date.now() - q.mulai < TUNGGU_MAKS_MS) {
+      jadwalkan(jid, MASIH_NGETIK_MS);
+      return;
+    }
+    antrian.delete(jid);
+    ngetik.delete(jid);
+    console.log(`[tunggu] ${jid.split('@')[0]}: ${q.msgs.length} bubble digabung setelah ${Math.round((Date.now() - q.mulai) / 1000)} dtk`);
+    runSerial(jid, () => handleBatch(q.msgs));
+  };
+
+  // Presence klien: "composing" = masih mengetik → jangan dulu balas;
+  // "paused" = berhenti mengetik → boleh balas lebih cepat.
+  sock.ev.on('presence.update', ({ id, presences }) => {
+    if (!antrian.has(id)) return;
+    for (const p of Object.values(presences || {})) {
+      const s = p && p.lastKnownPresence;
+      if (s === 'composing' || s === 'recording') ngetik.set(id, Date.now());
+      else if (s === 'paused') { ngetik.delete(id); jadwalkan(id, 4000); }
+    }
+  });
+
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
     for (const msg of messages) {
       const jid = msg.key?.remoteJid;
-      if (jid) await runSerial(jid, () => handleMessage(msg));
+      if (!jid || !msg.message) continue;
+      if (msg.key.fromMe) { runSerial(jid, () => handleFromMe(msg)); continue; }
+      if (jid === 'status@broadcast' || jid.endsWith('@g.us')) continue;
+      const ts = Number(msg.messageTimestamp) || 0;
+      if (ts && Date.now() - ts * 1000 > PESAN_TERLAMA_MS) continue;
+      if (!extractText(msg.message)) continue;
+
+      if (!sudahSubscribe.has(jid)) {
+        sudahSubscribe.add(jid);
+        sock.presenceSubscribe(jid).catch(() => {});
+      }
+      const q = antrian.get(jid) || { msgs: [], timer: null, mulai: Date.now() };
+      q.msgs.push(msg);
+      antrian.set(jid, q);
+      jadwalkan(jid, TUNGGU_MS());
     }
   });
 }

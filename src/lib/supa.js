@@ -144,6 +144,26 @@ async function fetchRecentLeads(sinceIso) {
 // Map { wa_jid -> updated_at_ms }: kapan admin TERAKHIR balas manual / pegang
 // kontak (bot_paused_contacts di-upsert tiap admin balas manual). Dipakai untuk
 // menentukan lead mana yang belum ditindaklanjuti admin.
+// Semua pesan masuk satu kontak sejak sinceIso (kronologis). Untuk mengisi ulang
+// ingatan bot saat riwayat lokal kosong.
+async function fetchLeadMessages(waJid, sinceIso) {
+  if (!supa) return [];
+  try {
+    const { data, error } = await supa
+      .from('whatsapp_bot_leads')
+      .select('message, created_at')
+      .eq('wa_jid', waJid)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: true })
+      .limit(40);
+    if (error) { console.error('[supa] fetchLeadMessages:', error.message); return []; }
+    return data || [];
+  } catch (e) {
+    console.error('[supa] fetchLeadMessages:', e.message);
+    return [];
+  }
+}
+
 async function fetchAdminReplyTimes() {
   if (!supa) return {};
   try {
@@ -342,6 +362,7 @@ async function hapusPause(waJid) {
 }
 
 module.exports = {
+  fetchLeadMessages,
   enabled,
   insertLead,
   fetchSettings,

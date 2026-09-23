@@ -58,8 +58,9 @@ const riwayat = loadJson(RIWAYAT_FILE); // jid -> { ts, pesan: [{role, content}]
 // yang baru datang: bot menyebut tanggal, pelanggan menjawab jamnya, lalu bot
 // bertanya tanggal lagi. Disimpan ke berkas supaya restart tidak menghapus
 // percakapan yang sedang berjalan.
-const RIWAYAT_MAKS = 12; // 6 giliran bolak-balik; cukup untuk satu alur tanya-booking
-const RIWAYAT_TTL_MS = 6 * 3600 * 1000; // percakapan dianggap baru setelah 6 jam diam
+const RIWAYAT_MAKS = 40; // ±20 giliran; klien yang nanya-nanya panjang tetap teringat
+const RIWAYAT_TTL_MS = 7 * 24 * 3600 * 1000; // 7 hari diam baru dianggap percakapan baru
+// (lebih lama dari itu, handlers/messages.js memuat ulang pesan masuk dari Supabase)
 
 function getRiwayat(jid) {
   const r = riwayat[jid];

@@ -194,10 +194,13 @@ async function startBot() {
         supa.updateStatus({ connection: 'close' });
         return;
       }
+      // 500 (badSession, mis. "Stream Errored (ack)") SENGAJA tidak ada di daftar ini:
+      // 23 Sep 2026 15:44 bot berhenti menyambung karena 500 dan diam 3+ jam, padahal
+      // kunci masih terdaftar. Kalau session memang rusak, WhatsApp akan menjawab 401
+      // saat reconnect dan itu ditangani di atas.
       if (
         code === DisconnectReason.forbidden ||
-        code === DisconnectReason.multideviceMismatch ||
-        code === DisconnectReason.badSession
+        code === DisconnectReason.multideviceMismatch
       ) {
         console.error(`⛔ Koneksi ditolak WhatsApp (${code}: ${alasan}). Tidak menyambung ulang — perlu pairing baru: node pairing.js`);
         supa.updateStatus({ connection: 'logged_out', qr: null });

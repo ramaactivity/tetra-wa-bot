@@ -6,7 +6,8 @@ const { exec } = require('child_process');
 const { toRow } = require('./enrichLead');
 
 const ROW_FILE = '/tmp/tetra_sheet_row.json';
-const APPEND_CMD = 'python3 /home/ubuntu/tetra-wa-bot/sheet_append.py';
+// python3 sistem tidak punya modul google; venv ini punya (dan tidak ditimpa `hermes update`).
+const APPEND_CMD = '/home/ubuntu/.venv_xlsx/bin/python3 /home/ubuntu/tetra-wa-bot/sheet_append.py';
 
 function syncToSheet(enriched) {
   try {
