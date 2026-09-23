@@ -71,6 +71,17 @@ function scheduleReconnect(delayOverride) {
 // satunya jalan yang aman adalah pairing ulang (node pairing.js).
 
 async function startBot() {
+  // Kunci belum-terdaftar yang sudah pernah dipakai meminta kode pairing, kalau
+  // dipakai lagi, ditolak WhatsApp: 401 "Connection Failure" {reason:401,location:rva}
+  // dalam 1-3 detik (23 Sep 2026: 71x berturut-turut). Karena kunci belum-terdaftar
+  // tidak menyimpan apa pun yang berharga, mulai saja selalu dari kunci baru.
+  try {
+    const creds = JSON.parse(fs.readFileSync(path.join(AUTH_DIR, 'creds.json'), 'utf8'));
+    if (creds.registered === false) {
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+      console.log('🔑 Kunci belum-terdaftar dibuang — pairing selalu dari kunci baru.');
+    }
+  } catch (_) { /* belum ada auth_info: memang baru */ }
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -198,6 +209,14 @@ async function startBot() {
         try { sock.end(undefined); } catch (_) { /* sudah tertutup */ }
         reconnectAttempts = 0;
         scheduleReconnect(1000);
+        return;
+      }
+      if (!sock.authState?.creds?.registered) {
+        // Belum terdaftar dan kode tidak dimasukkan sampai kedaluwarsa. Jangan
+        // memancing kode baru sendiri -- itu loop 5-menit versi lama. Pairing adalah
+        // tindakan manusia: node pairing.js.
+        console.log('⏸️  Kode pairing kedaluwarsa tanpa dimasukkan. Bot menunggu; jalankan: node pairing.js');
+        supa.updateStatus({ connection: 'close' });
         return;
       }
       // 408 timeout / 428 closed / 503 unavailable / tanpa kode: gangguan jaringan biasa.
