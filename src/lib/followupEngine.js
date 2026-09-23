@@ -32,7 +32,6 @@ const TICK_MS = 6 * 3600 * 1000;             // cek tiap 6 jam
 const MAKS_PER_SIKLUS = 10;                  // sisanya menunggu siklus berikutnya
 const JEDA_MIN_MS = 20000;                   // jeda acak 20-45 dtk antar kiriman
 const JEDA_MAKS_MS = 45000;
-const live = require('./liveConfig');
 
 function dalamJamKerja() {
   const cfg = live.get();
