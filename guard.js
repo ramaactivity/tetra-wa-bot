@@ -139,6 +139,27 @@ function tailLines(file, n) {
 }
 const countIn = (lines, needle) => lines.reduce((c, l) => c + (l.includes(needle) ? 1 : 0), 0);
 
+// Baris log yang BARU sejak tick sebelumnya (berdasarkan ukuran berkas). Untuk
+// sinyal yang menandai kejadian (Bad MAC, 440), jangan hitung ulang baris lama:
+// versi sebelumnya mengulang alarm 63 Bad MAC tiap 30 menit padahal semuanya sisa
+// badai jam 11:08. Rotasi log (ukuran mengecil) = mulai dari awal berkas.
+function bacaBarisBaru(file, state, key) {
+  try {
+    const ukuran = fs.statSync(file).size;
+    const sebelum = state[key] || 0;
+    const mulai = ukuran >= sebelum ? sebelum : 0;
+    state[key] = ukuran;
+    if (ukuran === mulai) return [];
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(ukuran - mulai);
+    fs.readSync(fd, buf, 0, buf.length, mulai);
+    fs.closeSync(fd);
+    return buf.toString('utf8').split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // Bunuh index.js yang TIDAK dikelola PM2: dua socket di satu session = Bad MAC.
 function killStrayInstances(pm2Pid) {
   try {
@@ -219,16 +240,19 @@ async function tick() {
   // 5. Lonjakan Bad MAC: JANGAN bertindak otomatis. Penyebab hampir selalu session
   //    ganda atau session yang dipulihkan dari salinan lama; restart/restore justru
   //    memperparah. Beri tahu manusia, sebut apa yang harus dicek.
-  const badMac = countIn(errLines, 'Bad MAC');
+  const errBaru = bacaBarisBaru(ERR_LOG, state, 'errLogOffset');
+  const outBaru = bacaBarisBaru(OUT_LOG, state, 'outLogOffset');
+  saveState(state);
+  const badMac = countIn(errBaru, 'Bad MAC');
   if (badMac >= BADMAC_ALERT_MIN) {
     await alertSekali(state, 'badmac', ALERT_COOLDOWN_MS,
-      `🧨 *Tetra Guard* — ${badMac} error *Bad MAC* di log terakhir.\n` +
+      `🧨 *Tetra Guard* — ${badMac} error *Bad MAC* BARU dalam 30 detik terakhir.\n` +
       `Ini tanda session Signal tidak sinkron. Penyebab umum: ada instance lain memakai session yang sama, ` +
       `atau auth\\_info pernah disalin/dipulihkan. Guard TIDAK bertindak otomatis — cek \`pgrep -af tetra-wa-bot\` di server.`);
   }
 
   // 6. 440 = session diambil alih instance lain
-  if (countIn(outLines, 'DIGANTIKAN instance lain (440)') > 0) {
+  if (countIn(outBaru, 'DIGANTIKAN instance lain (440)') > 0) {
     await alertSekali(state, 'replaced', ALERT_COOLDOWN_MS,
       `⛔ *Tetra Guard* — WhatsApp melapor session bot *dipakai instance lain* (440). Bot sengaja berhenti menyambung agar tidak berebut. ` +
       `Matikan instance yang satunya (VPS lama? proses liar?) lalu \`pm2 restart tetra-bot\`.`);
