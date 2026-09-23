@@ -18,8 +18,9 @@
 //   0. Instance index.js liar di luar PM2        -> bunuh (akar Bad MAC)
 //   1. tetra-bot tidak `online` di PM2           -> start
 //   2. Heartbeat bot_status.updated_at basi      -> proses macet -> restart
-//   3. Link 401 logged_out (masih terdaftar)     -> 1x restart konfirmasi, lalu
-//                                                   bersihkan auth 1x, lalu MINTA MANUSIA
+//   3. Status logged_out di DB                   -> dipercaya HANYA kalau log bot
+//                                                   mengonfirmasi 401; alert saja, tanpa
+//                                                   restart, tanpa menyentuh auth
 //   3b. Belum terdaftar (menunggu pairing)       -> beri tahu 1x + ingatkan tiap jam
 //   4. Loop putus-sambung tanpa pernah tersambung-> 1x restart bersih per 10 menit
 //   5. Lonjakan "Bad MAC" di log                 -> alert saja (jangan bertindak)
@@ -262,27 +263,33 @@ async function tick() {
     }
   }
 
-  // 3. 401 logged_out padahal masih terdaftar: WhatsApp mencabut device.
-  //    Satu restart untuk memastikan bukan sinyal palsu; kalau tetap, bersihkan
-  //    auth SEKALI supaya bot masuk mode pairing, lalu serahkan ke manusia.
+  // 3. Status 'logged_out' di bot_status. PELAJARAN 23 Sep 12:26: kolom ini bisa
+  //    ditulis proses lain (webapp Tetra Ops, agent lain), dan guard versi sebelumnya
+  //    mempercayainya lalu MENGHAPUS auth_info bot yang sedang sehat. Sekarang:
+  //    - guard TIDAK PERNAH menghapus auth_info. Pairing adalah keputusan manusia
+  //      (tombol "Tautkan ulang WhatsApp" di Mission Control / node pairing.js).
+  //    - 'logged_out' hanya dipercaya kalau LOG BOT SENDIRI mengonfirmasi: ada baris
+  //      401/ditolak yang muncul SETELAH baris "tersambung" terakhir.
+  //    - kalau DB bilang logged_out tapi log bilang tersambung -> ada penulis lain;
+  //      beri tahu manusia, jangan bertindak.
   if (db && db.connection === 'logged_out') {
-    if ((state.logoutRestarts || 0) < 1) {
-      if (t - (state.lastRestart || 0) > RESTART_COOLDOWN_MS) {
-        log('logged_out — 1x restart untuk konfirmasi.');
-        await restartBersih();
-        state.logoutRestarts = 1; state.lastRestart = t; saveState(state);
-      }
-      return;
-    }
-    if (!state.authCleared) {
-      log('logged_out tetap setelah restart — bersihkan auth_info, masuk mode pairing.');
-      pm2(['stop', 'tetra-bot']);
-      await new Promise((r) => setTimeout(r, 4000));
-      try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch (e) { console.error('[guard] hapus auth_info:', e.message); }
-      pm2(['start', 'tetra-bot']);
-      state.authCleared = t; state.lastRestart = t; state.alert_pairing = 0; saveState(state);
-      await tgAlert(`📵 *Tetra Guard* — WhatsApp *mencabut* device bot Tetra (logged out) dan restart tidak menolong. ` +
-        `Session lama saya bersihkan; bot sekarang menunggu pairing baru.\n\n${PETUNJUK_PAIRING}`);
+    let idxSambung = -1, idxUnlink = -1;
+    outLines.forEach((l, k) => {
+      if (l.includes('Bot tersambung')) idxSambung = k;
+      if (l.includes('di-unlink (401') || l.includes('ditolak WhatsApp')) idxUnlink = k;
+    });
+    const terkonfirmasi = idxUnlink > idxSambung;
+    if (terkonfirmasi) {
+      await alertSekali(state, 'logout401', REMINDER_MS,
+        `📵 *Tetra Guard* — WhatsApp *mencabut* device bot Tetra (401, terkonfirmasi di log). ` +
+        `Restart tidak akan menolong dan guard tidak menyentuh session.\n\n` +
+        `Tautkan ulang lewat Mission Control → Channels → *Tautkan ulang WhatsApp* (centang "putus & tautkan ulang"), ` +
+        `atau di server: \`node pairing.js --paksa\`.`);
+    } else {
+      await alertSekali(state, 'logout_palsu', ALERT_COOLDOWN_MS,
+        `⚠️ *Tetra Guard* — \`bot_status.connection\` bertuliskan *logged_out*, tapi log bot menunjukkan masih tersambung. ` +
+        `Ada proses lain yang menulis status itu (webapp Tetra Ops? agent lain?). Guard TIDAK bertindak. ` +
+        `Kalau chat pelanggan memang tidak terbalas, cek Mission Control → Channels.`);
     }
     return;
   }
@@ -303,7 +310,7 @@ async function tick() {
 }
 
 async function main() {
-  log('Tetra Guard aktif — memantau tetra-bot tiap 30 dtk. Tidak pernah menyentuh auth_info kecuali membersihkan setelah 401.');
+  log('Tetra Guard aktif — memantau tetra-bot tiap 30 dtk. Tidak pernah menyentuh auth_info.');
   await tick().catch((e) => console.error('[guard] tick error:', e.message));
   setInterval(() => tick().catch((e) => console.error('[guard] tick error:', e.message)), LOOP_MS);
 }
