@@ -34,6 +34,7 @@ const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 // logout/akses socket terbaru meski startBot dipanggil ulang saat reconnect.
 let currentSock = null;
 let pollerStarted = false;
+let shuttingDown = false;
 let isConnected = false; // true hanya saat link WA 'open' → dipakai gating healthcheck ping
 let reconnectTimer = null; // debounce reconnect — cegah dua socket hidup bersamaan
 let reconnectAttempts = 0; // backoff eksponensial saat koneksi putus
@@ -51,10 +52,10 @@ function hcPing() {
 }
 
 // Backoff eksponensial: 2s → 4s → 8s → ... (maks 30s). Reset saat berhasil open.
-function scheduleReconnect() {
-  if (reconnectTimer) return; // sudah dijadwalkan
+function scheduleReconnect(delayOverride) {
+  if (reconnectTimer || shuttingDown) return; // sudah dijadwalkan / sedang berhenti
   reconnectAttempts += 1;
-  const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts - 1));
+  const delay = delayOverride || Math.min(60000, 2000 * Math.pow(2, reconnectAttempts - 1));
   console.log(`[reconnect] coba lagi dalam ${(delay / 1000).toFixed(0)} dtk (percobaan ke-${reconnectAttempts})`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -63,21 +64,11 @@ function scheduleReconnect() {
   if (reconnectTimer.unref) reconnectTimer.unref();
 }
 
-// Snapshot session sehat — kalau auth_info rusak, bisa restore tanpa relink.
-function backupAuthInfo() {
-  try {
-    const backupDir = path.join(__dirname, '..', 'auth_info.healthy');
-    setTimeout(() => {
-      try {
-        fs.rmSync(backupDir, { recursive: true, force: true });
-        fs.cpSync(AUTH_DIR, backupDir, { recursive: true });
-        console.log('💾 Snapshot session sehat → auth_info.healthy');
-      } catch (e) {
-        console.error('[backup] gagal:', e.message);
-      }
-    }, 10000); // tunggu creds settle setelah open
-  } catch (_) { /* abaikan */ }
-}
+// TIDAK ADA snapshot/restore auth_info. Session Signal harus hanya ditulis oleh
+// Baileys sendiri. Menyalin lalu memulihkannya membuat session lokal lebih tua dari
+// yang dipegang WhatsApp -> "Bad MAC" / "MessageCounterError" beruntun -> device
+// dicabut (401). Itu persis kejadian 23 Sep 2026 11:08. Kalau session rusak, satu-
+// satunya jalan yang aman adalah pairing ulang (node pairing.js).
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -86,6 +77,11 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
+    // Jangan sinkron riwayat penuh saat connect: itu ribuan pesan lama yang harus
+    // didekripsi sekaligus -- sumber Bad MAC di awal koneksi, dan tidak dibutuhkan bot.
+    syncFullHistory: false,
+    // Jangan tandai 'online' otomatis: notifikasi tetap masuk ke HP Tetra.
+    markOnlineOnConnect: false,
     logger: pino({ level: 'silent' }), // ganti ke 'info' kalau mau debug
     // Pairing lewat kode HANYA diterima kalau identitas browser-nya dikenal WhatsApp.
     // Nama kustom ('Tetra Bot') membuat WhatsApp menolak dengan "Couldn't link device",
@@ -162,7 +158,6 @@ async function startBot() {
         last_connected_at: new Date().toISOString(),
       });
       hcPing(); // ping pertama langsung saat tersambung
-      backupAuthInfo(); // simpan snapshot session sehat buat pemulihan cepat
     }
 
     if (connection === 'close') {
@@ -171,20 +166,45 @@ async function startBot() {
         lastDisconnect?.error instanceof Boom
           ? lastDisconnect.error.output.statusCode
           : null;
+      const alasan = (lastDisconnect?.error && lastDisconnect.error.message) || '';
+
       if (code === DisconnectReason.loggedOut) {
-        console.log(
-          '❌ Device di-unlink. Hapus folder auth_info lalu start ulang untuk scan QR baru.'
-        );
+        // 401: WhatsApp sendiri yang mencabut device. Restart tidak akan menolong.
+        const detail = lastDisconnect?.error?.data ? JSON.stringify(lastDisconnect.error.data).slice(0, 300) : '';
+        console.log(`❌ Device di-unlink (401${alasan ? ': ' + alasan : ''}). Tidak menyambung ulang — perlu pairing baru: node pairing.js`);
+        if (detail) console.log('   detail 401:', detail);
         supa.updateStatus({ connection: 'logged_out', qr: null });
-      } else {
-        console.log('🔄 Koneksi putus, menyambung ulang...');
-        supa.updateStatus({ connection: 'close' });
-        // Matikan socket lama, lalu jadwalkan ulang DENGAN backoff. Jangan panggil
-        // startBot() langsung — itu bikin beberapa socket hidup bersamaan dan
-        // memperebutkan file auth_info (akar "Bad MAC" yang memaksa relink).
-        try { sock.end(undefined); } catch (_) { /* sudah tertutup */ }
-        scheduleReconnect();
+        return;
       }
+      if (code === DisconnectReason.connectionReplaced) {
+        // 440: ada instance LAIN yang memakai session ini. Menyambung ulang berarti
+        // berebut session dan berujung Bad MAC. Diam, biar yang satunya dimatikan.
+        console.error('⛔ Koneksi DIGANTIKAN instance lain (440). Bot berhenti menyambung. Cari proses ganda: pgrep -af tetra-wa-bot');
+        supa.updateStatus({ connection: 'close' });
+        return;
+      }
+      if (
+        code === DisconnectReason.forbidden ||
+        code === DisconnectReason.multideviceMismatch ||
+        code === DisconnectReason.badSession
+      ) {
+        console.error(`⛔ Koneksi ditolak WhatsApp (${code}: ${alasan}). Tidak menyambung ulang — perlu pairing baru: node pairing.js`);
+        supa.updateStatus({ connection: 'logged_out', qr: null });
+        return;
+      }
+      if (code === DisconnectReason.restartRequired) {
+        // 515: normal tepat setelah pairing berhasil — WhatsApp minta socket dibuka ulang.
+        console.log('🔄 WhatsApp minta socket dibuka ulang (515) — menyambung segera.');
+        try { sock.end(undefined); } catch (_) { /* sudah tertutup */ }
+        reconnectAttempts = 0;
+        scheduleReconnect(1000);
+        return;
+      }
+      // 408 timeout / 428 closed / 503 unavailable / tanpa kode: gangguan jaringan biasa.
+      console.log(`🔄 Koneksi putus (${code ?? 'tanpa kode'}${alasan ? ': ' + alasan : ''}), menyambung ulang dengan backoff...`);
+      supa.updateStatus({ connection: 'close' });
+      try { sock.end(undefined); } catch (_) { /* sudah tertutup */ }
+      scheduleReconnect();
     }
   });
 
@@ -324,3 +344,16 @@ function startCommandPoller() {
 }
 
 module.exports = { startBot };
+
+// Shutdown rapi saat pm2 stop/restart: tutup socket dulu supaya penulisan berkas
+// auth_info selesai, baru keluar. Proses yang dibunuh mendadak di tengah tulis =
+// session korup = Bad MAC saat hidup lagi. pm2 memberi 5 detik (kill_timeout).
+function shutdown(sig) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`⏹️  ${sig} diterima — menutup socket dengan rapi...`);
+  try { if (currentSock) currentSock.end(undefined); } catch (_) { /* sudah tertutup */ }
+  setTimeout(() => process.exit(0), 1500).unref();
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
