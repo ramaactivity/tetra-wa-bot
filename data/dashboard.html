@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      color: var(--foreground);
+      font-family: inherit;
+      margin: 0;
+      padding: 12px;
+      background: transparent;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 16px;
+      color: var(--accent);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      background: rgba(0,0,0,0.03);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .stat-num {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted-foreground);
+    }
+    ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 13px;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📊 Statistik Leads Tetra Photobooth</h2>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-num">430</div>
+        <div class="stat-label">Total Leads / Chat</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">113</div>
+        <div class="stat-label">Event Wedding</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">62</div>
+        <div class="stat-label">Area Bogor (Top)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">214</div>
+        <div class="stat-label">Request Pricelist</div>
+      </div>
+    </div>
+
+    <h2>📍 Top Lokasi Venue</h2>
+    <ul>
+      <li>Bogor: 62 leads</li>
+      <li>Jakarta: 13 leads</li>
+      <li>Depok: 9 leads</li>
+      <li>Sentul: 4 leads</li>
+      <li>Bekasi: 2 leads</li>
+    </ul>
+
+    <h2 style="margin-top: 12px;">🎉 Kategori Acara</h2>
+    <ul>
+      <li>Wedding / Pernikahan: 113 leads</li>
+      <li>Gathering / Outing: 8 leads</li>
+      <li>Acara Kampus / Universitas: 6 leads</li>
+      <li>Acara Sekolah: 5 leads</li>
+      <li>Corporate / Kantor: 5 leads</li>
+    </ul>
+  </div>
+</body>
+</html>

@@ -23,24 +23,31 @@ async function sendReply(sock, jid, msgKey, rule, replyText) {
   let sent;
 
   if (filePath && fs.existsSync(filePath)) {
-    const ext = path.extname(filePath).toLowerCase();
-    if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-      sent = await sock.sendMessage(jid, { image: { url: filePath }, caption: replyText });
-    } else {
-      sent = await sock.sendMessage(jid, {
-        document: { url: filePath },
-        fileName: path.basename(filePath),
-        mimetype: ext === '.pdf' ? 'application/pdf' : 'application/octet-stream',
-        caption: replyText,
-      });
-    }
+    sent = await sendDocument(sock, jid, filePath, replyText);
   } else {
     sent = await sock.sendMessage(jid, { text: replyText });
   }
 
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'balasan→customer', { toLead: true }); // pantau + tulis status ke lead
+  console.log(`[reply] → ${String(jid).split('@')[0]}: ${String(replyText).slice(0, 160).replace(/\n/g, ' | ')}`);
   return sent;
 }
 
-module.exports = { sendReply, delay };
+// Kirim satu berkas (gambar atau dokumen) ke jid. Dipakai oleh sendReply dan oleh
+// perintah `send-pdf:` di command poller, supaya aturan mimetype/caption cuma ada
+// di satu tempat.
+async function sendDocument(sock, jid, filePath, caption) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+    return sock.sendMessage(jid, { image: { url: filePath }, caption });
+  }
+  return sock.sendMessage(jid, {
+    document: { url: filePath },
+    fileName: path.basename(filePath),
+    mimetype: ext === '.pdf' ? 'application/pdf' : 'application/octet-stream',
+    caption,
+  });
+}
+
+module.exports = { sendReply, sendDocument, delay };

@@ -158,7 +158,7 @@ Kalau udah ada gambaran acaranya (jenis acara / tanggal / kota venue), info aja 
   PAUSE_HOURS: 24, // setelah admin bales manual, bot diam ke kontak itu sekian jam
 
   // ====== NOTIF LEAD KE ADMIN ======
-  ADMIN_NOTIFY_JID: '6289611384767@s.whatsapp.net', // notif lead ke WA admin. Kosong = matikan notif.
+  ADMIN_NOTIFY_JID: '5352849332@s.whatsapp.net', // notif lead ke WA admin. Kosong = matikan notif.
 
   // ====== JAM KERJA (WIB / UTC+7) ======
   BUSINESS_START_HOUR: 6,

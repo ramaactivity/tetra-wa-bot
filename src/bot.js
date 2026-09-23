@@ -10,16 +10,21 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  Browsers,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const path = require('path');
+const fs = require('fs');
 
 const { registerMessageHandler } = require('./handlers/messages');
+const { sendDocument, delay } = require('./lib/sender');
+const { kirimPricelist } = require('./lib/pricelist');
 const { getSentMessage, rememberBotMsg } = require('./lib/botMessages');
 const deliveryLog = require('./lib/deliveryLog');
 const reminder = require('./lib/reminder');
+const followup = require('./lib/followupEngine');
 const supa = require('./lib/supa');
 const live = require('./lib/liveConfig');
 
@@ -30,6 +35,8 @@ const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 let currentSock = null;
 let pollerStarted = false;
 let isConnected = false; // true hanya saat link WA 'open' → dipakai gating healthcheck ping
+let reconnectTimer = null; // debounce reconnect — cegah dua socket hidup bersamaan
+let reconnectAttempts = 0; // backoff eksponensial saat koneksi putus
 
 // Dead-man's switch: lapor "hidup" ke healthchecks.io (alert email/Telegram kalau berhenti).
 // Best-effort; cuma jalan kalau HEALTHCHECK_URL diset di .env.
@@ -43,6 +50,35 @@ function hcPing() {
   }
 }
 
+// Backoff eksponensial: 2s → 4s → 8s → ... (maks 30s). Reset saat berhasil open.
+function scheduleReconnect() {
+  if (reconnectTimer) return; // sudah dijadwalkan
+  reconnectAttempts += 1;
+  const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts - 1));
+  console.log(`[reconnect] coba lagi dalam ${(delay / 1000).toFixed(0)} dtk (percobaan ke-${reconnectAttempts})`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startBot().catch((e) => console.error('[reconnect] gagal:', e.message));
+  }, delay);
+  if (reconnectTimer.unref) reconnectTimer.unref();
+}
+
+// Snapshot session sehat — kalau auth_info rusak, bisa restore tanpa relink.
+function backupAuthInfo() {
+  try {
+    const backupDir = path.join(__dirname, '..', 'auth_info.healthy');
+    setTimeout(() => {
+      try {
+        fs.rmSync(backupDir, { recursive: true, force: true });
+        fs.cpSync(AUTH_DIR, backupDir, { recursive: true });
+        console.log('💾 Snapshot session sehat → auth_info.healthy');
+      } catch (e) {
+        console.error('[backup] gagal:', e.message);
+      }
+    }, 10000); // tunggu creds settle setelah open
+  } catch (_) { /* abaikan */ }
+}
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -51,7 +87,12 @@ async function startBot() {
     version,
     auth: state,
     logger: pino({ level: 'silent' }), // ganti ke 'info' kalau mau debug
-    browser: ['Tetra Bot', 'Chrome', '1.0.0'],
+    // Pairing lewat kode HANYA diterima kalau identitas browser-nya dikenal WhatsApp.
+    // Nama kustom ('Tetra Bot') membuat WhatsApp menolak dengan "Couldn't link device",
+    // padahal nama yang sama tidak masalah untuk jalur QR.
+    browser: process.env.PAIR_NUMBER
+      ? Browsers.ubuntu('Chrome')
+      : ['Tetra Bot', 'Chrome', '1.0.0'],
     // Layani retry-receipt: kalau device penerima gagal decrypt, ia minta kirim
     // ulang & Baileys ambil isi pesan asli dari sini untuk re-encrypt. Tanpa ini
     // pesan nyangkut "Waiting for this message" selamanya di sisi penerima.
@@ -61,14 +102,47 @@ async function startBot() {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Pairing lewat KODE, alternatif scan QR. QR di log server praktis tidak bisa discan:
+  // blok ASCII-nya terpotong lebar baris dan Baileys menggantinya tiap ~20 detik.
+  // Isi PAIR_NUMBER di .env (nomor WA HP Tetra, format 62xxx, tanpa + dan tanpa spasi).
+  const pairNumber = String(process.env.PAIR_NUMBER || '').replace(/\D/g, '');
+  if (pairNumber && !state.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(pairNumber);
+        const pretty = String(code).match(/.{1,4}/g).join('-');
+        console.log([
+          '',
+          '==================================================',
+          '  KODE PAIRING WHATSAPP: ' + pretty,
+          '==================================================',
+          '  Di HP Tetra: WhatsApp > Setelan > Perangkat Tertaut',
+          '  > Tautkan Perangkat > "Tautkan dengan nomor telepon"',
+          '  lalu ketik kode di atas. Berlaku sekitar 60 detik.',
+          '',
+        ].join('\n'));
+        fs.writeFileSync(
+          path.join(__dirname, '..', 'PAIRING-CODE.txt'),
+          pretty + '\n' + new Date().toISOString() + '\n'
+        );
+      } catch (e) {
+        console.log('Gagal meminta kode pairing:', (e && e.message) || e);
+      }
+    }, 2000);
+  }
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log(
-        '\n📷 Scan QR ini dari WhatsApp HP Tetra (Setelan → Perangkat Tertaut → Tautkan Perangkat):\n'
-      );
-      qrcode.generate(qr, { small: true });
+      // Mode kode pairing aktif -> QR sengaja tidak dicetak. QR di log server tidak
+      // bisa discan (terpotong lebar baris) dan hanya membuat log sulit dibaca.
+      if (!process.env.PAIR_NUMBER) {
+        console.log(
+          '\n📷 Scan QR ini dari WhatsApp HP Tetra (Setelan → Perangkat Tertaut → Tautkan Perangkat):\n'
+        );
+        qrcode.generate(qr, { small: true });
+      }
       // Publish QR string ke dashboard supaya bisa discan dari web.
       supa.updateStatus({ connection: 'connecting', qr });
     }
@@ -80,6 +154,7 @@ async function startBot() {
 
     if (connection === 'open') {
       isConnected = true;
+      reconnectAttempts = 0; // reset backoff — koneksi sehat
       console.log('✅ Bot tersambung & siap. Menunggu pesan masuk...');
       supa.updateStatus({
         connection: 'open',
@@ -87,6 +162,7 @@ async function startBot() {
         last_connected_at: new Date().toISOString(),
       });
       hcPing(); // ping pertama langsung saat tersambung
+      backupAuthInfo(); // simpan snapshot session sehat buat pemulihan cepat
     }
 
     if (connection === 'close') {
@@ -103,7 +179,11 @@ async function startBot() {
       } else {
         console.log('🔄 Koneksi putus, menyambung ulang...');
         supa.updateStatus({ connection: 'close' });
-        startBot();
+        // Matikan socket lama, lalu jadwalkan ulang DENGAN backoff. Jangan panggil
+        // startBot() langsung — itu bikin beberapa socket hidup bersamaan dan
+        // memperebutkan file auth_info (akar "Bad MAC" yang memaksa relink).
+        try { sock.end(undefined); } catch (_) { /* sudah tertutup */ }
+        scheduleReconnect();
       }
     }
   });
@@ -117,13 +197,20 @@ async function startBot() {
     live.start(60000); // refresh bot_settings/rules/paused tiap 60 dtk
     startCommandPoller();
     reminder.start(() => currentSock); // pengingat lead belum dibales ke admin
+    followup.start(() => currentSock); // follow-up AI ke lead yang diam 1–7 hari
     // Heartbeat: bukti proses bot hidup → dashboard bisa deteksi "bot mati"
     // (kalau bot_status.updated_at basi > beberapa menit = proses mati/VPS down).
     // Field `connection` (open/close/logged_out) tetap menandai status link WA.
     const hb = setInterval(() => {
       supa.updateStatus({}); // best-effort: cuma bump updated_at
     }, 90000);
-    if (hb.unref) hb.unref();
+    // PENTING: interval ini HARUS tetap "ref" (jangan di-unref). Kalau socket
+    // WA tertutup — mis. saat belum terdaftar (menunggu pairing) atau setelah
+    // logged out — tidak ada handle aktif lain (semua timer lain di-unref),
+    // sehingga event loop kosong dan proses keluar sendiri dengan kode 0.
+    // PM2 lalu restart, dan bot crash-loop tiap ~8 detik: pairing code berganti
+    // terus, mustahil dimasukkan. Satu interval ref'd ini menjaga proses tetap
+    // hidup & stabil (PM2 tetap jadi lapis restart kalau benar-benar crash).
 
     // Dead-man's switch: ping healthchecks.io tiap 60 dtk HANYA saat link WA sehat.
     // Bot mati / logout / VPS down → ping berhenti → healthchecks kirim alert email/Telegram.
@@ -140,6 +227,16 @@ async function startBot() {
 //  - reconnect / restart : exit proses; pm2 menyalakan ulang (auto-reconnect /
 //    munculkan QR kalau perlu pairing).
 //  - logout              : unlink device (sock.logout) → butuh scan QR ulang.
+// -- Berkas & kalimat untuk perintah send-pdf -------------------------------
+// Urutan kirim: GAMBAR dulu (harga langsung kebaca tanpa membuka lampiran),
+// lalu PDF untuk yang mau lihat lengkapnya. Ubah kalimatnya di sini. Semua
+// berkas wajib berada di dalam folder assets/.
+const GAMBAR_RINGKAS = 'UNLIMITED PHOTOBOOTH.jpg';
+const CAPTION_GAMBAR = 'Ini paket unlimited cetak ya kak, harganya sudah all-in.';
+
+const DEFAULT_PDF = 'PRICELIST TETRA PHOTOBOOTH.pdf';
+const CAPTION_PDF = 'Kalau mau cek lengkapnya, ada di pricelist ini kak.';
+
 function startCommandPoller() {
   const POLL_MS = 10000;
   const tick = async () => {
@@ -176,6 +273,42 @@ function startCommandPoller() {
             deliveryLog.track(sent, 'test-notify→admin'); // pantau sampai/dibaca
             await supa.markCommand(c.id, 'done', `terkirim id=${sent?.key?.id || '?'}`);
             console.log(`🧪 test-notify terkirim ke ${adminJid} (id=${sent?.key?.id})`);
+          }
+        } else if (c.command.startsWith('hand-back:')) {
+          // Format: hand-back:<nomor>
+          const [, rawNumber] = c.command.split(':');
+          const number = String(rawNumber || '').replace(/\D/g, '');
+          const jid = `${number}@s.whatsapp.net`;
+          await supa.hapusPause(jid);
+          await supa.markCommand(c.id, 'done', `Handoff dilepas untuk ${number}`);
+          console.log(`✅ Handoff dilepas untuk ${number}, AI aktif kembali.`);
+        } else if (c.command.startsWith('send-pdf:')) {
+          // Format: send-pdf:<nomor>[:<berkas di dalam assets/>]
+          //   send-pdf:6281234567890
+          //   send-pdf:6281234567890:PRICELIST TETRA PHOTOBOOTH.pdf
+          const [, rawNumber, rawFile] = c.command.split(':');
+          const number = String(rawNumber || '').replace(/\D/g, '');
+          const fileName = (rawFile || DEFAULT_PDF).trim();
+
+          // Batas kepercayaan: baris di bot_commands bisa disisipkan siapa pun yang
+          // punya akses Supabase. Nomor wajib masuk akal, dan berkas WAJIB berada di
+          // dalam assets/ — tanpa ini `../.env` ikut terkirim ke nomor asing.
+          const assetsDir = path.join(__dirname, '..', 'assets');
+          const filePath = path.resolve(assetsDir, fileName);
+
+          if (number.length < 8 || number.length > 15) {
+            await supa.markCommand(c.id, 'error', `Nomor tidak wajar: "${rawNumber}"`);
+          } else if (!filePath.startsWith(assetsDir + path.sep)) {
+            await supa.markCommand(c.id, 'error', 'Berkas harus berada di dalam assets/');
+          } else if (!fs.existsSync(filePath)) {
+            await supa.markCommand(c.id, 'error', `Berkas tidak ada: ${fileName}`);
+          } else if (!currentSock || !isConnected) {
+            await supa.markCommand(c.id, 'error', 'socket belum siap');
+          } else {
+            const jid = `${number}@s.whatsapp.net`;
+            const { idGambar, idPdf } = await kirimPricelist(currentSock, jid, 'send-pdf');
+            console.log(`Pricelist terkirim ke ${number} (gambar=${idGambar} pdf=${idPdf})`);
+            await supa.markCommand(c.id, 'done', `terkirim ke ${number} gambar=${idGambar} pdf=${idPdf}`);
           }
         } else {
           await supa.markCommand(c.id, 'error', `Perintah tak dikenal: ${c.command}`);

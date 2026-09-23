@@ -158,9 +158,9 @@ function parseLeadDetails(originalText) {
   let tanggal = null;
   let lokasi = null;
   if (isForm) {
-    jenisAcara = fieldFromForm(text, /jenis\s*acara[^:•\n]*[:•]\s*([^\n]*)/i);
-    tanggal = fieldFromForm(text, /tanggal[^:•\n]*[:•]\s*([^\n]*)/i);
-    lokasi = fieldFromForm(text, /lokasi[^:•\n]*[:•]\s*([^\n]*)/i);
+    jenisAcara = fieldFromForm(text, /jenis\s*acara[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
+    tanggal = fieldFromForm(text, /tanggal[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
+    lokasi = fieldFromForm(text, /lokasi[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
   }
   if (!jenisAcara) jenisAcara = detectEvent(text);
   if (!lokasi) lokasi = detectCity(text);
@@ -330,7 +330,8 @@ function detectSegment(originalText) {
   }
   // Sekolah (institusi sekolah) + panitia/sponsorship generik (default ke sekolah)
   if (
-    /\b(smp|sma|smk|smpn|sman|smkn|mts|man|min|madrasah|sekolah|siswa|guru|kepala\s*sekolah|pramuka|ambalan|pensi|pentas\s*seni|class\s*?meeting|porseni|scoutition|jambore)\b/i.test(t) ||
+    /\b(smp|sma|smk|smpn|sman|smkn|mts|man|madrasah|sekolah|siswa|guru|kepala\s*sekolah|pramuka|ambalan|pensi|pentas\s*seni|class\s*?meeting|porseni|scoutition|jambore)\b/i.test(t) ||
+    /\bmin\s*\d/i.test(t) || // "MIN 2" (madrasah); "min" polos = panggilan admin, jangan ditandai sekolah
     /\b(panitia|sponsor|sponsorship|open\s*(stand|booth)|proposal\s*sponsor)\b/i.test(t)
   ) {
     return { segment: 'sekolah', orgName };
@@ -404,6 +405,8 @@ function buildB2BReply(segment, details, orgName, withGreeting = true) {
 
 module.exports = {
   parseLeadDetails,
+  detectCity,
+  detectEvent,
   toISODate,
   parseJamRange,
   mergeDetails,

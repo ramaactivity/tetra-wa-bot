@@ -15,4 +15,14 @@ try {
 
 const { startBot } = require('./src/bot');
 
+// Jaga-jaga: error tak tertangani TIDAK boleh mematikan bot. Proses yang mati
+// mendadak = shutdown kotor = session WA bisa korup (akar "Bad MAC").
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught exception:', err && err.message ? err.message : err);
+  // sengaja tidak exit — biar bot tetap hidup; kalau benar-benar fatal, pm2 restart
+});
+
 startBot().catch((e) => console.error('Fatal:', e));

@@ -5,3 +5,10 @@ data/*.json
 .DS_Store
 .env
 .env.local
+# artefak runtime & cadangan -- jangan pernah masuk repo
+auth_info*/
+PAIRING-CODE.txt
+.guard-state.json
+*.bak
+*.bak-*
+.env.local.bak*

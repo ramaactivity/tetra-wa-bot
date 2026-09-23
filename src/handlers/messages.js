@@ -1,211 +1,247 @@
-// Handler utama event messages.upsert (alur SEDERHANA — bot cuma untuk customer
-// BARU, maksimal 2 balasan, lalu hand-off PERMANEN ke admin):
-//  1. Deteksi balasan manual admin → pause PERMANEN kontak (human handoff).
-//  2. Filter scope: hanya chat personal masuk, bukan grup/status/admin.
-//  3. B2B (rekanan) → cukup SAPA sekali → notif prioritas → diam (admin yang balas).
-//  4. Private → sapa / minta detail (#1), kirim pricelist (#2) → pause permanen.
-// DP, cek-ketersediaan, dan semua rule statis (lokasi/fasilitas/durasi/dll)
-// SENGAJA dimatikan — itu jadi tanggung jawab admin manual.
+// Handler utama event messages.upsert.
+// Routing: kemitraan/sponsor → handoff · purna-jual → handoff · produk khusus →
+// handoff · pricelist/form website → gate kualifikasi (smartLead) · sisanya → AI
+// dengan konteks lead (persona + detail acara + yang masih kurang).
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
-const base = require('../../config');
-const { isPaused, setPause } = require('../lib/store');
-const { extractText, findRule, isWithinBusinessHours } = require('../lib/rules');
+const { isPaused, setPause, HANDOFF_AI_MS, getRiwayat, tambahRiwayat, lupakanRiwayat } = require('../lib/store');
+const { syncToSheet } = require('../lib/sheetSync');
+const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
 const { sendReply } = require('../lib/sender');
 const { notifyAdmin } = require('../lib/notify');
+const { getAIResponse } = require('../lib/ai');
+const { kirimPricelist, mintaPricelist } = require('../lib/pricelist');
+const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
-const leadStore = require('../lib/leadStore');
+const { execSync } = require('child_process');
 
-// Teks sapaan (balasan pertama untuk chat tanpa inquiry jelas, mis. cuma "halo").
-const GREETING_PRIVATE = `${base.SMART_LEAD.GREETING}\n\nAda yang bisa kami bantu, Kak? Boleh diceritakan kebutuhan acaranya, nanti kami carikan paket yang pas 🙌`;
-// Sapaan B2B: ringan saja — kebutuhan rekanan ditangani langsung oleh admin.
-const GREETING_B2B = `${base.SMART_LEAD.GREETING}\n\nMohon ditunggu sebentar ya Kak, admin kami akan segera membantu kebutuhan acaranya 🙌`;
+// Serialisasi pemrosesan per-JID
+const jidChains = new Map();
+function runSerial(jid, task) {
+  const prev = jidChains.get(jid) || Promise.resolve();
+  const next = prev.then(task, task);
+  jidChains.set(jid, next);
+  next.finally(() => { if (jidChains.get(jid) === next) jidChains.delete(jid); });
+  return next;
+}
 
-// Nomor telepon asli (MSISDN) untuk display + wa.me. WhatsApp kini bisa
-// meng-address chat pakai LID (`<lid>@lid`) demi privasi — angka di situ BUKAN
-// nomor HP. Saat LID, nomor asli ada di `msg.key.senderPn`
-// (`628xxx@s.whatsapp.net`). Kalau bukan LID, remoteJid sudah berisi nomor.
-// `wa_jid` tetap pakai remoteJid (identitas utk pause/cooldown), hanya `phone`
-// yang di-resolve ke nomor asli.
 function phoneDigits(msg) {
   const jid = msg.key?.remoteJid || '';
   if (jid.endsWith('@lid')) {
-    const pn = msg.key?.senderPn; // contoh: 628xxx@s.whatsapp.net
+    const pn = msg.key?.senderPn;
     if (pn && pn.includes('@')) return pn.split('@')[0];
   }
   return jid.split('@')[0];
 }
 
-// Serialisasi pemrosesan per-JID. WhatsApp bisa mengirim beberapa pesan beruntun
-// sebagai event `messages.upsert` TERPISAH yang handler-nya jalan berbarengan.
-// Tanpa antrian, dua pesan bisa sama-sama membaca state lead yang belum sempat
-// di-commit (mis. stage 'awaiting' belum jadi 'sent') → balasan dobel. Antrian ini
-// memaksa pesan dari kontak yang sama diproses satu-per-satu, berurutan.
-const jidChains = new Map(); // jid -> Promise (ekor antrian per kontak)
-function runSerial(jid, task) {
-  const prev = jidChains.get(jid) || Promise.resolve();
-  const next = prev.then(task, task); // jalan apa pun hasil task sebelumnya
-  jidChains.set(jid, next);
-  next.finally(() => {
-    if (jidChains.get(jid) === next) jidChains.delete(jid); // bersihkan ekor
-  });
-  return next;
+// ── Deteksi intent khusus (di luar penjualan retail) ──────────────────────────
+// Kemitraan / franchise / sponsorship masuk: mereka MENAWARKAN kerja sama atau
+// minta Tetra jadi sponsor — BUKAN menyewa photobooth. Harus ke owner.
+function isKemitraan(t) {
+  return /kemitraan|franchise|transfer knowledge|memulai usaha|membuka peluang|open kolaborasi|menawarkan kesempatan|proposal sponsor|tim sponsorship|sponsorship/i.test(t);
+}
+
+// Purna-jual: pelanggan existing butuh softfile/invoice/bayar/reschedule. Data
+// transaksi dipegang manusia, bukan bot.
+function isPostSale(t) {
+  return /softfile|soft file|file foto|kwitansi|invoice|nota pembayaran|bayar sisa|sisa dp|reschedule|re.?schedule|kabar duka|meninggal|bukti transfer|pelunasan/i.test(t);
+}
+
+// Produk/jasa di luar pricelist unlimited standar → jangan dikarang, handoff.
+function isSpecialProduct(t) {
+  return /\b360\b|mingle|instant photobooth|instant photo|software|aplikasi|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
+}
+
+// Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
+// nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
+// terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
+function buildLeadContext(fullText) {
+  const det = smart.parseLeadDetails(fullText);
+  const seg = smart.detectSegment(fullText);
+  const known = [];
+  if (det.jenisAcara) known.push(`jenis=${det.jenisAcara}`);
+  if (det.tanggal) known.push(`tanggal=${det.tanggal}`);
+  if (det.lokasi) known.push(`lokasi=${det.lokasi}`);
+  const missing = smart.missingFields(det);
+  const lines = [`Persona: ${smart.segmentLabel(seg.segment)}`];
+  if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
+  else lines.push('Belum ada detail acara.');
+  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — gali satu per satu, jangan sekaligus.`);
+  else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
+  return lines.join('\n');
+}
+
+// Gabungkan seluruh pesan USER dalam riwayat + pesan terbaru menjadi satu teks.
+// Dipakai untuk parse detail acara & segmentasi supaya gate kualifikasi tidak
+// menanya ulang hal yang sudah diberi klien di pesan sebelumnya.
+function fullUserText(jid, originalText) {
+  const hist = getRiwayat(jid)
+    .filter((p) => p.role === 'user')
+    .map((p) => p.content);
+  return [...hist, originalText].join('\n');
+}
+
+// Kirim handoff: jawab klien singkat + notif admin + pause bot ke kontak ini.
+async function handoff(sock, msg, alasan, jawabanKlien) {
+  const jid = msg.key.remoteJid;
+  await sock.readMessages([msg.key]);
+  await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
+  await notifyAdmin(sock, phoneDigits(msg), { name: 'HANDOFF' }, getRiwayat(jid), alasan);
+  await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
 }
 
 function registerMessageHandler(sock) {
-  // Waktu bot mulai mendengar. Pesan dengan timestamp lebih lama dari ini berarti
-  // hasil history-sync saat pertama connect → diabaikan (jangan dibales / jangan pause).
   const startedAt = Math.floor(Date.now() / 1000);
 
-  // Pemrosesan satu pesan. `return` = berhenti memproses pesan ini (dulu `continue`).
   const handleMessage = async (msg) => {
-      try {
-        if (!msg.message) return;
-        const jid = msg.key.remoteJid;
-        if (!jid) return;
-        // Nomor HP asli (resolve LID → senderPn) untuk lead/notif/contact.
-        const phone = phoneDigits(msg);
+    try {
+      if (!msg.message) return;
+      const jid = msg.key.remoteJid;
+      if (!jid) return;
 
-        // Abaikan pesan lama (history sync) — hanya proses pesan yang masuk setelah bot start.
-        const ts = Number(msg.messageTimestamp) || 0;
-        if (ts && ts < startedAt) return;
+      const ts = Number(msg.messageTimestamp) || 0;
+      if (ts && ts < startedAt) return;
 
-        // Abaikan chat dengan nomor sendiri (note-to-self) — bukan customer.
-        const ownNum = sock.user?.id?.split(':')[0]?.split('@')[0];
-        if (ownNum && jid.split('@')[0] === ownNum) return;
-
-        // --- Deteksi balasan manual admin (auto-pause / human handoff) ---
-        if (msg.key.fromMe) {
-          if (botSentIds.has(msg.key.id)) {
-            botSentIds.delete(msg.key.id); // pesan bot sendiri → abaikan
-          } else if (!jid.endsWith('@g.us') && jid !== 'status@broadcast') {
-            setPause(jid); // admin bales manual → pause PERMANEN (bukan 24 jam)
-            console.log(`⏸️  Admin bales manual ke ${jid}, auto-reply MATI permanen.`);
-          }
-          return;
+      if (msg.key.fromMe) {
+        if (botSentIds.has(msg.key.id)) {
+          botSentIds.delete(msg.key.id);
+        } else if (!jid.endsWith('@g.us') && jid !== 'status@broadcast') {
+          // Admin bales manual → bot diam 24 jam (PAUSE_HOURS), BUKAN 7 hari.
+          // 7 hari terlalu lama: pelanggan yang chat lagi 2-3 hari kemudian jadi
+          // dibisukan padahal admin belum tentu sempat balas.
+          const adminPauseMs = (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
+          await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
         }
-
-        // --- Master on/off (bot_settings.enabled dari dashboard) ---
-        if (!live.isEnabled()) return; // bot dimatikan → tidak auto-reply
-
-        // --- Filter scope pesan masuk ---
-        if (jid === 'status@broadcast') return;
-        if (jid.endsWith('@g.us')) return; // skip grup
-        const adminJid = live.get().ADMIN_NOTIFY_JID;
-        if (adminJid && jid === adminJid) return; // jangan auto-reply ke admin
-        if (isPaused(jid)) {
-          console.log(`⏸️  ${jid} di-pause (admin handle), dilewati.`);
-          return;
-        }
-
-        const text = extractText(msg.message).toLowerCase();
-        if (!text) return;
-        const originalText = extractText(msg.message);
-
-        // Helper: catat lead ke Supabase + (opsional) ping admin. Best-effort.
-        const logAndNotify = async (topic, notifRule, extra = '') => {
-          supa.insertLead({
-            wa_jid: jid,
-            phone,
-            name: msg.pushName || null,
-            topic,
-            message: originalText,
-            is_after_hours: !isWithinBusinessHours(),
-          });
-          if (notifRule) await notifyAdmin(sock, phone, notifRule, originalText, extra);
-        };
-        const PL = { name: 'pricelist', file: '' }; // pseudo-rule: kirim teks saja
-        const GREET = { name: 'greeting', file: '' };
-
-        const lead = leadStore.getLead(jid);
-
-        // ===== SEGMENTASI: REKANAN (B2B) vs PRIVATE =====
-        // Override manual admin (dari dashboard) MENANG atas tebakan bot.
-        const manualSeg = live.getManualSegment(jid);
-        const auto = smart.detectSegment(originalText);
-        const segment = (manualSeg && manualSeg.segment) || auto.segment;
-        const orgName = (manualSeg && manualSeg.org_name) || auto.orgName || null;
-        const isB2B = segment !== 'private';
-
-        const rule = findRule(text);
-        const isLeadInquiry = (rule && rule.name === 'pricelist') || smart.isWebsiteForm(originalText);
-
-        // (B2B) Rekanan → cukup SAPA sekali (kalau belum disapa) + notif PRIORITAS,
-        // lalu DIAM PERMANEN. Kebutuhan rekanan penting → admin yang balas sendiri.
-        if (isB2B) {
-          if (!lead) {
-            await sendReply(sock, jid, msg.key, GREET, smart.finalize(GREETING_B2B, originalText));
-          }
-          leadStore.setLead(jid, 'sent', smart.parseLeadDetails(originalText));
-          setPause(jid); // hand-off permanen ke admin
-          if (!manualSeg) {
-            supa.upsertContactAuto(jid, { phone, name: msg.pushName || null, segment, org_name: orgName });
-          }
-          await logAndNotify(segment, { name: `🏢 PRIORITAS — ${smart.segmentLabel(segment)}` });
-          console.log(`🏢 B2B (${segment}) → sapa + hand-off admin ${jid}`);
-          return;
-        }
-
-        // ===== ALUR PRIVATE — maksimal 2 balasan, lalu hand-off permanen =====
-
-        // (A) Bot tadi sudah sapa / tanya detail → balasan #2 = kirim PL, lalu DIAM.
-        if (lead && lead.stage === 'awaiting') {
-          const merged = smart.mergeDetails(lead.details, smart.parseLeadDetails(originalText));
-          await sendReply(sock, jid, msg.key, PL, smart.finalize(smart.buildPlReply(merged, false), originalText));
-          leadStore.setLead(jid, 'sent', merged);
-          setPause(jid); // PL terkirim → tanggung jawab admin, bot diam permanen
-          await logAndNotify('pricelist', { name: 'pricelist (detail masuk)' });
-          console.log(`📤 PL terkirim (#2) → hand-off admin ${jid}`);
-          return;
-        }
-
-        // (B) Klien minta pricelist (balasan #1)
-        if (isLeadInquiry) {
-          const details = smart.parseLeadDetails(originalText);
-          const missing = smart.missingFields(details);
-
-          // Detail sudah lengkap ATAU klien nolak/maksa → langsung kirim PL + diam.
-          if (missing.length === 0 || smart.wantsDirectPL(text)) {
-            await sendReply(sock, jid, msg.key, PL, smart.finalize(smart.buildPlReply(details), originalText));
-            leadStore.setLead(jid, 'sent', details);
-            setPause(jid); // PL terkirim → hand-off permanen
-            await logAndNotify('pricelist', { name: 'pricelist' });
-            console.log(`📤 PL terkirim langsung (#1) → hand-off admin ${jid}`);
-          } else {
-            // Special case: minta PL tapi belum kasih detail → tanya detail (balasan #1).
-            // 2 bubble: (1) sapaan/akui detail, (2) form copy-paste. Balasan #2
-            // (kirim PL) menyusul saat dia jawab, di branch (A).
-            const gate = smart.buildGateReply(details, missing);
-            await sendReply(sock, jid, msg.key, { name: 'gate', file: '' }, smart.finalize(gate.intro, originalText));
-            await sendReply(sock, jid, msg.key, { name: 'gate-form', file: '' }, gate.form);
-            leadStore.setLead(jid, 'awaiting', details);
-            await logAndNotify('lead', null); // notif ke admin nanti pas dia kasih detail
-            console.log(`🚪 Gate: minta detail (#1, 2 bubble) ke ${jid}`);
-          }
-          return;
-        }
-
-        // (C) Tidak ada inquiry jelas (mis. cuma "halo") → SAPA balik (balasan #1).
-        // Balasan #2 (kirim PL) menyusul saat dia respon, di branch (A).
-        await sendReply(sock, jid, msg.key, GREET, smart.finalize(GREETING_PRIVATE, originalText));
-        leadStore.setLead(jid, 'awaiting', {});
-        await logAndNotify('sapa', null);
-        console.log(`👋 Sapa customer baru (#1) ke ${jid}`);
-      } catch (err) {
-        console.error('Error memproses pesan:', err.message);
+        return;
       }
+
+      // Periksa status pause dari Supabase
+      const pausedContacts = await supa.fetchPausedContacts();
+      const alasanDiam = !live.isEnabled()
+        ? 'bot dimatikan di bot_settings.enabled'
+        : jid === 'status@broadcast'
+        ? 'status/broadcast'
+        : jid.endsWith('@g.us')
+        ? 'pesan grup'
+        : (pausedContacts && pausedContacts[jid] && pausedContacts[jid] > Date.now())
+        ? 'kontak ini di-pause (hand-off ke admin)'
+        : null;
+      if (alasanDiam) return;
+
+      const originalText = extractText(msg.message);
+      if (!originalText) return;
+
+      // [Auto-database logging] — topik/segmen/kategori/lokasi/tanggal acara
+      const createdIso = new Date((ts || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+      const leadData = {
+        wa_jid: jid,
+        phone: phoneDigits(msg),
+        name: msg.pushName || "Klien",
+        topic: classifyTopik(originalText),
+        message: originalText,
+      };
+      const enriched = enrich({ ...leadData, created_at: createdIso });
+      await supa.insertLead({
+        ...leadData,
+        segment: enriched.segmen,
+        category: enriched.kategori,
+        location: enriched.lokasi,
+        event_date: enriched.tanggal_acara || null,
+      });
+      await syncToSheet(enriched);
+
+      const t = originalText.toLowerCase();
+      const fullText = fullUserText(jid, originalText);
+
+      // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
+      if (isKemitraan(t)) {
+        await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
+          'Wah menarik! Untuk peluang kemitraan/kerja sama, ini langsung dibahas sama founder kami ya — aku cuma bantu info layanan. Boleh aku sambungkan?');
+        return;
+      }
+
+      // ── 2. Purna-jual → handoff admin ──
+      if (isPostSale(t)) {
+        await handoff(sock, msg, 'Purna-jual (softfile/invoice/bayar/reschedule)',
+          'Siap Kak, untuk urusan ini aku sambungkan ke admin ya — mereka yang pegang data transaksinya. Sebentar 🙏');
+        return;
+      }
+
+      // ── 3. Produk khusus → handoff (jangan karang harga) ──
+      if (isSpecialProduct(t)) {
+        await handoff(sock, msg, 'Produk khusus (360/mingle/instant/software/cetak doang)',
+          'Untuk itu di luar paket unlimited standar ya Kak — harga & ketersediaannya beda. Biar tim kami yang info detailnya, aku sambungkan ya?');
+        return;
+      }
+
+      // Command Admin: /stats
+      if (originalText.toLowerCase() === '/stats' && phoneDigits(msg) === '5352849332') {
+        const stats = execSync('node /home/ubuntu/tetra-wa-bot/stats.js').toString();
+        await sendReply(sock, jid, msg.key, { name: 'stats' }, stats);
+        return;
+      }
+
+      // ── 4. Pricelist / form website → gate kualifikasi ──
+      const isForm = smart.isWebsiteForm(originalText);
+      if (mintaPricelist(originalText) || isForm) {
+        await sock.readMessages([msg.key]);
+        const det = smart.parseLeadDetails(fullText);
+        const seg = smart.detectSegment(fullText);
+
+        // B2B (eo_wo/corporate/instansi/venue/edu) → framing kemitraan, bukan dump retail
+        if (seg.segment !== 'private') {
+          const reply = smart.buildB2BReply(seg.segment, det, seg.orgName, false);
+          tambahRiwayat(jid, 'user', originalText);
+          tambahRiwayat(jid, 'assistant', reply);
+          await sendReply(sock, jid, msg.key, { name: 'b2b' }, reply);
+          return;
+        }
+
+        const missing = smart.missingFields(det);
+
+        // Sudah lengkap ATAU nolak kasih detail → kirim PL + AI lanjutin (cek slot)
+        if (missing.length === 0 || smart.wantsDirectPL(originalText)) {
+          await kirimPricelist(sock, jid, 'auto-pricelist');
+          const ai = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
+          tambahRiwayat(jid, 'user', originalText);
+          tambahRiwayat(jid, 'assistant', ai);
+          await sendReply(sock, jid, msg.key, { name: 'ai-reply' }, ai);
+          return;
+        }
+
+        // Gate: tanya yang kurang, dibungkus manfaat
+        const gate = smart.buildGateReply(det, missing);
+        tambahRiwayat(jid, 'user', originalText);
+        tambahRiwayat(jid, 'assistant', gate.intro + '\n\n' + gate.form);
+        await sendReply(sock, jid, msg.key, { name: 'gate' }, gate.intro);
+        await sendReply(sock, jid, msg.key, { name: 'gate-form' }, gate.form);
+        return;
+      }
+
+      // ── 5. Default → AI dengan konteks lead ──
+      const aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
+
+      if (aiResponse.includes("[ADMIN_HANDOFF]")) {
+        await notifyAdmin(sock, phoneDigits(msg), { name: 'ADMIN_HANDOFF' }, getRiwayat(jid), "Handoff diminta oleh AI");
+        await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
+        return;
+      }
+
+      tambahRiwayat(jid, 'user', originalText);
+      tambahRiwayat(jid, 'assistant', aiResponse);
+      await sendReply(sock, jid, msg.key, { name: 'ai-reply', file: '' }, aiResponse);
+
+    } catch (err) {
+      console.error('Error memproses pesan:', err.message);
+    }
   };
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
-
     for (const msg of messages) {
       const jid = msg.key?.remoteJid;
-      if (!jid) continue; // tanpa jid tak bisa diantrikan; abaikan
-      // Antrikan per kontak: pesan berikutnya dari jid yang sama menunggu
-      // pesan ini selesai (state ter-commit) → cegah balasan dobel.
-      await runSerial(jid, () => handleMessage(msg));
+      if (jid) await runSerial(jid, () => handleMessage(msg));
     }
   });
 }

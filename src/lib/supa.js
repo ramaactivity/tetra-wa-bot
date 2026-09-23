@@ -127,7 +127,7 @@ async function fetchRecentLeads(sinceIso) {
   try {
     const { data, error } = await supa
       .from('whatsapp_bot_leads')
-      .select('wa_jid, phone, name, topic, created_at, reply_status')
+      .select('wa_jid, phone, name, message, topic, created_at, reply_status')
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false });
     if (error) {
@@ -327,6 +327,20 @@ async function upsertContactAuto(jid, fields) {
   }
 }
 
+// Hapus pause (Admin Hand-back) — panggil ini via command queue (Selesai/Done)
+async function hapusPause(waJid) {
+  if (!supa) return;
+  try {
+    const { error } = await supa
+      .from('bot_paused_contacts')
+      .delete()
+      .eq('wa_jid', waJid);
+    if (error) console.error('[supa] hapusPause:', error.message);
+  } catch (e) {
+    console.error('[supa] hapusPause:', e.message);
+  }
+}
+
 module.exports = {
   enabled,
   insertLead,
@@ -334,6 +348,7 @@ module.exports = {
   fetchRules,
   fetchPausedContacts,
   upsertPause,
+  hapusPause, // Export fungsi baru
   updateStatus,
   fetchPendingCommands,
   markCommand,
