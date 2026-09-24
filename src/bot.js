@@ -27,6 +27,7 @@ const reminder = require('./lib/reminder');
 const followup = require('./lib/followupEngine');
 const supa = require('./lib/supa');
 const live = require('./lib/liveConfig');
+const store = require('./lib/store');
 
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 
@@ -283,6 +284,51 @@ const CAPTION_GAMBAR = 'Ini paket unlimited cetak ya kak, harganya sudah all-in.
 const DEFAULT_PDF = 'PRICELIST TETRA PHOTOBOOTH.pdf';
 const CAPTION_PDF = 'Kalau mau cek lengkapnya, ada di pricelist ini kak.';
 
+// PDF invoice hanya boleh diunduh dari tetra-ops: baris bot_commands bisa disisipkan
+// siapa pun yang punya akses Supabase, jadi URL asing ditolak.
+const TETRA_OPS_ORIGIN = process.env.TETRA_OPS_ORIGIN || 'https://tetra-ops-lac.vercel.app';
+async function kirimInvoice(raw) {
+  let p;
+  try {
+    p = JSON.parse(raw);
+  } catch (_) {
+    return { ok: false, pesan: 'payload bukan JSON' };
+  }
+  const nomor = String(p.nomor || '').replace(/\D/g, '');
+  const pesan = String(p.pesan || '').trim();
+  const namaFile = String(p.nama_file || 'Invoice.pdf').replace(/[\\/:*?"<>|]+/g, '');
+  let url;
+  try {
+    url = new URL(String(p.pdf_url || ''));
+  } catch (_) {
+    return { ok: false, pesan: 'pdf_url tidak sah' };
+  }
+  if (nomor.length < 8 || nomor.length > 15) return { ok: false, pesan: `Nomor tidak wajar: "${p.nomor}"` };
+  if (!pesan || pesan.length > 1500) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
+  if (url.origin !== TETRA_OPS_ORIGIN) return { ok: false, pesan: `pdf_url bukan dari ${TETRA_OPS_ORIGIN}` };
+  if (!currentSock || !isConnected) return { ok: false, pesan: 'socket belum siap' };
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  const tipe = res.headers.get('content-type') || '';
+  if (!res.ok || !tipe.includes('pdf')) return { ok: false, pesan: `unduh PDF gagal: HTTP ${res.status} ${tipe}` };
+  const pdf = Buffer.from(await res.arrayBuffer());
+  if (pdf.length > 10 * 1024 * 1024) return { ok: false, pesan: 'PDF > 10 MB' };
+
+  const jid = `${nomor}@s.whatsapp.net`;
+  await currentSock.sendPresenceUpdate('composing', jid);
+  await delay(Math.min(8000, 2000 + pesan.length * 20));
+  await currentSock.sendPresenceUpdate('paused', jid);
+  const sentTeks = await currentSock.sendMessage(jid, { text: pesan });
+  rememberBotMsg(sentTeks);
+  deliveryLog.track(sentTeks, 'pengingat-pelunasan→customer');
+  await delay(1500);
+  const sentPdf = await currentSock.sendMessage(jid, { document: pdf, fileName: namaFile, mimetype: 'application/pdf' });
+  rememberBotMsg(sentPdf);
+  // Masuk riwayat supaya AI paham konteksnya kalau klien membalas pengingat ini.
+  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[terlampir: ${namaFile}]`);
+  console.log(`🧾 Pengingat pelunasan + ${namaFile} terkirim ke ${nomor}`);
+  return { ok: true, pesan: `terkirim ke ${nomor} teks=${sentTeks?.key?.id} pdf=${sentPdf?.key?.id}` };
+}
 function startCommandPoller() {
   const POLL_MS = 10000;
   const tick = async () => {
@@ -356,6 +402,11 @@ function startCommandPoller() {
             console.log(`Pricelist terkirim ke ${number} (gambar=${idGambar} pdf=${idPdf})`);
             await supa.markCommand(c.id, 'done', `terkirim ke ${number} gambar=${idGambar} pdf=${idPdf}`);
           }
+        } else if (c.command.startsWith('send-invoice:')) {
+          // Dari tool MCP tetra-ops kirim_pengingat_pelunasan (owner sudah menyetujui
+          // di Hermes). Format: send-invoice:{"nomor","pesan","pdf_url","nama_file"}
+          const hasil = await kirimInvoice(c.command.slice('send-invoice:'.length));
+          await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else {
           await supa.markCommand(c.id, 'error', `Perintah tak dikenal: ${c.command}`);
         }
