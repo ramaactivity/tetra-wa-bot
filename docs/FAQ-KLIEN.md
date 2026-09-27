@@ -19,9 +19,9 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ### Videobooth 360 (360° Spin Video Booth)
 - 2 jam Rp 2.500.000 · 3 jam Rp 3.000.000 · 4 jam Rp 3.500.000 · 5 jam Rp 4.000.000 · 6 jam Rp 4.500.000 · 8 jam Rp 5.500.000.
-- Termasuk: video 360° kualitas tinggi pakai iPhone, platform spin untuk 3–4 orang (maks. 250 kg), lighting profesional, template video custom sesuai acara, pilihan musik, properti seru, sharing real-time via AirDrop atau QR code, free transport se-Jabodetabek.
+- Termasuk: video 360° kualitas tinggi pakai iPhone, platform spin untuk 2–4 orang sekali putar (paling leluasa 2 orang, maks. 250 kg), lighting profesional, template video custom sesuai acara, pilihan musik, properti seru, sharing real-time via AirDrop atau QR code, free transport se-Jabodetabek.
 - Tidak ada cetak foto (videonya digital).
-- Kebutuhan area & listrik 360: admin yang konfirmasi.
+- Area sekitar 3×3 meter dengan langit-langit cukup tinggi (lengan kamera berputar), dekat sumber listrik. Detail daya listrik 360: admin yang konfirmasi.
 
 ### Magazine Box + Photobooth Classic
 - 3 jam Rp 5.500.000 · 5 jam Rp 6.000.000 · 8 jam Rp 7.000.000.
