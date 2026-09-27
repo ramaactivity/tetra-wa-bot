@@ -17,6 +17,7 @@ const booking = require('../lib/booking');
 const { kirimPricelist, mintaPricelist } = require('../lib/pricelist');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
+const { cleanName } = require('../lib/followupEngine');
 const { execSync } = require('child_process');
 
 // Serialisasi pemrosesan per-JID
@@ -71,7 +72,7 @@ function isSpecialProduct(t) {
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
 // nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
 // terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
-function buildLeadContext(fullText, jid) {
+function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
   const det = smart.parseLeadDetails(fullText);
   const seg = smart.detectSegment(fullText);
   const known = [];
@@ -84,6 +85,16 @@ function buildLeadContext(fullText, jid) {
   else lines.push('Belum ada detail acara.');
   if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
   else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
+  const w = smart.parseWebsite(pesanBaru);
+  if (w.dariWebsite || w.halaman) {
+    const info = [w.halaman && `halaman ${w.halaman}`, w.paket && `paket yang diklik: ${w.paket}`,
+      w.jam && `jam photobooth: ${w.jam}`, w.tamu && `jumlah tamu: ${w.tamu}`].filter(Boolean);
+    lines.push(`Sumber: tombol WhatsApp di website Tetra${info.length ? ` (${info.join('; ')})` : ''}.` +
+      (w.kosong ? ' Template dari website terkirim TANPA isian' + (w.terpotong ? ' (pesannya juga terpotong)' : '') + '.' : ''));
+  }
+  const nama = w.nama || cleanName(namaWA);
+  if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
+  if (!getRiwayat(jid).some((p) => p.role === 'assistant')) lines.push('Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
   const ringkasan = getRingkasan(jid);
   if (ringkasan) lines.push(`\nCATATAN KLIEN (ringkasan percakapan lama):\n${ringkasan}`);
   return lines.join('\n');
@@ -350,11 +361,11 @@ function registerMessageHandler(sock) {
       // ── 4. Pricelist / form website → lampiran PL kalau detail lengkap atau
       // klien minta langsung. Kalimatnya tetap dari AI (dulu template gate/B2B
       // yang terasa bot dan salah sasaran), jadi aturan gaya berlaku sama.
+      // Lampiran dikirim SETELAH balasan teks: sapaan dulu, baru file.
+      let kirimPL = false;
       if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) {
         const det = smart.parseLeadDetails(fullText);
-        if (smart.missingFields(det).length === 0 || smart.wantsDirectPL(originalText)) {
-          await kirimPricelist(sock, jid, 'auto-pricelist');
-        }
+        kirimPL = smart.missingFields(det).length === 0 || smart.wantsDirectPL(originalText);
       }
 
       // ── 5. AI dengan konteks lead ──
@@ -363,7 +374,8 @@ function registerMessageHandler(sock) {
         b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
         await perbaruiBooking(jid, originalText);
       }
-      let aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText, jid) + booking.konteksAI(jid));
+      let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
+        buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -387,6 +399,7 @@ function registerMessageHandler(sock) {
       tambahRiwayat(jid, 'user', originalText);
       tambahRiwayat(jid, 'assistant', aiResponse);
       await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist');
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }
@@ -492,4 +505,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler };
+module.exports = { registerMessageHandler, buildLeadContext };

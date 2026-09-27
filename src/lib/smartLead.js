@@ -145,7 +145,48 @@ function fieldFromForm(text, labelRe) {
 
 // Apakah pesan ini "form website" (punya struktur Jenis acara: ... / dari website)?
 function isWebsiteForm(text) {
-  return /jenis\s*acara\s*[:•]/i.test(text) || /\bdari\s*website\b/i.test(text);
+  return /jenis\s*acara\s*[:•]/i.test(text) || /\b(dari|di)\s*(halaman\b[^\n]*)?\s*website\b/i.test(text) ||
+    /website\s*tetra/i.test(text);
+}
+
+// ── Pesan dari tombol WA website ─────────────────────────────────────────────
+// Kontrak dengan repo website (docs/PROMPT-WEBSITE-WA-TEMPLATE.md di HERMES):
+// label "Acara / Tanggal / Jam photobooth / Lokasi / Jumlah tamu / Paket / Nama"
+// satu per baris, penanda "website Tetra (halaman X)". Format lama (form kosong
+// "Jenis acara : / Tanggal acara : / Lokasi/venue :", intro per halaman/paket)
+// tetap dibaca. Ganti label di website = ganti LABEL_WEB di sini juga.
+const LABEL_WEB = {
+  acara: /^(?:jenis\s*)?acara/i,
+  tanggal: /^tanggal/i,
+  jam: /^jam/i,
+  lokasi: /^(?:lokasi|venue)/i,
+  tamu: /^(?:jumlah|perkiraan)\s*tamu|^tamu/i,
+  paket: /^paket/i,
+  nama: /^nama/i,
+};
+function parseWebsite(text) {
+  const t = text || '';
+  const out = { dariWebsite: isWebsiteForm(t), halaman: null };
+  for (const baris of t.split('\n')) {
+    const m = baris.match(/^\s*[•\-*]?\s*([^:]{2,30}?)\s*:\s*(.*)$/);
+    if (!m) continue;
+    for (const [k, re] of Object.entries(LABEL_WEB)) {
+      if (!out[k] && re.test(m[1].trim())) { const v = m[2].trim(); if (v && !isEmptyVal(v)) out[k] = v; }
+    }
+  }
+  // Konteks dari kalimat pembuka: "(halaman Wedding)", "halaman photobooth wedding",
+  // "tertarik dengan paket Unlimited (3 Jam)", "acara di Bogor".
+  const hal = t.match(/halaman\s+(?:photobooth\s+)?([^\n).,]+?)(?:\s+di\s+website|\)|\.|\n|$)/i);
+  if (hal) out.halaman = hal[1].trim();
+  const pk = t.match(/paket\s+([^\n]+?\(\s*\d+\s*jam[^)]*\))/i);
+  if (!out.paket && pk) out.paket = pk[1].trim();
+  const area = t.match(/untuk acara di\s+([A-Z][\w ]+?)[.\n]/);
+  if (!out.lokasi && area) out.lokasi = area[1].trim();
+  const isian = ['acara', 'tanggal', 'jam', 'lokasi', 'tamu', 'nama'].filter((k) => out[k]);
+  // Kosong = klien menekan kirim tanpa mengisi, atau pesan terpotong (in-app browser memutus di "&").
+  out.kosong = out.dariWebsite && isian.length === 0;
+  out.terpotong = out.dariWebsite && /&\s*$/.test(t.trim());
+  return out;
 }
 
 // Parse detail acara dari pesan (form terstruktur dulu, lalu deteksi bebas).
@@ -159,6 +200,10 @@ function parseLeadDetails(originalText) {
     jenisAcara = fieldFromForm(text, /jenis\s*acara[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
     tanggal = fieldFromForm(text, /tanggal[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
     lokasi = fieldFromForm(text, /lokasi[^:•\n]*[:•][^\S\r\n]*([^\n]*)/i);
+  }
+  if (!isForm) {
+    const w = parseWebsite(text);
+    jenisAcara = w.acara || null; tanggal = w.tanggal || null; lokasi = w.lokasi || null;
   }
   if (!jenisAcara) jenisAcara = detectEvent(text);
   if (!lokasi) lokasi = detectCity(text);
@@ -298,6 +343,7 @@ module.exports = {
   mergeDetails,
   missingFields,
   isWebsiteForm,
+  parseWebsite,
   wantsDirectPL,
   detectSegment,
   segmentLabel,
