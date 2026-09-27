@@ -53,7 +53,7 @@ async function kirimPricelist(sock, jid, label = 'pricelist') {
   rememberBotMsg(pdf);
   deliveryLog.track(pdf, `${label}-pdf`);
 
-  tambahRiwayat(jid, 'assistant', '[kirim gambar & PDF pricelist paket unlimited]');
+  tambahRiwayat(jid, 'assistant', '[kirim PDF pricelist] + gambar ringkas paket unlimited');
   return { idGambar, idPdf: pdf?.key?.id || '' };
 }
 

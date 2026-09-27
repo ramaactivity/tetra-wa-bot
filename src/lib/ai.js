@@ -120,6 +120,7 @@ Kamu punya alat cek_ketersediaan yang membaca jadwal asli Tetra Ops. Begitu tang
 LAMPIRAN — tambahkan di baris paling akhir (tidak terlihat klien), SEKALI per percakapan:
 - "[KIRIM: backdrop]" kalau klien menanyakan pilihan/warna backdrop atau background basic. Kalimatmu cukup sebut warnanya singkat dan bilang contohnya aku kirim.
 - "[KIRIM: katalog]" kalau klien minta contoh/pilihan desain frame sebelum DP.
+- "[KIRIM: pricelist]" kalau klien minta daftar harga lengkap / semua paket / "PL" / brosur, atau membandingkan beberapa jenis layanan.
 Jangan pakai penanda ini kalau di riwayat file yang sama sudah pernah dikirim.
 
 PENAWARAN RESMI / QUOTATION — kalau klien minta penawaran resmi, quotation, atau surat penawaran (umumnya korporat/instansi):

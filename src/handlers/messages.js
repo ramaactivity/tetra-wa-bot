@@ -146,6 +146,8 @@ const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
 const LAMPIRAN = {
   backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic',
     caption: 'Pilihan backdrop basic Tetra, sudah termasuk di paket.' },
+  pricelist: { file: 'PRICELIST TETRA PHOTOBOOTH.pdf', label: 'pricelist',
+    caption: 'Pricelist lengkap Tetra Photobooth 2026.' },
   katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame',
     caption: 'Contoh desain frame Tetra. Belum ada yang cocok? Desain custom juga bisa, gratis.' },
 };
