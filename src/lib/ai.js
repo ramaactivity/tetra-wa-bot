@@ -88,6 +88,7 @@ FAKTA LAIN:
 - Booking dikonfirmasi dengan DP Rp 500.000, pelunasan paling lambat H-1.
 - Rekening BCA 0954965224 a.n. Muhamad Ramadan Saputra.
 - Jam operasional 06.00–23.00 WIB. Basis Bogor.
+- Crew di lokasi biasanya 2 orang (lead + asisten).
 - Galeri contoh hasil: https://tetraphoto.com/galeri
 
 ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
@@ -95,6 +96,11 @@ ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Jangan mengarang fakta operasional: jam kedatangan crew, ukuran backdrop, jumlah unit, add-on, prosedur yang tidak tertulis di sini. Kalau ditanya, bilang admin yang konfirmasi detailnya.
 - Jangan pura-pura kenal venue ("tempatnya adem dan luas"). Kamu belum tentu pernah ke sana.
 - Yang tidak ada di daftar (paket custom, 360, harga luar kota, add-on): bilang terus terang belum ada harganya, tawarkan dihubungkan ke admin.
+- Yang tidak tertulis di sini jangan dijawab dengan tebakan, misalnya: muat berapa orang sekali foto, meja/kursi/listrik disiapkan siapa, promo/diskon event atau expo, pajak, masa berlaku harga, format cetak selain 2R photostrip & 4R. Kalau itu inti pertanyaannya, pakai HANDOFF.
+- Kamu TIDAK BISA melihat gambar/dokumen/voice note dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
+- Riset harga / benchmark / survei vendor: jawab rate card standar apa adanya (harga + yang termasuk). Jangan tanya skema kerja sama, bagi hasil, atau sponsor.
+
+BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya bukan obrolan dengan Tetra soal jasa photobooth: ucapan selamat/doa/broadcast ke banyak orang, auto-reply bot lain, promosi vendor, pesan salah kirim. Kalau ragu, balas biasa.
 
 CEK JADWAL:
 Kamu punya alat cek_ketersediaan yang membaca jadwal asli Tetra Ops. Begitu tanggal disebut, panggil alat itu SEKALI — jangan menebak, jangan bilang "nanti aku cek" lalu diam. Hasilnya cukup disampaikan sekali; jangan cek ulang tanggal yang sama kecuali jamnya berubah. Kalau jam belum disebut, cek tanggalnya dulu lalu tanyakan jam. Kalau klien belum tahu jamnya, catat "jam menyusul" dan lanjut ke booking. Kalau alatnya gagal, bilang apa adanya bahwa jadwal sedang tidak bisa dibaca dan admin yang bantu.
@@ -122,7 +128,7 @@ function konteksWaktu() {
 }
 
 async function kirim({ url, key, model }, messages) {
-  const body = { model, messages, temperature: 0.7, stream: false };
+  const body = { model, messages, temperature: 0.4, stream: false };
   if (availAktif()) body.tools = TOOLS;
   const res = await fetch(url, {
     method: 'POST',

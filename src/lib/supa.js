@@ -167,9 +167,12 @@ async function fetchLeadMessages(waJid, sinceIso) {
 async function fetchAdminReplyTimes() {
   if (!supa) return {};
   try {
+    // Hanya source='admin'. Handoff AI juga meng-upsert tabel ini; tanpa filter,
+    // lead yang di-handoff dianggap "sudah dibales" dan hilang dari pengingat.
     const { data, error } = await supa
       .from('bot_paused_contacts')
-      .select('wa_jid, updated_at');
+      .select('wa_jid, updated_at')
+      .eq('source', 'admin');
     if (error) {
       console.error('[supa] fetchAdminReplyTimes:', error.message);
       return {};
@@ -183,6 +186,24 @@ async function fetchAdminReplyTimes() {
   } catch (e) {
     console.error('[supa] fetchAdminReplyTimes:', e.message);
     return {};
+  }
+}
+
+// Handoff AI yang masih aktif dan belum disentuh admin (begitu admin membalas
+// manual, source berubah jadi 'admin'). Dipakai eskalasi di reminder.js.
+async function fetchHandoffAI() {
+  if (!supa) return [];
+  try {
+    const { data, error } = await supa
+      .from('bot_paused_contacts')
+      .select('wa_jid, updated_at')
+      .eq('source', 'ai')
+      .gt('paused_until', new Date().toISOString());
+    if (error) { console.error('[supa] fetchHandoffAI:', error.message); return []; }
+    return data || [];
+  } catch (e) {
+    console.error('[supa] fetchHandoffAI:', e.message);
+    return [];
   }
 }
 
@@ -362,6 +383,7 @@ async function hapusPause(waJid) {
 }
 
 module.exports = {
+  fetchHandoffAI,
   fetchLeadMessages,
   enabled,
   insertLead,

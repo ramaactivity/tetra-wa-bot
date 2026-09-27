@@ -26,6 +26,17 @@ function runSerial(jid, task) {
   return next;
 }
 
+// Teks pesan, atau penanda untuk media tanpa caption. Tanpa ini bukti transfer
+// (gambar) dan voice note diabaikan diam-diam, sementara klien menunggu.
+function teksPesan(message) {
+  const t = extractText(message);
+  if (t) return t;
+  if (message?.imageMessage) return '[kirim gambar]';
+  if (message?.documentMessage || message?.documentWithCaptionMessage) return '[kirim dokumen]';
+  if (message?.audioMessage) return '[kirim voice note]';
+  return '';
+}
+
 function phoneDigits(msg) {
   const jid = msg.key?.remoteJid || '';
   if (jid.endsWith('@lid')) {
@@ -83,8 +94,11 @@ function fullUserText(jid, originalText) {
 }
 
 // Kirim handoff: jawab klien singkat + notif admin + pause bot ke kontak ini.
-async function handoff(sock, msg, alasan, jawabanKlien) {
+// Dua sisi dicatat di riwayat supaya setelah pause habis AI tahu admin sudah dipanggil.
+async function handoff(sock, msg, alasan, jawabanKlien, teksKlien) {
   const jid = msg.key.remoteJid;
+  tambahRiwayat(jid, 'user', teksKlien);
+  tambahRiwayat(jid, 'assistant', jawabanKlien);
   await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
   await notifyAdmin(sock, phoneDigits(msg), { name: 'HANDOFF' }, getRiwayat(jid), alasan);
   await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
@@ -137,10 +151,11 @@ function registerMessageHandler(sock) {
 
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
   const handleBatch = async (msgs) => {
+    const msg = msgs[msgs.length - 1];
+    const jid = msg.key.remoteJid;
+    const keys = msgs.map((m) => m.key);
+    let originalText = '';
     try {
-      const msg = msgs[msgs.length - 1];
-      const jid = msg.key.remoteJid;
-      const keys = msgs.map((m) => m.key);
 
       // Periksa status pause dari Supabase (admin bisa saja membalas selagi kita menunggu)
       const pausedContacts = await supa.fetchPausedContacts();
@@ -155,7 +170,7 @@ function registerMessageHandler(sock) {
         : null;
       if (alasanDiam) return;
 
-      const originalText = msgs.map((m) => extractText(m.message)).filter(Boolean).join('\n');
+      originalText = msgs.map((m) => teksPesan(m.message)).filter(Boolean).join('\n');
       if (!originalText) return;
 
       await pastikanRiwayat(jid);
@@ -163,7 +178,7 @@ function registerMessageHandler(sock) {
       // [Auto-database logging] — tiap bubble tetap dicatat sendiri-sendiri
       for (const m of msgs) {
         const ts = Number(m.messageTimestamp) || 0;
-        const teks = extractText(m.message);
+        const teks = teksPesan(m.message);
         if (!teks) continue;
         const createdIso = new Date((ts || Math.floor(Date.now() / 1000)) * 1000).toISOString();
         const leadData = {
@@ -187,24 +202,40 @@ function registerMessageHandler(sock) {
       const t = originalText.toLowerCase();
       const fullText = fullUserText(jid, originalText);
 
+      // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
+      // transfer) hanya admin yang boleh menilai. 24 Sep bot sempat bilang
+      // "DP sudah masuk" padahal tidak bisa melihat gambar maupun rekening.
+      if (t.trim() === '[kirim voice note]') {
+        const minta = 'Kak, voice note belum bisa aku putar di sini. Boleh diketik singkat?';
+        tambahRiwayat(jid, 'user', originalText);
+        tambahRiwayat(jid, 'assistant', minta);
+        await sendReply(sock, jid, keys, { name: 'voice-note' }, minta);
+        return;
+      }
+      if (/\[kirim (gambar|dokumen)\]/.test(t)) {
+        await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
+          'Sudah aku terima Kak. Admin cek dulu, nanti dibalas langsung di chat ini.', originalText);
+        return;
+      }
+
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
       if (isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
-          'Wah menarik! Untuk peluang kemitraan/kerja sama, ini langsung dibahas sama founder kami ya — aku cuma bantu info layanan. Boleh aku sambungkan?');
+          'Untuk kerja sama atau kemitraan, ini langsung dibahas sama founder kami. Aku teruskan ya Kak, nanti dibalas di chat ini.', originalText);
         return;
       }
 
       // ── 2. Purna-jual → handoff admin ──
       if (isPostSale(t)) {
         await handoff(sock, msg, 'Purna-jual (softfile/invoice/bayar/reschedule)',
-          'Siap Kak, untuk urusan ini aku sambungkan ke admin ya — mereka yang pegang data transaksinya. Sebentar 🙏');
+          'Untuk urusan ini aku teruskan ke admin ya Kak, datanya mereka yang pegang. Nanti dibalas langsung di chat ini.', originalText);
         return;
       }
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
       if (isSpecialProduct(t)) {
         await handoff(sock, msg, 'Produk khusus (360/mingle/instant/software/cetak doang)',
-          'Untuk itu di luar paket unlimited standar ya Kak — harga & ketersediaannya beda. Biar tim kami yang info detailnya, aku sambungkan ya?');
+          'Itu di luar paket unlimited standar, harga dan ketersediaannya beda. Aku teruskan ke tim ya Kak, nanti diinfokan langsung di sini.', originalText);
         return;
       }
 
@@ -215,49 +246,30 @@ function registerMessageHandler(sock) {
         return;
       }
 
-      // ── 4. Pricelist / form website → gate kualifikasi ──
-      const isForm = smart.isWebsiteForm(originalText);
-      if (mintaPricelist(originalText) || isForm) {
+      // ── 4. Pricelist / form website → lampiran PL kalau detail lengkap atau
+      // klien minta langsung. Kalimatnya tetap dari AI (dulu template gate/B2B
+      // yang terasa bot dan salah sasaran), jadi aturan gaya berlaku sama.
+      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) {
         const det = smart.parseLeadDetails(fullText);
-        const seg = smart.detectSegment(fullText);
-
-        // B2B (eo_wo/corporate/instansi/venue/edu) → framing kemitraan, bukan dump retail
-        if (seg.segment !== 'private') {
-          const reply = smart.buildB2BReply(seg.segment, det, seg.orgName, false);
-          tambahRiwayat(jid, 'user', originalText);
-          tambahRiwayat(jid, 'assistant', reply);
-          await sendReply(sock, jid, keys, { name: 'b2b' }, reply);
-          return;
-        }
-
-        const missing = smart.missingFields(det);
-
-        // Sudah lengkap ATAU nolak kasih detail → kirim PL + AI lanjutin (cek slot)
-        if (missing.length === 0 || smart.wantsDirectPL(originalText)) {
+        if (smart.missingFields(det).length === 0 || smart.wantsDirectPL(originalText)) {
           await kirimPricelist(sock, jid, 'auto-pricelist');
-          const ai = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
-          tambahRiwayat(jid, 'user', originalText);
-          tambahRiwayat(jid, 'assistant', ai);
-          await sendReply(sock, jid, keys, { name: 'ai-reply' }, ai);
-          return;
         }
+      }
 
-        // Gate: tanya yang kurang, dibungkus manfaat
-        const gate = smart.buildGateReply(det, missing);
+      // ── 5. AI dengan konteks lead ──
+      const aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
+
+      if (aiResponse.includes('[DIAM]')) {
+        // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
         tambahRiwayat(jid, 'user', originalText);
-        tambahRiwayat(jid, 'assistant', gate.intro + '\n\n' + gate.form);
-        await sendReply(sock, jid, keys, { name: 'gate' }, gate.intro + '\n\n' + gate.form);
+        console.log(`[diam] ${jid.split('@')[0]}: bukan calon klien, tidak dibalas`);
         return;
       }
 
-      // ── 5. Default → AI dengan konteks lead ──
-      const aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
-
       if (aiResponse.includes('[ADMIN_HANDOFF]')) {
         // Klien tidak boleh ditinggal diam: satu kalimat, lalu admin yang lanjut.
-        tambahRiwayat(jid, 'user', originalText);
         await handoff(sock, msg, 'Handoff diminta oleh AI',
-          'Untuk yang ini aku sambungkan ke admin ya Kak, biar dijawab langsung sama yang pegang datanya. Ditunggu sebentar 🙏');
+          'Yang ini aku teruskan ke admin ya Kak, biar dijawab sama yang pegang datanya. Nanti dibalas langsung di chat ini.', originalText);
         return;
       }
 
@@ -267,6 +279,14 @@ function registerMessageHandler(sock) {
 
     } catch (err) {
       console.error('Error memproses pesan:', err.message);
+      // AI mati / error lain: klien tetap dijawab dan admin dipanggil, jangan bisu.
+      if (!originalText) return;
+      try {
+        await handoff(sock, msg, `Bot error: ${err.message.slice(0, 120)}`,
+          'Sebentar ya Kak, pesannya aku teruskan ke admin biar dibalas langsung.', originalText);
+      } catch (e2) {
+        console.error('Handoff darurat gagal:', e2.message);
+      }
     }
   };
 
@@ -306,12 +326,15 @@ function registerMessageHandler(sock) {
     if (type !== 'notify') return;
     for (const msg of messages) {
       const jid = msg.key?.remoteJid;
+      // Stub CIPHERTEXT (2) = pesan gagal didekripsi (Bad MAC). Dicatat per JID
+      // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
+      if (msg.messageStubType === 2) console.log(`[gagal-dekripsi] ${jid} (${type})`);
       if (!jid || !msg.message) continue;
       if (msg.key.fromMe) { runSerial(jid, () => handleFromMe(msg)); continue; }
       if (jid === 'status@broadcast' || jid.endsWith('@g.us')) continue;
       const ts = Number(msg.messageTimestamp) || 0;
       if (ts && Date.now() - ts * 1000 > PESAN_TERLAMA_MS) continue;
-      if (!extractText(msg.message)) continue;
+      if (!teksPesan(msg.message)) continue;
 
       if (!sudahSubscribe.has(jid)) {
         sudahSubscribe.add(jid);

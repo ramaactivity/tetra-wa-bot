@@ -84,7 +84,9 @@ async function generateFollowupMessage(panggilan, leadContext) {
     `Sapa hangat, ingatkan Tetra masih siap bantu photobooth-nya, dan tawarkan lock slot tanggal dengan DP *Rp 500.000*. ` +
     `Sesuaikan dengan KONTEKS LEAD di system prompt: akui detail yang sudah klien sebut, jangan tanya ulang, ` +
     `kenali keraguan/pertanyaan klien di riwayat (mis. listrik/watt, format cetak, harga) dan yakinkan dengan santun. ` +
-    `Hanya tanya yang masih kurang. Pendek (maks 4 baris), akhiri satu pertanyaan terbuka.`;
+    `Hanya tanya yang masih kurang. Pendek (maks 4 baris), akhiri satu pertanyaan terbuka.\n` +
+    `Balas persis [DIAM] tanpa teks lain kalau dari riwayat: ini bukan calon klien (ucapan, broadcast, ` +
+    `auto-reply, vendor lain), klien sudah bilang transfer/bayar DP, atau klien sudah menolak.`;
 
   try {
     return await getAIResponse([], prompt, leadContext);
@@ -152,7 +154,11 @@ async function runFollowupCycle(sock) {
     const panggilan = cleanName(last.name) || 'Kak';
     const leadContext = buildLeadContext(panggilan, details, missing, historyLines);
     const msg = await generateFollowupMessage(panggilan, leadContext);
-    if (!msg || typeof msg !== 'string' || msg.includes('[ADMIN_HANDOFF]')) continue;
+    if (!msg || typeof msg !== 'string') continue;
+    if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
+      state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam
+      continue;
+    }
 
     try {
       if (sent > 0) {

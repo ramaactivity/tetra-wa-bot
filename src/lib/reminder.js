@@ -125,6 +125,52 @@ async function maybeSend(sock) {
   console.log(`⏰ Reminder terkirim ke admin: ${result.pending.length} lead belum dibales.`);
 }
 
+// ── Eskalasi handoff ─────────────────────────────────────────────────────────
+// Pengingat WA di atas mudah tenggelam (24-27 Sep: klien yang sudah DP menunggu
+// 2-3 hari). Handoff AI yang belum disentuh admin > ESKALASI_JAM dikirim SEKALI
+// ke Telegram topic CS Mintet. Kunci state = jid + waktu handoff, jadi handoff
+// baru untuk kontak yang sama tetap dieskalasi lagi.
+const ESKALASI_JAM = Number(process.env.ESKALASI_HANDOFF_JAM) || 2;
+const TG_CHAT = process.env.ESKALASI_TELEGRAM_CHAT_ID || '-1004377661750';
+const TG_THREAD = process.env.ESKALASI_TELEGRAM_THREAD_ID || '109';
+const ESKALASI_FILE = path.join(__dirname, '..', '..', 'data', 'eskalasi.json');
+
+async function eskalasi() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !withinActiveHours()) return;
+
+  const sudah = loadJson(ESKALASI_FILE); // { jid: updated_at yang sudah dieskalasi }
+  const telat = (await supa.fetchHandoffAI()).filter((r) =>
+    Date.now() - new Date(r.updated_at).getTime() > HOURS(ESKALASI_JAM) && sudah[r.wa_jid] !== r.updated_at);
+  if (!telat.length) return;
+
+  // Nomor asli & pesan terakhir dari tabel lead (wa_jid sering berupa @lid).
+  const leads = await supa.fetchRecentLeads(new Date(Date.now() - HOURS(7 * 24)).toISOString());
+  const terbaru = {};
+  for (const l of leads) if (!terbaru[l.wa_jid]) terbaru[l.wa_jid] = l; // sudah urut terbaru dulu
+
+  const baris = telat.map((r) => {
+    const l = terbaru[r.wa_jid] || {};
+    const num = String(l.phone || r.wa_jid).split('@')[0];
+    const kutip = String(l.message || '').replace(/\s+/g, ' ').slice(0, 120);
+    return `• ${l.name || 'Tanpa nama'} — wa.me/${num} (⏳ ${fmtWaiting(Date.now() - new Date(r.updated_at).getTime())})\n  "${kutip}"`;
+  });
+  const text = `🔴 ${telat.length} klien sudah dioper bot ke admin tapi belum dibalas:\n\n${baris.join('\n')}\n\n` +
+    `Bot diam 24 jam sejak handoff, setelah itu menjawab lagi.`;
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TG_CHAT, message_thread_id: Number(TG_THREAD), text, disable_web_page_preview: true }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`Telegram ${res.status} ${(await res.text()).slice(0, 150)}`);
+
+  for (const r of telat) sudah[r.wa_jid] = r.updated_at;
+  saveJson(ESKALASI_FILE, sudah);
+  console.log(`🔴 Eskalasi handoff ke Telegram: ${telat.length} klien.`);
+}
+
 // getSock = fungsi yang mengembalikan socket aktif terbaru (atau socket langsung).
 function start(getSock) {
   const st = loadJson(STATE_FILE);
@@ -134,6 +180,7 @@ function start(getSock) {
     const sock = typeof getSock === 'function' ? getSock() : getSock;
     if (!sock) return;
     maybeSend(sock).catch((e) => console.error('[reminder]', e.message));
+    eskalasi().catch((e) => console.error('[eskalasi]', e.message));
   };
   const t = setInterval(tick, TICK_MS);
   if (t.unref) t.unref();
@@ -144,4 +191,4 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { start, computePending, buildMessage, maybeSend };
+module.exports = { start, computePending, buildMessage, maybeSend, eskalasi };

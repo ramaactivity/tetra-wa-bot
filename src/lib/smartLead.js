@@ -1,10 +1,8 @@
 // Otak alur "Smart Lead" (gated, deterministik — tanpa AI):
 //  - parse detail acara (jenis / tanggal / lokasi) dari form website maupun chat bebas
 //  - deteksi frasa "nolak ngasih detail" (cuma mau cek harga) -> langsung PL
-//  - rakit pertanyaan gerbang (tanya yang kurang) & balasan kirim PL
-const base = require('../../config');
-const { hasSalam, isWithinBusinessHours } = require('./rules');
-const live = require('./liveConfig');
+//  - deteksi segmen (private / corporate / pendidikan / EO) untuk konteks AI
+//  Kalimat balasan ke klien selalu dari AI (lib/ai.js), bukan template di sini.
 
 // ---------- deteksi jenis acara (echo natural kata yang dipakai klien) ----------
 const EVENT_PATTERNS = [
@@ -203,81 +201,6 @@ function wantsDirectPL(t) {
   );
 }
 
-// ---------- penyusunan teks ----------
-// Rapikan nilai sebelum di-echo ke klien biar nggak kebawa mentah/bertele-tele:
-// buang catatan dalam kurung "(...)", ambil opsi pertama (atau / /), batasi panjang.
-// Data LENGKAP tetap tersimpan di log lead — ini cuma buat tampilan balasan.
-function cleanAck(v) {
-  if (!v) return '';
-  let s = String(v).split('(')[0]; // buang "(lgi dlm proses...)", "(atau)...", dst
-  s = s.split(/\s+atau\s+|\s*\/\s*|;|•/i)[0]; // ada beberapa opsi → ambil pertama
-  s = s.trim().replace(/[.,;:\-\s]+$/, '').trim();
-  if (s.length > 40) s = `${s.slice(0, 40).trim()}…`;
-  return s;
-}
-
-function ackParts(d) {
-  const p = [];
-  const je = cleanAck(d.jenisAcara);
-  const tg = cleanAck(d.tanggal);
-  const lo = cleanAck(d.lokasi);
-  if (je) p.push(`acara *${je}*`);
-  if (tg) p.push(`tanggal *${tg}*`);
-  if (lo) p.push(`di *${lo}*`);
-  return p;
-}
-
-// Baris template isian (copy-paste). Cuma yang BELUM diberi yang ditampilkan,
-// biar tidak menanyakan ulang info yang sudah dikasih klien.
-const ASK_LABEL = {
-  jenis: 'Acara: ',
-  tanggal: 'Tanggal: ',
-  lokasi: 'Kota/Venue: ',
-};
-// Jam PAKAI photobooth (bukan durasi acara) — penting buat cek ketersediaan unit.
-// Selalu ditanyakan karena tak terdeteksi otomatis dari teks.
-const JAM_LINE = 'Jam photobooth: (mis. 11.00–13.00)';
-
-// Pertanyaan gerbang → DUA bubble terpisah biar natural & blok form gampang
-// di-copy: { intro } = sapaan/akui detail, { form } = template isian copy-paste
-// (cuma field yang masih kurang + jam photobooth).
-function buildGateReply(details, missing) {
-  const c = base.SMART_LEAD;
-  const a = ackParts(details);
-  const form = [...missing.map((m) => ASK_LABEL[m]), JAM_LINE].join('\n');
-  const intro = a.length
-    ? `${c.GREETING}\n\nSip, untuk ${a.join(' ')} ya Kak 🙌 Boleh lengkapi sisanya biar kami kirimkan paket & harganya:`
-    : `${c.GREETING}\n\nBoleh dibantu isi detail acaranya dulu ya, biar kami kirimkan paket & harga yang paling sesuai 🙌`;
-  return { intro, form };
-}
-
-// Balasan kirim PL: akui detail (kalau ada), kirim link + galeri, tutup hand-off.
-// withGreeting=false untuk balasan di tengah percakapan (sapaan tak diulang —
-// sudah disapa di pesan sebelumnya).
-function buildPlReply(details, withGreeting = true) {
-  const c = base.SMART_LEAD;
-  const hasDetail = ackParts(details || {}).length > 0; // cuma buat tahu ada detail atau belum
-  const head = withGreeting ? `${c.GREETING}\n\n` : '';
-  const galeri = c.GALERI_URL
-    ? `\n\nContoh hasilnya bisa diintip di galeri:\n👉 ${c.GALERI_URL}`
-    : '';
-  const pl = `Ini pricelist lengkap kami:\n👉 ${c.PRICELIST_URL}${galeri}`;
-
-  if (hasDetail) {
-    return `${head}Sip, detail acaranya sudah kami catat ya Kak 🙌\n\n${pl}\n\n${c.HANDOFF_DETAIL}`;
-  }
-  return `${head}${pl}\n\n${c.HANDOFF_NODETAIL}`;
-}
-
-// Tambah salam (kalau ada) di atas & catatan after-hours (kalau di luar jam) di bawah.
-function finalize(text, originalText) {
-  const cfg = live.get();
-  let out = text;
-  if (cfg.SALAM_REPLY && hasSalam(originalText)) out = `${cfg.SALAM_REPLY}\n\n${out}`;
-  if (!isWithinBusinessHours() && cfg.AFTER_HOURS_NOTE) out += cfg.AFTER_HOURS_NOTE;
-  return out;
-}
-
 // ---------- SEGMENTASI B2B vs PRIVATE (rekanan) ----------
 const SEGMENT_LABELS = {
   private: 'Private',
@@ -366,43 +289,6 @@ function detectSegment(originalText) {
   return { segment: 'private', orgName: null };
 }
 
-// Balasan khusus rekanan (B2B): framing kemitraan + tanya org & frekuensi.
-function buildB2BReply(segment, details, orgName, withGreeting = true) {
-  const c = base.SMART_LEAD;
-  const head = withGreeting ? `${c.GREETING}\n\n` : '';
-  const intro = (c.B2B && c.B2B[segment]) || (c.B2B && c.B2B.corporate) || '';
-  const orgAck = orgName ? `Sip, dari *${orgName}* ya Kak! ` : '';
-
-  // Dunia pendidikan (osis/bem/sekolah/kampus) → balasan NETRAL: gali kebutuhan
-  // dulu (sewa / bagi hasil / sponsor beda-beda), jangan dorong satu model.
-  const EDU = ['osis', 'bem', 'sekolah', 'kampus'];
-  if (EDU.includes(segment)) {
-    const eduIntro = (c.B2B && c.B2B.pendidikan) || 'Seru nih acara sekolah/kampusnya! 🙌';
-    const ask = [];
-    if (!orgName) ask.push('• Dari sekolah/kampus/organisasi apa ya, Kak?');
-    ask.push('• Acaranya apa & kapan?');
-    ask.push('• Estimasi pengunjung/peserta berapa?');
-    ask.push('• Kebutuhannya gimana — sewa biasa, kerja sama bagi hasil, atau lagi cari sponsor?');
-    return (
-      `${head}${orgAck}${eduIntro}\n\n` +
-      `Boleh diinfoin dulu ya:\n${ask.join('\n')}\n\n` +
-      `Nanti tim kami bantu carikan skema yang paling cocok buat acara Kakak ya 🙏`
-    );
-  }
-
-  // corporate / instansi / eo_wo / venue → framing kemitraan + pricelist sebagai gambaran.
-  const ask = [];
-  if (!orgName) ask.push('• Dari PT/instansi/EO mana ya, Kak?');
-  ask.push('• Acaranya jenis apa & kapan?');
-  ask.push('• Sekali ini aja, atau ada rencana acara rutin/berkala?');
-  return (
-    `${head}${orgAck}${intro}\n\n` +
-    `Boleh diinfoin dulu ya:\n${ask.join('\n')}\n\n` +
-    `Ini pricelist sebagai gambaran awal: 👉 ${c.PRICELIST_URL}\n` +
-    `Nanti tim kami siapin penawaran kerja sama yang paling pas ya 🙏`
-  );
-}
-
 module.exports = {
   parseLeadDetails,
   detectCity,
@@ -413,10 +299,6 @@ module.exports = {
   missingFields,
   isWebsiteForm,
   wantsDirectPL,
-  buildGateReply,
-  buildPlReply,
-  finalize,
   detectSegment,
   segmentLabel,
-  buildB2BReply,
 };

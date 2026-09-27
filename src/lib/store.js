@@ -26,9 +26,11 @@ const cooldownMs = () => live.get().COOLDOWN_HOURS * 3600 * 1000;
 // terhitung -- jadi akibatnya tidak boleh permanen.
 //
 // Balasan manual admin  -> PAUSE_HOURS (default 24 jam, bisa diubah dari dashboard)
-// Hand-off eksplisit AI -> 7 hari, karena di sana manusia memang sedang mengambil alih
+// Hand-off eksplisit AI -> 24 jam. Dulu 7 hari: 24-27 Sep dua klien yang sudah DP
+// dibisukan 2-3 hari menunggu admin. Kalau admin belum membalas, reminder.js
+// mengeskalasi ke Telegram; setelah 24 jam bot kembali menjawab.
 const handoffMs = () => (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
-const HANDOFF_AI_MS = 7 * 24 * 3600 * 1000;
+const HANDOFF_AI_MS = 24 * 3600 * 1000;
 
 // ---------- low-level JSON I/O ----------
 function loadJson(file) {
