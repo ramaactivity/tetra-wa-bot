@@ -278,4 +278,29 @@ async function ringkasPercakapan(ringkasanLama, pesan) {
   }
 }
 
-module.exports = { getAIResponse, ringkasPercakapan };
+// Isi form data acara dari chat (klien sering mencicil / menjawab di tengah
+// obrolan). Hanya mengembalikan kolom yang disebut jelas; tebakan = kosong.
+async function ekstrakBooking(dataLama, pesan, field) {
+  const teks = pesan.map((p) => `${p.role === 'user' ? 'KLIEN' : 'TETRA'}: ${p.content}`).join('\n');
+  const daftar = field.map(([k, label]) => `- ${k}: ${label}`).join('\n');
+  const messages = [
+    { role: 'system', content:
+      'Kamu mengisi data booking photobooth dari chat WhatsApp. Kembalikan HANYA objek JSON tanpa teks lain. ' +
+      'Kunci yang boleh:\n' + daftar + '\n- tanggal_iso: tanggal acara format YYYY-MM-DD\n' +
+      'Isi hanya kolom yang dinyatakan jelas oleh klien, atau yang disepakati klien di chat (paket/jam yang ia setujui). ' +
+      'Jangan menebak; kalau tidak ada, jangan tulis kuncinya. Tulis nilai ringkas apa adanya. ' +
+      'Kalau klien mengoreksi nilai lama, pakai nilai terbaru. ' +
+      `Hari ini ${new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)}; kalau tanggal acara diketahui, ` +
+      'WAJIB isi tanggal_iso (tahun tidak disebut = tanggal terdekat ke depan).' },
+    { role: 'user', content: `DATA SAAT INI:\n${JSON.stringify(dataLama)}\n\nCHAT TERBARU:\n${teks}` },
+  ];
+  const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
+  let raw;
+  try { raw = await ambil(PRIMARY); }
+  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) return {};
+  try { return JSON.parse(m[0]); } catch { return {}; }
+}
+
+module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking };

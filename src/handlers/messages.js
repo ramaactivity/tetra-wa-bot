@@ -1,7 +1,8 @@
 // Handler utama event messages.upsert.
 // Routing: kemitraan/sponsor → handoff · purna-jual → handoff · produk khusus →
 // handoff · pricelist/form website → gate kualifikasi (smartLead) · sisanya → AI
-// dengan konteks lead (persona + detail acara + yang masih kurang).
+// dengan konteks lead (persona + detail acara + yang masih kurang) · bukti
+// transfer / konfirmasi DP admin → tahap booking (lib/booking.js).
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
 const { proto } = require('@whiskeysockets/baileys');
@@ -11,7 +12,8 @@ const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
 const { sendReply } = require('../lib/sender');
 const { notifyAdmin } = require('../lib/notify');
-const { getAIResponse, ringkasPercakapan } = require('../lib/ai');
+const { getAIResponse, ringkasPercakapan, ekstrakBooking } = require('../lib/ai');
+const booking = require('../lib/booking');
 const { kirimPricelist, mintaPricelist } = require('../lib/pricelist');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
@@ -120,6 +122,12 @@ const TUNGGU_MAKS_MS = 120000;  // batas total menunggu, apa pun yang terjadi
 const PESAN_TERLAMA_MS = 12 * 3600 * 1000; // pesan yang masuk selagi bot offline tetap dibalas (maks 12 jam)
 const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
 
+// Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
+// pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
+const RE_BAYAR = /\b(dp|down ?payment|transfer|tf|trf|bukti|bayar|pembayaran|lunas|pelunasan)\b/i;
+// Admin mengonfirmasi DP manual → mulai tahap booking juga.
+const RE_DP_ADMIN = /\b(dp|down ?payment|pembayaran|transfer)(nya)?\b[^\n]{0,40}\b(diterima|terima|masuk|terverifikasi|dikonfirmasi|konfirmasi|aman)\b/i;
+
 // ── Chat lama dari HP (history sync on-demand) ──────────────────────────────
 // Bot hanya melihat pesan sejak ia tertaut. Supaya jawabannya berdasar seluruh
 // percakapan (termasuk yang dulu dibalas admin manual), saat kontak pertama kali
@@ -154,8 +162,13 @@ function registerMessageHandler(sock) {
       const adminPauseMs = (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
       // Balasan admin masuk ingatan bot: tanpa ini, setelah pause habis bot tidak
       // tahu apa yang sudah admin janjikan dan bisa bertentangan.
-      tambahRiwayat(jid, 'assistant', `(admin) ${teksPesan(msg.message) || '[pesan non-teks]'}`);
+      const teksAdmin = teksPesan(msg.message) || '[pesan non-teks]';
+      tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
+      if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
+        await mulaiBooking(jid, null, 'admin', 'DP-nya sudah diterima ya Kak, makasih!',
+          'DP dikonfirmasi admin — data booking').catch((e) => console.error('[booking] gagal mulai:', e.message));
+      }
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
       const q = antrian.get(jid);
       if (q) { clearTimeout(q.timer); antrian.delete(jid); }
@@ -175,29 +188,45 @@ function registerMessageHandler(sock) {
     if (lama.length) console.log(`[riwayat] ${jid.split('@')[0]}: ${lama.length} pesan lama dimuat dari database`);
   };
 
+  // Ekstrak data acara dari chat terbaru (+ catatan klien) ke rekap booking,
+  // lalu lapor admin kalau baru lengkap / berubah setelah lengkap.
+  const perbaruiBooking = async (jid, teksBaru) => {
+    // Gagal ekstrak tidak boleh menggagalkan balasan ke klien; pesan tetap di riwayat
+    // dan ikut terbaca pada ekstraksi berikutnya.
+    try {
+      const b = booking.get(jid);
+      const sebelum = b.lengkap;
+      const pesan = getRiwayat(jid).slice(-16);
+      if (teksBaru) pesan.push({ role: 'user', content: teksBaru });
+      const ringkasan = getRingkasan(jid);
+      if (ringkasan) pesan.unshift({ role: 'assistant', content: `CATATAN KLIEN: ${ringkasan}` });
+      booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD));
+      await booking.laporBilaBerubah(sock, jid, sebelum);
+    } catch (e) {
+      console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
+    }
+  };
+
+  // Mulai tahap booking: form (terisi sebagian) + katalog ke klien, rekap ke admin.
+  const mulaiBooking = async (jid, msg, sumber, pembuka, judulAdmin) => {
+    const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
+    b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
+    await perbaruiBooking(jid, null);
+    await booking.kirimTeks(sock, jid, booking.teksForm(b, pembuka), 'form-booking→customer');
+    await booking.kirimKatalog(sock, jid);
+    await booking.laporAdmin(sock, jid, judulAdmin);
+  };
+
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
   const handleBatch = async (msgs) => {
     const msg = msgs[msgs.length - 1];
     const jid = msg.key.remoteJid;
     const keys = msgs.map((m) => m.key);
     let originalText = '';
+    let bolehBalas = false; // false = error apa pun tidak memicu balasan darurat (mis. kontak di-pause)
     try {
-
-      // Periksa status pause dari Supabase (admin bisa saja membalas selagi kita menunggu)
-      const pausedContacts = await supa.fetchPausedContacts();
-      const alasanDiam = !live.isEnabled()
-        ? 'bot dimatikan di bot_settings.enabled'
-        : jid === 'status@broadcast'
-        ? 'status/broadcast'
-        : jid.endsWith('@g.us')
-        ? 'pesan grup'
-        : (pausedContacts && pausedContacts[jid] && pausedContacts[jid] > Date.now())
-        ? 'kontak ini di-pause (hand-off ke admin)'
-        : null;
-      if (alasanDiam) return;
-
       originalText = msgs.map((m) => teksPesan(m.message)).filter(Boolean).join('\n');
-      if (!originalText) return;
+      if (!originalText || jid === 'status@broadcast' || jid.endsWith('@g.us')) return;
 
       await pastikanRiwayat(jid);
 
@@ -225,6 +254,28 @@ function registerMessageHandler(sock) {
         await syncToSheet(enriched);
       }
 
+      // Periksa status pause dari Supabase (admin bisa saja membalas selagi kita menunggu)
+      const pausedContacts = await supa.fetchPausedContacts();
+      const alasanDiam = !live.isEnabled()
+        ? 'bot dimatikan di bot_settings.enabled'
+        : jid === 'status@broadcast'
+        ? 'status/broadcast'
+        : jid.endsWith('@g.us')
+        ? 'pesan grup'
+        : (pausedContacts && pausedContacts[jid] && pausedContacts[jid] > Date.now())
+        ? 'kontak ini di-pause (hand-off ke admin)'
+        : null;
+      if (alasanDiam) {
+        // Di-pause (admin pegang): bot diam, tapi pesan tetap masuk ingatan dan
+        // data booking tetap dicatat. Dulu pesan selama pause hilang dari riwayat.
+        if (alasanDiam.startsWith('kontak ini di-pause')) {
+          tambahRiwayat(jid, 'user', originalText);
+          if (booking.aktif(jid)) await perbaruiBooking(jid, null);
+        }
+        return;
+      }
+      bolehBalas = true;
+
       const t = originalText.toLowerCase();
       const fullText = fullUserText(jid, originalText);
 
@@ -239,6 +290,30 @@ function registerMessageHandler(sock) {
         return;
       }
       if (/\[kirim (gambar|dokumen)/.test(t)) {
+        const media = msgs.filter((m) => /\[kirim (gambar|dokumen)/.test(teksPesan(m.message)));
+        const soalBayar = RE_BAYAR.test(t) ||
+          getRiwayat(jid).slice(-6).some((p) => p.role === 'user' && RE_BAYAR.test(p.content));
+        // Tahap booking: file (desain pilihan, grand design, bukti pelunasan) diteruskan
+        // ke admin, bot tetap melayani.
+        if (booking.aktif(jid) || soalBayar) {
+          await sock.readMessages(keys).catch(() => {});
+          for (const m of media) await booking.teruskanKeAdmin(sock, m).catch((e) => console.error('[booking] gagal teruskan:', e.message));
+          tambahRiwayat(jid, 'user', originalText);
+          if (booking.aktif(jid)) {
+            const b = booking.get(jid);
+            b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
+            await perbaruiBooking(jid, null);
+            const ack = 'Sudah aku terima Kak, aku teruskan ke tim Tetra ya.';
+            tambahRiwayat(jid, 'assistant', ack);
+            await sendReply(sock, jid, keys, { name: 'file-booking' }, ack);
+            await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
+          } else {
+            await mulaiBooking(jid, msg, 'bukti-transfer',
+              'Makasih Kak, bukti transfernya sudah aku terima. Admin cek dulu ke rekening, setelah terverifikasi invoice-nya dikirim di chat ini.',
+              'Bukti DP masuk — cek mutasi BCA, lalu input booking');
+          }
+          return;
+        }
         await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
           'Sudah aku terima Kak. Admin cek dulu, nanti dibalas langsung di chat ini.', originalText);
         return;
@@ -283,7 +358,12 @@ function registerMessageHandler(sock) {
       }
 
       // ── 5. AI dengan konteks lead ──
-      let aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText, jid));
+      if (booking.aktif(jid)) {
+        const b = booking.get(jid);
+        b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
+        await perbaruiBooking(jid, originalText);
+      }
+      let aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText, jid) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -316,7 +396,7 @@ function registerMessageHandler(sock) {
     } catch (err) {
       console.error('Error memproses pesan:', err.message);
       // AI mati / error lain: klien tetap dijawab dan admin dipanggil, jangan bisu.
-      if (!originalText) return;
+      if (!originalText || !bolehBalas) return;
       try {
         await handoff(sock, msg, `Bot error: ${err.message.slice(0, 120)}`,
           'Sebentar ya Kak, pesannya aku teruskan ke admin biar dibalas langsung.', originalText);

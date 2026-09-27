@@ -5,22 +5,26 @@ const path = require('path');
 const { proto } = require('@whiskeysockets/baileys');
 const R = (p) => require.resolve(path.join(process.cwd(), p));
 
-const log = { kirim: [], notif: [], pause: [], sejarah: [] };
+const log = { kirim: [], notif: [], pause: [], sejarah: [], wa: [] };
+let ekstrak = {};
+let paused = {};
 let aiJawab = 'halo';
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
-  fetchPausedContacts: async () => ({}), fetchLeadMessages: async () => [],
+  fetchPausedContacts: async () => paused, fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
 });
 stub('src/lib/sheetSync.js', { syncToSheet: async () => {} });
-stub('src/lib/sender.js', { sendReply: async (s, j, k, r, t) => log.kirim.push(t) });
+stub('src/lib/sender.js', { sendReply: async (s, j, k, r, t) => log.kirim.push(t), sendDocument: async (s, j, f, c) => { log.kirim.push(`[DOK ${require('path').basename(f)}]`); return { key: { id: 'd' + Math.random() } }; } });
+stub('src/lib/deliveryLog.js', { track: () => {} });
 stub('src/lib/notify.js', { notifyAdmin: async (s, f, rule, r, extra) => log.notif.push(`${rule.name}:${extra}`) });
 stub('src/lib/pricelist.js', { kirimPricelist: async () => log.kirim.push('[PL]'), mintaPricelist: (t) => /pricelist/i.test(t) });
 stub('src/lib/ai.js', {
   getAIResponse: async () => { if (aiJawab instanceof Error) throw aiJawab; return aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
+  ekstrakBooking: async () => ekstrak,
 });
-stub('src/lib/liveConfig.js', { isEnabled: () => true, get: () => ({ PAUSE_HOURS: 24 }) });
+stub('src/lib/liveConfig.js', { isEnabled: () => true, get: () => ({ PAUSE_HOURS: 24, ADMIN_NOTIFY_JID: 'admin@s.whatsapp.net' }) });
 
 const store = require(R('src/lib/store.js'));
 const { registerMessageHandler } = require(R('src/handlers/messages.js'));
@@ -29,6 +33,12 @@ const sock = {
   ev: { on: (e, f) => (handlers[e] = f) },
   presenceSubscribe: async () => {},
   fetchMessageHistory: async (n, key, ts) => log.sejarah.push({ jid: key.remoteJid, ts }),
+  readMessages: async () => {},
+  sendMessage: async (jid, isi) => {
+    if (jid === 'admin@s.whatsapp.net') log.wa.push(isi.forward ? '[FORWARD]' : isi.text);
+    else log.kirim.push(isi.text);
+    return { key: { id: 'b' + Math.random(), remoteJid: jid } };
+  },
 };
 process.env.REPLY_DELAY_SECONDS = '0.05';
 registerMessageHandler(sock);
@@ -36,7 +46,7 @@ registerMessageHandler(sock);
 let n = 0;
 const tunggu = (ms) => new Promise((r) => setTimeout(r, ms));
 async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
-  log.kirim = []; log.notif = []; log.pause = [];
+  log.kirim = []; log.notif = []; log.pause = []; log.wa = [];
   await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: jid, id: 'x' + Math.random() }, message, messageTimestamp: Math.floor(Date.now() / 1000) }] });
   await tunggu(400);
   return { ...log, jid };
@@ -103,6 +113,63 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   aiJawab = 'Tanggal 7 November masih kosong.';
   r = await kirim({ conversation: 'tgl 7 nov kosong?' });
   assert.deepStrictEqual(r.kirim, ['Tanggal 7 November masih kosong.']);
+
+  // ── Tahap booking ──
+  const booking = require(R('src/lib/booking.js'));
+  const jidB = '62811@s.whatsapp.net';
+  aiJawab = 'Sip, ditunggu bukti transfernya ya Kak.';
+  await kirim({ conversation: 'aku udah transfer dp ya kak' }, jidB);
+  ekstrak = { tanggal: 'Sabtu, 5 Des 2026', tanggal_iso: '2026-12-05', paket: '3 jam', lokasi: 'Sentul' };
+  r = await kirim({ imageMessage: {} }, jidB);
+  assert.match(r.kirim[0], /bukti transfernya sudah aku terima/); assert.match(r.kirim[0], /\*1\. Data acara\*/);
+  assert.match(r.kirim[0], /Tanggal: Sabtu, 5 Des 2026/, 'form tidak terisi otomatis');
+  assert.ok(r.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'), 'katalog tidak terkirim');
+  assert.deepStrictEqual(r.wa[0], '[FORWARD]', 'bukti transfer tidak diteruskan ke admin');
+  assert.match(r.wa[1], /Bukti DP masuk/); assert.match(r.wa[1], /Belum diisi: .*PIC/);
+  assert.strictEqual(r.pause.length, 0, 'tahap booking tidak boleh pause');
+
+  // Data dicicil sampai lengkap → rekap "lengkap" ke admin
+  ekstrak = { nama_acara: 'Budi & Sari', jam: '13.00-16.00', pic: 'Andi 0812', ukuran_frame: '4R', desain_frame: 'katalog hal 5 no 2', backdrop: 'Gold' };
+  aiJawab = 'Siap, sudah aku catat Kak.';
+  r = await kirim({ conversation: 'pengantin Budi & Sari, jam 13-16, PIC Andi 0812, 4R desain hal 5 no 2, backdrop gold' }, jidB);
+  assert.ok(booking.get(jidB).lengkap); assert.match(r.wa.at(-1), /Data booking lengkap/);
+  // Ubah jam setelah lengkap → rekap "Update"
+  ekstrak = { jam: '14.00-17.00' };
+  r = await kirim({ conversation: 'eh jamnya mundur jadi 14-17 ya' }, jidB);
+  assert.match(r.wa.at(-1), /Update data booking/); assert.match(r.wa.at(-1), /14\.00-17\.00/);
+
+  // Gambar di tahap booking → diteruskan, bot tetap melayani, tidak mulai ulang
+  r = await kirim({ imageMessage: {} }, jidB);
+  assert.deepStrictEqual(r.kirim, ['Sudah aku terima Kak, aku teruskan ke tim Tetra ya.']);
+  assert.ok(r.wa.includes('[FORWARD]'));
+
+  // Admin konfirmasi DP manual → form + katalog
+  const jidC = '62822@s.whatsapp.net';
+  ekstrak = {};
+  log.kirim = []; log.wa = [];
+  await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: jidC, id: 'adm2', fromMe: true }, message: { conversation: 'DP sudah kami terima ya kak, terima kasih' } }] });
+  await tunggu(200);
+  assert.match(log.kirim[0], /DP-nya sudah diterima/); assert.ok(log.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'));
+  assert.match(log.wa[0], /DP dikonfirmasi admin/);
+
+  // Kontak di-pause: bot diam tapi pesan tetap masuk riwayat
+  paused = { [jidC]: Date.now() + 3600e3 };
+  r = await kirim({ conversation: 'acaranya di Bogor kak' }, jidC);
+  assert.strictEqual(r.kirim.length, 0);
+  assert.strictEqual(store.getRiwayat(jidC).at(-1).content, 'acaranya di Bogor kak');
+  paused = {};
+
+  // Follow-up data booking: jidC belum lengkap & diam > 48 jam → diingatkan
+  const fe = require(R('src/lib/followupEngine.js'));
+  const bc = booking.get(jidC); bc.terakhirTanya = 0;
+  const rw = store.getRiwayat(jidC); rw.forEach((p) => { p.t = 1; });
+  aiJawab = 'Kak, tinggal nama acara & PIC-nya ya, boleh dicicil.';
+  log.kirim = [];
+  await fe.followupBooking(sock, {}, 0);
+  assert.deepStrictEqual(log.kirim, ['Kak, tinggal nama acara & PIC-nya ya, boleh dicicil.']);
+  log.kirim = [];
+  await fe.followupBooking(sock, {}, 0);
+  assert.strictEqual(log.kirim.length, 0, 'follow-up booking dobel');
 
   console.log('SEMUA UJI LOLOS');
   process.exit(0);

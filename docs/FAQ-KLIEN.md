@@ -41,6 +41,7 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
 
 ## Setelah DP
 - Setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin sebagai bukti booking.
+- Setelah DP, klien diminta melengkapi data acara (boleh dicicil) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
 - Batal setelah DP: DP hangus sebagai cancellation fee.
 - Reschedule dan pembatalan ditangani admin.
 

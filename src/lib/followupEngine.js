@@ -16,7 +16,8 @@ const { getAIResponse } = require('./ai');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
-const { loadJson, saveJson, tambahRiwayat } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, getRiwayat } = require('./store');
+const booking = require('./booking');
 const { parseLeadDetails, mergeDetails, missingFields } = require('./smartLead');
 
 const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'followup.json');
@@ -137,6 +138,7 @@ async function runFollowupCycle(sock) {
     if (paused && paused[jid] && paused[jid] > now) continue;           // admin sedang pegang
     if (state[jid] && now - state[jid] < RESEND_AFTER_MS) continue;     // sudah di-followup
     if (!msgs.some((m) => /pricelist|lead/i.test(m.topic || ''))) continue; // cuma yang tanya harga
+    if (booking.get(jid)) continue;                                     // sudah DP → followupBooking
 
     // Kumpulkan detail acara dari SELURUH riwayat (bukan cuma pesan terakhir),
     // karena klien sering kasih detail terpencar di beberapa pesan.
@@ -178,6 +180,59 @@ async function runFollowupCycle(sock) {
 
   saveJson(STATE_FILE, state);
   console.log(`[followup] selesai, terkirim ${sent} pesan.`);
+  await followupBooking(sock, paused, sent);
+}
+
+// ── Follow-up data booking (klien sudah DP, data acara belum lengkap) ────────
+// Tiap 48 jam; 24 jam kalau acara tinggal ≤7 hari. Dihitung dari aktivitas
+// terakhir di chat, jadi klien yang baru saja membalas tidak ditagih.
+// H-3 masih belum lengkap → admin dikabari sekali.
+async function followupBooking(sock, paused, sudahTerkirim) {
+  const now = Date.now();
+  let sent = 0;
+  for (const [jid, b] of Object.entries(booking.semua())) {
+    if (sudahTerkirim + sent >= MAKS_PER_SIKLUS) break;
+    if (!booking.aktif(jid) || b.lengkap) continue;
+    const sisaHari = b.data.tanggal_iso ? (Date.parse(`${b.data.tanggal_iso}T00:00:00+07:00`) - now) / 864e5 : null;
+
+    if (sisaHari !== null && sisaHari <= 3 && !b.h3) {
+      await booking.laporAdmin(sock, jid, 'H-3 tapi data booking belum lengkap');
+      b.h3 = true; booking.simpan();
+    }
+    if (paused && paused[jid] > now) continue;                          // admin sedang pegang
+
+    const riw = getRiwayat(jid);
+    const jedaJam = sisaHari !== null && sisaHari <= 7 ? 24 : 48;
+    if (now - Math.max(b.terakhirTanya || 0, riw.at(-1)?.t || 0) < jedaJam * 3600 * 1000) continue;
+
+    const k = booking.kurang(b).map((x) => x.label);
+    const prompt =
+      `Tulis SATU pesan WhatsApp singkat (maks 4 baris) untuk klien yang SUDAH DP, mengingatkan dengan ramah ` +
+      `data acara yang masih kurang: ${k.join(', ')}. Sebut maks 3 yang paling penting, bilang boleh dicicil. ` +
+      (sisaHari !== null ? `Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi. ` : '') +
+      `Jangan tawarkan DP atau paket lagi, jangan kirim ulang form lengkap.`;
+    let msg;
+    try { msg = await getAIResponse(riw.slice(-20), prompt, booking.konteksAI(jid)); }
+    catch (e) { console.error('[followup-booking] gagal generate:', e.message); continue; }
+    msg = String(msg || '').replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
+    if (!msg || /\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) continue;
+
+    try {
+      if (sudahTerkirim + sent > 0) {
+        await new Promise((r) => setTimeout(r, JEDA_MIN_MS + Math.random() * (JEDA_MAKS_MS - JEDA_MIN_MS)));
+      }
+      const sentMsg = await sock.sendMessage(jid, { text: msg });
+      rememberBotMsg(sentMsg);
+      deliveryLog.track(sentMsg, 'followup-booking→customer');
+      tambahRiwayat(jid, 'assistant', msg);
+      b.terakhirTanya = now; booking.simpan();
+      sent++;
+      console.log(`[followup-booking] terkirim ke ${jid} (kurang: ${k.join(', ')})`);
+    } catch (e) {
+      console.error(`[followup-booking] gagal kirim ke ${jid}:`, e.message);
+    }
+  }
+  if (sent) console.log(`[followup-booking] ${sent} pengingat data booking terkirim.`);
 }
 
 // getSock = fungsi yang mengembalikan socket aktif terbaru (atau socket langsung).
@@ -196,4 +251,4 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { start, runFollowupCycle, generateFollowupMessage, cleanName };
+module.exports = { start, runFollowupCycle, followupBooking, generateFollowupMessage, cleanName };
