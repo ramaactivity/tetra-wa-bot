@@ -65,8 +65,10 @@ function isPostSale(t) {
 }
 
 // Produk/jasa di luar pricelist unlimited standar → jangan dikarang, handoff.
+// 360, Magazine Box, Photo Stage tidak di sini lagi: sudah ada di katalog FAQ
+// dan boleh dijawab bot sendiri (keputusan Rama 27 Sep 2026).
 function isSpecialProduct(t) {
-  return /\b360\b|mingle|instant photobooth|instant photo|software|aplikasi|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
+  return /mingle|instant photobooth|instant photo|software|aplikasi|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
 }
 
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
@@ -346,7 +348,7 @@ function registerMessageHandler(sock) {
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
       if (isSpecialProduct(t)) {
-        await handoff(sock, msg, 'Produk khusus (360/mingle/instant/software/cetak doang)',
+        await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)',
           'Itu di luar paket unlimited standar, harga dan ketersediaannya beda. Aku teruskan ke tim ya Kak, nanti diinfokan langsung di sini.', originalText);
         return;
       }

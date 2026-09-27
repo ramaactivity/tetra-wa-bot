@@ -4,10 +4,67 @@ Dibaca bot setiap membalas (src/lib/ai.js). Sumber: jawaban Rama 27 Sep 2026.
 Tambah jawaban baru di sini; tidak perlu restart bot.
 
 ## Transport
-- Gratis transport untuk seluruh Jabodetabek (termasuk Jakarta, Depok, Tangerang, Bekasi).
-- Di luar Jabodetabek: belum ada harga, admin yang konfirmasi.
+- Gratis transport untuk seluruh Jabodetabek (termasuk Jakarta, Depok, Tangerang, Bekasi) untuk Photobooth Classic, Videobooth 360, dan Photo Stage.
+- Pengecualian: Magazine Box (Only maupun + Photobooth) ada biaya transport, admin yang info nominalnya.
+- Di luar Jabodetabek: ada biaya transport untuk semua paket, admin yang info nominalnya.
 
-## Yang perlu disiapkan klien/venue
+## Katalog paket lengkap (harga resmi, sumber Tetra Ops & pricelist 2026)
+Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua paket ini sendiri (keputusan Rama 27 Sep 2026).
+
+### Photobooth Classic (Unlimited Photobooth)
+- 2 jam Rp 2.000.000 · 3 jam Rp 2.500.000 · 4 jam Rp 3.000.000 · 5 jam Rp 3.500.000 · 6 jam Rp 4.000.000 · 8 jam Rp 5.000.000.
+- Durasi sangat panjang (>8 jam): ada paket 13 jam Rp 7.500.000 (format 2R). Tawarkan hanya kalau klien butuh durasi lebih dari 8 jam.
+- Pilih satu format cetak: 2R photostrip, 4R, atau Polaroid (harga sama).
+- Termasuk: cetak unlimited, printer/kamera/lighting profesional, setup + properti, crew, desain frame custom, softfile real-time via QR, backdrop basic, flashdisk kayu berisi semua file, free transport se-Jabodetabek.
+
+### Videobooth 360 (360° Spin Video Booth)
+- 2 jam Rp 2.500.000 · 3 jam Rp 3.000.000 · 4 jam Rp 3.500.000 · 5 jam Rp 4.000.000 · 6 jam Rp 4.500.000 · 8 jam Rp 5.500.000.
+- Termasuk: video 360° kualitas tinggi pakai iPhone, platform spin untuk 3–4 orang (maks. 250 kg), lighting profesional, template video custom sesuai acara, pilihan musik, properti seru, sharing real-time via AirDrop atau QR code, free transport se-Jabodetabek.
+- Tidak ada cetak foto (videonya digital).
+- Kebutuhan area & listrik 360: admin yang konfirmasi.
+
+### Magazine Box + Photobooth Classic
+- 3 jam Rp 5.500.000 · 5 jam Rp 6.000.000 · 8 jam Rp 7.000.000.
+- Termasuk: magazine box booth + semua isi Photobooth Classic (cetak unlimited, crew, frame custom, QR softfile, backdrop basic, flashdisk kayu).
+- Ketentuan: loading magazine 3 jam sebelum jam mulai photobooth; area minimal 4×5 meter; indoor saja; dibongkar setelah durasi selesai; listrik ±700 watt; klien siapkan 1 meja dan 3 kursi; magazine tidak bisa dipindah setelah setup; dekorasi tambahan boleh asal tidak merusak struktur (kerusakan diganti).
+- TIDAK termasuk: transport (ada biaya, admin yang info nominalnya), penggantian sticker, dekorasi tambahan.
+
+### Magazine Box Only
+- 8 jam Rp 2.500.000. Instalasi magazine box saja, TANPA crew standby, tanpa cetak.
+- Termasuk: instalasi magazine box, sticker magazine default, loading & bongkar sesuai ketentuan venue.
+- Ketentuan: loading H-1 malam atau hari H; dibongkar maksimal pukul 23.00; klien kirim foto area pemasangan dan surat loading (kalau venue minta); listrik ±100 watt; indoor saja; tidak bisa dipindah setelah setup.
+- Sticker custom: headline utama tidak bisa diganti (ganti headline mulai Rp 350.000); tulisan kecil (barcode, judul acara, tanggal) dan tulisan sedang (nama, maks. satu kalimat singkat) bisa diganti; logo Tetra tidak bisa dihilangkan.
+- TIDAK termasuk: transport (ada biaya, admin yang info), penggantian sticker, dekorasi tambahan.
+
+### Photo Stage Only
+- 2 jam Rp 1.500.000 · 3 jam Rp 2.000.000.
+- Tamu berfoto di stage (mis. pelaminan) diarahkan crew, lalu unduh softfile lewat QR code. Tanpa cetak.
+- Termasuk: layout desain custom 4R 1–2 pose, QR code A2 untuk unduh, link softfile via Drive, lighting profesional, crew pengarah gaya, free transport se-Jabodetabek.
+- Perlu koordinasi dengan vendor dokumentasi utama klien.
+
+### Photo Stage + Photobooth Classic
+- 2 jam Rp 4.000.000 · 3 jam Rp 4.500.000.
+- Sama seperti Photo Stage, ditambah pilihan cetak instan classic photobooth untuk tamu.
+
+### Extend di hari H
+- Photobooth Classic dan Videobooth 360: tambah durasi di hari H Rp 500.000 per jam.
+
+### Add-on
+- Voucher Photobooth 100 pcs Rp 25.000
+- Break Time 1 jam Rp 150.000 (jeda di tengah durasi)
+- Album Photostripe 20 halaman Rp 100.000
+- Guest Book Photo 25 lembar Rp 200.000
+- Photomagnet 50 cetak Rp 350.000
+- Costume Sleeve 1.000 lembar Rp 1.500.000
+- Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan: admin yang konfirmasi.
+
+### Dua layanan sekaligus
+- Mis. Photobooth + 360, atau 2 unit photobooth: harga dijumlah normal. Diskon bundling hanya dari admin.
+
+### Transport di luar Jabodetabek
+- Semua paket: ada biaya transport, admin yang info nominalnya.
+
+## Yang perlu disiapkan klien/venue (Photobooth Classic)
 - 1 meja (untuk printer) dan 2 kursi.
 - Area kosong ±2x3 meter untuk photobooth.
 - Colokan listrik dekat area photobooth. Daya yang dibutuhkan ±500 watt.
