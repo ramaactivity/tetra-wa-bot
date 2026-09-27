@@ -8,6 +8,7 @@ const fs = require('fs');
 const { sendDocument, delay } = require('./sender');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
+const { tambahRiwayat } = require('./store');
 
 const ASSETS_DIR = path.join(__dirname, '..', '..', 'assets');
 
@@ -52,6 +53,7 @@ async function kirimPricelist(sock, jid, label = 'pricelist') {
   rememberBotMsg(pdf);
   deliveryLog.track(pdf, `${label}-pdf`);
 
+  tambahRiwayat(jid, 'assistant', '[kirim gambar & PDF pricelist paket unlimited]');
   return { idGambar, idPdf: pdf?.key?.id || '' };
 }
 

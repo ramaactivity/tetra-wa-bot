@@ -13,9 +13,13 @@ async function notifyAdmin(sock, from, rule, riwayat, extra = '') {
   if (!adminJid) return;
 
   const num = String(from || '').split('@')[0];
-  let notif = `🔔 *Handoff ke Admin — Tetra Photobooth*\n` +
+  // rule.name 'INFO' = admin perlu menjawab satu hal, bot tetap melayani sisanya.
+  const judul = rule?.name === 'INFO'
+    ? '📝 *Info untuk Admin — bot tetap melayani klien*'
+    : '🔔 *Handoff ke Admin — Tetra Photobooth*';
+  let notif = `${judul}\n` +
     `Pelanggan: wa.me/${num}\n` +
-    `Alasan: ${extra}\n\n` +
+    `${rule?.name === 'INFO' ? 'Perlu dijawab admin' : 'Alasan'}: ${extra}\n\n` +
     `*Riwayat Chat (terakhir):*\n`;
   
   // Format riwayat (misalnya 3-5 pesan terakhir)

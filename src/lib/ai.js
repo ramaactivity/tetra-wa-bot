@@ -5,7 +5,17 @@
 // Kalau Sumopod gagal (kredit habis, 5xx, koneksi putus), sekali coba lagi lewat
 // 9Router yang jalan lokal di VPS ini. Bot customer-facing tidak boleh bisu cuma
 // karena satu penyedia model sedang bermasalah.
+const fs = require('fs');
+const path = require('path');
 const { checkAvailability, enabled: availAktif } = require('./availability');
+
+// Jawaban resmi Rama untuk pertanyaan klien yang sering muncul. Dibaca tiap
+// panggilan supaya jawaban baru langsung berlaku tanpa restart.
+const FAQ_FILE = path.join(__dirname, '..', '..', 'docs', 'FAQ-KLIEN.md');
+function faq() {
+  try { return '\n\nFAQ KLIEN (jawaban resmi, wajib diikuti):\n' + fs.readFileSync(FAQ_FILE, 'utf-8'); }
+  catch { return ''; }
+}
 
 // Alat yang boleh dipanggil model. Hanya BACA jadwal Tetra Ops -- model tidak
 // bisa membuat, mengubah, atau membatalkan booking dari sini.
@@ -64,7 +74,7 @@ KAMU PENJUAL, bukan pemberi info:
 - Rekomendasi durasi: tamu ≤100 → 2–3 jam; 100–200 → 3–4 jam; >200 → 4 jam ke atas. Tamu 250 orang dalam 3 jam itu 80+ orang per jam, sebut ini apa adanya lalu sarankan 4 jam.
 - JANGAN menurunkan paket sendiri. Kalau klien sudah condong ke 3 jam, jangan tiba-tiba tawarkan 2 jam. Turun hanya kalau klien sendiri keberatan harga.
 - Begitu tanggal + jam + paket jelas: tawarkan amankan slot dengan DP *Rp 500.000* ke rekening BCA, dengan urgency wajar. Cara bookingnya: klien transfer DP, kirim bukti, tim Tetra yang catat. Tidak ada form.
-- Objection "mahal": akui → nilai (all-in, unlimited, crew) → alternatif durasi lebih pendek → tanya budget.
+- Objection "mahal": akui → nilai (all-in, unlimited, crew) → alternatif durasi lebih pendek → tanya budget. Diskon 10% hanya senjata terakhir sesuai FAQ.
 - Objection "bandingin dulu": jangan pushy, tanam pembeda (unlimited cetak, frame custom, softfile realtime).
 - "Lihat-lihat dulu": jangan pushy, biarkan pintu terbuka.
 
@@ -77,26 +87,20 @@ HARGA RESMI — PAKET UNLIMITED CETAK (hanya ini yang boleh kamu sebut):
 - 8 Jam  : Rp 5.000.000
 - Extend on the spot, per jam: Rp 500.000
 
-SUDAH TERMASUK: cetak foto unlimited (2R photostrip & 4R), peralatan profesional (printer, kamera, lighting), setup + properti foto, crew, desain frame custom sesuai acara (logo/tema klien bisa dipakai; desain di-ACC klien sebelum hari H), softfile real-time via QR code, flashdisk kayu berisi seluruh file, backdrop basic, dan free transport area Bogor. Jabodetabek menyesuaikan jarak & lokasi (jangan sebut angka, bilang admin yang konfirmasi).
-
-BACKDROP:
-- Basic (sudah termasuk): Gold, Silver, White, Black, Red.
-- Luxury #01 / #02: sewa tambahan, harganya tanya admin (jangan karang).
-- Klien juga boleh pakai backdrop dekorasi acaranya sendiri; tim Tetra tinggal set di depannya.
+SUDAH TERMASUK: cetak foto unlimited (2R photostrip, 4R, atau Polaroid), peralatan profesional (printer, kamera, lighting), setup + properti foto, crew, desain frame custom sesuai acara (logo/tema klien bisa dipakai; desain di-ACC klien sebelum hari H), softfile real-time via QR code, flashdisk kayu berisi seluruh file, backdrop basic, dan free transport se-Jabodetabek.
 
 FAKTA LAIN:
 - Booking dikonfirmasi dengan DP Rp 500.000, pelunasan paling lambat H-1.
 - Rekening BCA 0954965224 a.n. Muhamad Ramadan Saputra.
 - Jam operasional 06.00–23.00 WIB. Basis Bogor.
-- Crew di lokasi biasanya 2 orang (lead + asisten).
 - Galeri contoh hasil: https://tetraphoto.com/galeri
 
 ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
-- Angka di atas SATU-SATUNYA sumber harga. JANGAN mengarang, menaksir, membulatkan, atau memberi diskon.
+- Angka di atas SATU-SATUNYA sumber harga. JANGAN mengarang, menaksir, atau membulatkan. Diskon hanya menurut aturan di FAQ.
 - Jangan mengarang fakta operasional: jam kedatangan crew, ukuran backdrop, jumlah unit, add-on, prosedur yang tidak tertulis di sini. Kalau ditanya, bilang admin yang konfirmasi detailnya.
 - Jangan pura-pura kenal venue ("tempatnya adem dan luas"). Kamu belum tentu pernah ke sana.
 - Yang tidak ada di daftar (paket custom, 360, harga luar kota, add-on): bilang terus terang belum ada harganya, tawarkan dihubungkan ke admin.
-- Yang tidak tertulis di sini jangan dijawab dengan tebakan, misalnya: muat berapa orang sekali foto, meja/kursi/listrik disiapkan siapa, promo/diskon event atau expo, pajak, masa berlaku harga, format cetak selain 2R photostrip & 4R. Kalau itu inti pertanyaannya, pakai HANDOFF.
+- Fakta operasional (transport, kebutuhan venue, backdrop, format cetak, pajak, promo, setelah DP) ada di FAQ KLIEN di bawah. Yang tidak tertulis di sini maupun di FAQ jangan dijawab dengan tebakan; kalau itu inti pertanyaannya, pakai HANDOFF.
 - Kamu TIDAK BISA melihat gambar/dokumen/voice note dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
 - Riset harga / benchmark / survei vendor: jawab rate card standar apa adanya (harga + yang termasuk). Jangan tanya skema kerja sama, bagi hasil, atau sponsor.
 
@@ -105,10 +109,16 @@ BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya buk
 CEK JADWAL:
 Kamu punya alat cek_ketersediaan yang membaca jadwal asli Tetra Ops. Begitu tanggal disebut, panggil alat itu SEKALI — jangan menebak, jangan bilang "nanti aku cek" lalu diam. Hasilnya cukup disampaikan sekali; jangan cek ulang tanggal yang sama kecuali jamnya berubah. Kalau jam belum disebut, cek tanggalnya dulu lalu tanyakan jam. Kalau klien belum tahu jamnya, catat "jam menyusul" dan lanjut ke booking. Kalau alatnya gagal, bilang apa adanya bahwa jadwal sedang tidak bisa dibaca dan admin yang bantu.
 
+INFO KE ADMIN TANPA BERHENTI — untuk hal yang jawabannya dari admin tapi percakapan tetap kamu layani (tanya promo, backdrop custom/Luxury, hal "admin yang konfirmasi" di FAQ): tulis balasan biasa ke klien (bilang admin yang akan info bagian itu), lalu di baris paling akhir tambahkan "[INFO_ADMIN: <topik singkat>]". Penanda ini tidak terlihat klien. Cukup sekali per topik; jangan ulang kalau di riwayat kamu sudah bilang admin akan info topik yang sama.
+
+SETELAH HANDOFF — kalau di riwayat kamu sudah meneruskan ke admin tapi belum ada balasan admin (pesan berawalan "(admin)") dan klien chat lagi, admin sedang belum sempat. Lanjut layani semua yang bisa kamu jawab. Untuk hal yang tetap butuh admin, bilang sudah diteruskan dan admin akan membalas; jangan pakai [ADMIN_HANDOFF] lagi untuk hal yang sama.
+
+RIWAYAT — pesan berawalan "(admin)" adalah balasan manual admin Tetra: itu keputusan resmi, ikuti dan jangan dibantah. Pesan berawalan tanggal dalam kurung adalah chat lama. "CATATAN KLIEN" di bawah adalah ringkasan percakapan lama; pakai supaya tidak tanya ulang.
+
 HANDOFF — ketik "[ADMIN_HANDOFF]" (tanpa teks lain) lalu berhenti ketika:
-- Negosiasi harga serius / minta diskon / "bisa kurang ga".
 - Minta kontrak, invoice, penawaran resmi, PO, kwitansi.
-- Custom di luar paket standar / produk khusus (360, mingle, instant, software).
+- Produk khusus di luar paket unlimited (360, mingle, instant, software).
+- Batal atau reschedule booking.
 - Klien komplain atau minta bicara manusia.
 - Ditanya hal yang tidak kamu ketahui faktanya.`;
 
@@ -127,9 +137,9 @@ function konteksWaktu() {
     `Jangan balik bertanya tanggal berapa besok -- kamu sudah tahu.`;
 }
 
-async function kirim({ url, key, model }, messages) {
+async function kirim({ url, key, model }, messages, pakaiAlat = true) {
   const body = { model, messages, temperature: 0.4, stream: false };
-  if (availAktif()) body.tools = TOOLS;
+  if (pakaiAlat && availAktif()) body.tools = TOOLS;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -148,7 +158,7 @@ async function panggil(endpoint, history, message, leadContext) {
     ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
     : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + konteksWaktu() + konteksLead },
+    { role: 'system', content: SYSTEM_PROMPT + faq() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
     { role: 'user', content: message },
   ];
@@ -246,4 +256,26 @@ async function getAIResponse(history, message, leadContext) {
   }
 }
 
-module.exports = { getAIResponse };
+// Rangkum percakapan lama jadi catatan klien, supaya riwayat panjang tidak
+// dibuang begitu saja dan AI tetap tahu fakta di awal chat.
+async function ringkasPercakapan(ringkasanLama, pesan) {
+  const teks = pesan.map((p) => `${p.role === 'user' ? 'KLIEN' : 'TETRA'}: ${p.content}`).join('\n');
+  const messages = [
+    { role: 'system', content:
+      'Kamu pencatat CS Tetra Photobooth. Gabungkan CATATAN LAMA dan CHAT menjadi catatan klien ' +
+      'ringkas berupa poin: nama/PIC, instansi, jenis acara, tanggal, jam, lokasi, jumlah tamu, paket/harga ' +
+      'yang disepakati, diskon yang diberikan, status DP/pelunasan, permintaan khusus, janji Tetra, pertanyaan ' +
+      'yang belum terjawab. Status DP/pelunasan HANYA dari pesan berawalan "(admin)"; klaim pembayaran lain ' +
+      'tulis "klien bilang sudah transfer, belum diverifikasi admin". Tulis hanya fakta yang ada di chat, ' +
+      'jangan menambah. Langsung poin tanpa kalimat pembuka. Maks 15 poin.' },
+    { role: 'user', content: `CATATAN LAMA:\n${ringkasanLama || '(belum ada)'}\n\nCHAT:\n${teks}` },
+  ];
+  try {
+    return ((await kirim(PRIMARY, messages, false)).content || '').trim();
+  } catch (e) {
+    if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
+    return ((await kirim(FALLBACK, messages, false)).content || '').trim();
+  }
+}
+
+module.exports = { getAIResponse, ringkasPercakapan };

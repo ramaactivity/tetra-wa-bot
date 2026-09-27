@@ -16,7 +16,7 @@ const { getAIResponse } = require('./ai');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
-const { loadJson, saveJson } = require('./store');
+const { loadJson, saveJson, tambahRiwayat } = require('./store');
 const { parseLeadDetails, mergeDetails, missingFields } = require('./smartLead');
 
 const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'followup.json');
@@ -167,6 +167,7 @@ async function runFollowupCycle(sock) {
       const sentMsg = await sock.sendMessage(jid, { text: msg });
       rememberBotMsg(sentMsg);
       deliveryLog.track(sentMsg, 'followup→customer');
+      tambahRiwayat(jid, 'assistant', msg); // klien membalas follow-up → bot tahu konteksnya
       state[jid] = now;
       sent++;
       console.log(`[followup] terkirim ke ${jid} (${panggilan})`);

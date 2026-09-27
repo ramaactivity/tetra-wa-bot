@@ -4,13 +4,14 @@
 // dengan konteks lead (persona + detail acara + yang masih kurang).
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
-const { isPaused, setPause, HANDOFF_AI_MS, getRiwayat, tambahRiwayat, lupakanRiwayat } = require('../lib/store');
+const { proto } = require('@whiskeysockets/baileys');
+const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
 const { sendReply } = require('../lib/sender');
 const { notifyAdmin } = require('../lib/notify');
-const { getAIResponse } = require('../lib/ai');
+const { getAIResponse, ringkasPercakapan } = require('../lib/ai');
 const { kirimPricelist, mintaPricelist } = require('../lib/pricelist');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
@@ -32,7 +33,8 @@ function teksPesan(message) {
   const t = extractText(message);
   if (t) return t;
   if (message?.imageMessage) return '[kirim gambar]';
-  if (message?.documentMessage || message?.documentWithCaptionMessage) return '[kirim dokumen]';
+  const dok = message?.documentMessage || message?.documentWithCaptionMessage?.message?.documentMessage;
+  if (dok) return `[kirim dokumen${dok.fileName ? `: ${dok.fileName}` : ''}]`;
   if (message?.audioMessage) return '[kirim voice note]';
   return '';
 }
@@ -67,7 +69,7 @@ function isSpecialProduct(t) {
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
 // nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
 // terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
-function buildLeadContext(fullText) {
+function buildLeadContext(fullText, jid) {
   const det = smart.parseLeadDetails(fullText);
   const seg = smart.detectSegment(fullText);
   const known = [];
@@ -80,6 +82,8 @@ function buildLeadContext(fullText) {
   else lines.push('Belum ada detail acara.');
   if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
   else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
+  const ringkasan = getRingkasan(jid);
+  if (ringkasan) lines.push(`\nCATATAN KLIEN (ringkasan percakapan lama):\n${ringkasan}`);
   return lines.join('\n');
 }
 
@@ -115,6 +119,25 @@ const MASIH_NGETIK_MS = 10000;  // presence "composing" lebih baru dari ini = ma
 const TUNGGU_MAKS_MS = 120000;  // batas total menunggu, apa pun yang terjadi
 const PESAN_TERLAMA_MS = 12 * 3600 * 1000; // pesan yang masuk selagi bot offline tetap dibalas (maks 12 jam)
 const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
+
+// ── Chat lama dari HP (history sync on-demand) ──────────────────────────────
+// Bot hanya melihat pesan sejak ia tertaut. Supaya jawabannya berdasar seluruh
+// percakapan (termasuk yang dulu dibalas admin manual), saat kontak pertama kali
+// chat kita minta HP Tetra mengirim chat lama, 50 per halaman, maks 4 halaman.
+// Syarat: HP Tetra online. Hasil datang lewat 'messaging-history.set', biasanya
+// dalam beberapa detik -- masih di dalam jeda tunggu balasan.
+const HALAMAN_SEJARAH = 50;
+const MAKS_HALAMAN = 4;
+const tarikSejarah = new Map(); // jid -> { sejakMs, halaman }
+const sudahMinta = new Set();
+const detik = (m) => { const t = m.messageTimestamp; return Number(t?.toNumber ? t.toNumber() : t) || 0; };
+const tglPendek = (s) => new Date(s * 1000).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric' });
+
+function mintaSejarah(sock, key, tsMs, halaman, sejakMs) {
+  tarikSejarah.set(key.remoteJid, { sejakMs, halaman });
+  sock.fetchMessageHistory(HALAMAN_SEJARAH, key, tsMs)
+    .catch((e) => console.error(`[sejarah] ${key.remoteJid.split('@')[0]}: gagal minta`, e.message));
+}
 const ngetik = new Map();       // jid -> ts terakhir terlihat mengetik
 const sudahSubscribe = new Set();
 
@@ -129,6 +152,9 @@ function registerMessageHandler(sock) {
       // 7 hari terlalu lama: pelanggan yang chat lagi 2-3 hari kemudian jadi
       // dibisukan padahal admin belum tentu sempat balas.
       const adminPauseMs = (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
+      // Balasan admin masuk ingatan bot: tanpa ini, setelah pause habis bot tidak
+      // tahu apa yang sudah admin janjikan dan bisa bertentangan.
+      tambahRiwayat(jid, 'assistant', `(admin) ${teksPesan(msg.message) || '[pesan non-teks]'}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
       const q = antrian.get(jid);
@@ -212,7 +238,7 @@ function registerMessageHandler(sock) {
         await sendReply(sock, jid, keys, { name: 'voice-note' }, minta);
         return;
       }
-      if (/\[kirim (gambar|dokumen)\]/.test(t)) {
+      if (/\[kirim (gambar|dokumen)/.test(t)) {
         await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
           'Sudah aku terima Kak. Admin cek dulu, nanti dibalas langsung di chat ini.', originalText);
         return;
@@ -257,7 +283,7 @@ function registerMessageHandler(sock) {
       }
 
       // ── 5. AI dengan konteks lead ──
-      const aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText));
+      let aiResponse = await getAIResponse(getRiwayat(jid), originalText, buildLeadContext(fullText, jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -273,9 +299,19 @@ function registerMessageHandler(sock) {
         return;
       }
 
+      // [INFO_ADMIN: topik] = admin perlu tahu (promo, backdrop custom, dll) tapi
+      // bot tetap melayani. Penanda dibuang sebelum dikirim ke klien.
+      const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
+      aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
+
       tambahRiwayat(jid, 'user', originalText);
       tambahRiwayat(jid, 'assistant', aiResponse);
       await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+      if (info) {
+        await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
+      }
+      await rangkumBilaPerlu(jid, ringkasPercakapan)
+        .catch((e) => console.error(`[riwayat] gagal merangkum ${jid.split('@')[0]}:`, e.message));
 
     } catch (err) {
       console.error('Error memproses pesan:', err.message);
@@ -311,6 +347,30 @@ function registerMessageHandler(sock) {
     runSerial(jid, () => handleBatch(q.msgs));
   };
 
+  sock.ev.on('messaging-history.set', ({ messages, syncType }) => {
+    if (syncType !== proto.HistorySync.HistorySyncType.ON_DEMAND) return;
+    const perJid = {};
+    for (const m of messages || []) {
+      const j = m.key?.remoteJid;
+      if (tarikSejarah.has(j)) (perJid[j] ||= []).push(m);
+    }
+    for (const [jid, list] of Object.entries(perJid)) {
+      const st = tarikSejarah.get(jid);
+      list.sort((a, b) => detik(a) - detik(b));
+      const lama = list
+        .map((m) => ({ m, teks: teksPesan(m.message) }))
+        .filter((x) => x.teks)
+        .map(({ m, teks }) => ({ role: m.key.fromMe ? 'assistant' : 'user', content: `(${tglPendek(detik(m))}) ${teks}`, t: detik(m) * 1000 }));
+      gabungSejarah(jid, lama, st.sejakMs, st.halaman === 1);
+      console.log(`[sejarah] ${jid.split('@')[0]}: ${lama.length} pesan lama dari HP (halaman ${st.halaman})`);
+      if (list.length >= HALAMAN_SEJARAH && st.halaman < MAKS_HALAMAN) {
+        mintaSejarah(sock, list[0].key, detik(list[0]) * 1000, st.halaman + 1, st.sejakMs);
+      } else {
+        tarikSejarah.delete(jid);
+      }
+    }
+  });
+
   // Presence klien: "composing" = masih mengetik → jangan dulu balas;
   // "paused" = berhenti mengetik → boleh balas lebih cepat.
   sock.ev.on('presence.update', ({ id, presences }) => {
@@ -339,6 +399,10 @@ function registerMessageHandler(sock) {
       if (!sudahSubscribe.has(jid)) {
         sudahSubscribe.add(jid);
         sock.presenceSubscribe(jid).catch(() => {});
+      }
+      if (!sudahSejarah(jid) && !sudahMinta.has(jid)) {
+        sudahMinta.add(jid);
+        mintaSejarah(sock, msg.key, ts * 1000, 1, ts * 1000);
       }
       const q = antrian.get(jid) || { msgs: [], timer: null, mulai: Date.now() };
       q.msgs.push(msg);

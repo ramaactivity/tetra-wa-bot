@@ -26,11 +26,12 @@ const cooldownMs = () => live.get().COOLDOWN_HOURS * 3600 * 1000;
 // terhitung -- jadi akibatnya tidak boleh permanen.
 //
 // Balasan manual admin  -> PAUSE_HOURS (default 24 jam, bisa diubah dari dashboard)
-// Hand-off eksplisit AI -> 24 jam. Dulu 7 hari: 24-27 Sep dua klien yang sudah DP
-// dibisukan 2-3 hari menunggu admin. Kalau admin belum membalas, reminder.js
-// mengeskalasi ke Telegram; setelah 24 jam bot kembali menjawab.
+// Hand-off eksplisit AI -> 2 jam (HANDOFF_AI_JAM). Keputusan Rama 27 Sep: kalau
+// admin belum membalas 2 jam dan klien chat lagi, bot melayani dulu. Dulu 7 hari:
+// dua klien yang sudah DP dibisukan 2-3 hari. reminder.js mengeskalasi ke
+// Telegram setelah 1 jam, sebelum bot ambil alih.
 const handoffMs = () => (live.get().PAUSE_HOURS || 24) * 3600 * 1000;
-const HANDOFF_AI_MS = 24 * 3600 * 1000;
+const HANDOFF_AI_MS = (Number(process.env.HANDOFF_AI_JAM) || 2) * 3600 * 1000;
 
 // ---------- low-level JSON I/O ----------
 function loadJson(file) {
@@ -60,20 +61,29 @@ const riwayat = loadJson(RIWAYAT_FILE); // jid -> { ts, pesan: [{role, content}]
 // yang baru datang: bot menyebut tanggal, pelanggan menjawab jamnya, lalu bot
 // bertanya tanggal lagi. Disimpan ke berkas supaya restart tidak menghapus
 // percakapan yang sedang berjalan.
-const RIWAYAT_MAKS = 40; // ±20 giliran; klien yang nanya-nanya panjang tetap teringat
-const RIWAYAT_TTL_MS = 7 * 24 * 3600 * 1000; // 7 hari diam baru dianggap percakapan baru
-// (lebih lama dari itu, handlers/messages.js memuat ulang pesan masuk dari Supabase)
+//
+// Bentuk: jid -> { ts, pesan: [{role, content, t}], ringkasan, sejarah }
+//  - pesan > RINGKAS_SETELAH: yang lama dirangkum AI jadi `ringkasan` (catatan
+//    klien), SISAKAN pesan terakhir tetap utuh. Tidak ada yang dibuang begitu saja.
+//  - sejarah = chat lama dari HP sudah ditarik (history sync), jangan tarik ulang.
+//  - TTL 90 hari: acara sering dibooking berbulan-bulan sebelumnya.
+const RIWAYAT_MAKS = 250;      // batas keras; normalnya dirangkum jauh sebelum ini
+const RINGKAS_SETELAH = 60;
+const SISAKAN = 40;
+const RIWAYAT_TTL_MS = 90 * 24 * 3600 * 1000;
+
+const aktif = (jid) => riwayat[jid] && Date.now() - riwayat[jid].ts <= RIWAYAT_TTL_MS;
 
 function getRiwayat(jid) {
-  const r = riwayat[jid];
-  if (!r || Date.now() - r.ts > RIWAYAT_TTL_MS) return [];
-  return r.pesan || [];
+  return aktif(jid) ? riwayat[jid].pesan || [] : [];
 }
 
-function tambahRiwayat(jid, role, content) {
-  if (!content) return;
-  const pesan = [...getRiwayat(jid), { role, content }].slice(-RIWAYAT_MAKS);
-  riwayat[jid] = { ts: Date.now(), pesan };
+function getRingkasan(jid) {
+  return aktif(jid) ? riwayat[jid].ringkasan || '' : '';
+}
+
+function simpanKontak(jid, patch) {
+  riwayat[jid] = { ...(aktif(jid) ? riwayat[jid] : {}), ts: Date.now(), ...patch };
   // Buang percakapan basi sekalian, supaya berkasnya tidak tumbuh selamanya.
   for (const [k, v] of Object.entries(riwayat)) {
     if (Date.now() - (v.ts || 0) > RIWAYAT_TTL_MS) delete riwayat[k];
@@ -81,9 +91,40 @@ function tambahRiwayat(jid, role, content) {
   saveJson(RIWAYAT_FILE, riwayat);
 }
 
+function tambahRiwayat(jid, role, content) {
+  if (!content) return;
+  simpanKontak(jid, { pesan: [...getRiwayat(jid), { role, content, t: Date.now() }].slice(-RIWAYAT_MAKS) });
+}
+
 function lupakanRiwayat(jid) {
   delete riwayat[jid];
   saveJson(RIWAYAT_FILE, riwayat);
+}
+
+// Chat lama dari HP (urut lama→baru, semuanya sebelum `sejakMs`). Halaman pertama
+// menggantikan entri yang tidak lebih lengkap darinya: entri lama tanpa stempel,
+// entri sebelum sejakMs, dan isi-ulang Supabase "(pesan ...)" yang cuma sisi klien.
+// Halaman berikutnya (lebih tua lagi) cukup ditaruh di depan.
+function gabungSejarah(jid, lama, sejakMs, halamanPertama) {
+  let kini = getRiwayat(jid);
+  if (halamanPertama) {
+    kini = kini.filter((p) => p.t && p.t >= sejakMs && !String(p.content).startsWith('(pesan '));
+  }
+  simpanKontak(jid, { pesan: [...lama, ...kini].slice(-RIWAYAT_MAKS), sejarah: true });
+}
+
+const sudahSejarah = (jid) => !!(aktif(jid) && riwayat[jid].sejarah);
+
+// Rangkum pesan lama bila riwayat kepanjangan. `fn` = ai.ringkasPercakapan,
+// disuntik dari pemanggil supaya store tidak bergantung ke modul AI.
+async function rangkumBilaPerlu(jid, fn) {
+  const pesan = getRiwayat(jid);
+  if (pesan.length <= RINGKAS_SETELAH) return;
+  const lama = pesan.slice(0, pesan.length - SISAKAN);
+  const ringkasan = await fn(getRingkasan(jid), lama);
+  if (!ringkasan) return;
+  simpanKontak(jid, { ringkasan, pesan: getRiwayat(jid).slice(lama.length) });
+  console.log(`[riwayat] ${jid.split('@')[0]}: ${lama.length} pesan lama dirangkum jadi catatan klien`);
 }
 
 // ---------- cooldown (anti-spam per kontak × rule) ----------
@@ -120,8 +161,12 @@ const setPause = (jid, durationMs, alasan = 'tidak disebut') => {
 module.exports = {
   HANDOFF_AI_MS,
   getRiwayat,
+  getRingkasan,
   tambahRiwayat,
   lupakanRiwayat,
+  gabungSejarah,
+  sudahSejarah,
+  rangkumBilaPerlu,
   loadJson,
   saveJson,
   isOnCooldown,

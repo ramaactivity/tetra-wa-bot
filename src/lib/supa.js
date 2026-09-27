@@ -189,8 +189,10 @@ async function fetchAdminReplyTimes() {
   }
 }
 
-// Handoff AI yang masih aktif dan belum disentuh admin (begitu admin membalas
+// Handoff AI 24 jam terakhir yang belum disentuh admin (begitu admin membalas
 // manual, source berubah jadi 'admin'). Dipakai eskalasi di reminder.js.
+// Tidak disaring paused_until: bot sudah ambil alih setelah 2 jam, tapi admin
+// tetap perlu tahu klien ini belum dibalas.
 async function fetchHandoffAI() {
   if (!supa) return [];
   try {
@@ -198,7 +200,7 @@ async function fetchHandoffAI() {
       .from('bot_paused_contacts')
       .select('wa_jid, updated_at')
       .eq('source', 'ai')
-      .gt('paused_until', new Date().toISOString());
+      .gt('updated_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString());
     if (error) { console.error('[supa] fetchHandoffAI:', error.message); return []; }
     return data || [];
   } catch (e) {

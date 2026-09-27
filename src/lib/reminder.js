@@ -12,7 +12,7 @@ const path = require('path');
 
 const live = require('./liveConfig');
 const supa = require('./supa');
-const { loadJson, saveJson } = require('./store');
+const { loadJson, saveJson, HANDOFF_AI_MS } = require('./store');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
 
@@ -127,10 +127,10 @@ async function maybeSend(sock) {
 
 // ── Eskalasi handoff ─────────────────────────────────────────────────────────
 // Pengingat WA di atas mudah tenggelam (24-27 Sep: klien yang sudah DP menunggu
-// 2-3 hari). Handoff AI yang belum disentuh admin > ESKALASI_JAM dikirim SEKALI
-// ke Telegram topic CS Mintet. Kunci state = jid + waktu handoff, jadi handoff
+// 2-3 hari). Handoff AI yang belum disentuh admin > ESKALASI_JAM (1 jam, sebelum
+// bot ambil alih di jam ke-2) dikirim SEKALI ke Telegram topic CS Mintet. Kunci state = jid + waktu handoff, jadi handoff
 // baru untuk kontak yang sama tetap dieskalasi lagi.
-const ESKALASI_JAM = Number(process.env.ESKALASI_HANDOFF_JAM) || 2;
+const ESKALASI_JAM = Number(process.env.ESKALASI_HANDOFF_JAM) || 1;
 const TG_CHAT = process.env.ESKALASI_TELEGRAM_CHAT_ID || '-1004377661750';
 const TG_THREAD = process.env.ESKALASI_TELEGRAM_THREAD_ID || '109';
 const ESKALASI_FILE = path.join(__dirname, '..', '..', 'data', 'eskalasi.json');
@@ -156,7 +156,7 @@ async function eskalasi() {
     return `• ${l.name || 'Tanpa nama'} — wa.me/${num} (⏳ ${fmtWaiting(Date.now() - new Date(r.updated_at).getTime())})\n  "${kutip}"`;
   });
   const text = `🔴 ${telat.length} klien sudah dioper bot ke admin tapi belum dibalas:\n\n${baris.join('\n')}\n\n` +
-    `Bot diam 24 jam sejak handoff, setelah itu menjawab lagi.`;
+    `Kalau admin belum membalas ${Math.round(HANDOFF_AI_MS / 3600000)} jam sejak handoff dan klien chat lagi, bot melayani dulu.`;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
