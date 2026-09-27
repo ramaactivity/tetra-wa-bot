@@ -384,7 +384,25 @@ async function hapusPause(waJid) {
   }
 }
 
+// Nama add-on aktif di master Tetra Ops. Quotation mencocokkan nama persis,
+// jadi AI harus memilih dari daftar ini. Cache 1 jam.
+let cacheAddon = { t: 0, nama: [] };
+async function fetchAddonNames() {
+  if (!supa) return [];
+  if (Date.now() - cacheAddon.t < 3600 * 1000 && cacheAddon.nama.length) return cacheAddon.nama;
+  try {
+    const { data, error } = await supa.from('addons').select('name').eq('is_active', true).is('deleted_at', null);
+    if (error) { console.error('[supa] fetchAddonNames:', error.message); return cacheAddon.nama; }
+    cacheAddon = { t: Date.now(), nama: (data || []).map((r) => r.name) };
+    return cacheAddon.nama;
+  } catch (e) {
+    console.error('[supa] fetchAddonNames:', e.message);
+    return cacheAddon.nama;
+  }
+}
+
 module.exports = {
+  fetchAddonNames,
   fetchHandoffAI,
   fetchLeadMessages,
   enabled,

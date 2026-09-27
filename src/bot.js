@@ -320,13 +320,13 @@ async function kirimInvoice(raw) {
   await currentSock.sendPresenceUpdate('paused', jid);
   const sentTeks = await currentSock.sendMessage(jid, { text: pesan });
   rememberBotMsg(sentTeks);
-  deliveryLog.track(sentTeks, 'pengingat-pelunasan→customer');
+  deliveryLog.track(sentTeks, 'dokumen→customer');
   await delay(1500);
   const sentPdf = await currentSock.sendMessage(jid, { document: pdf, fileName: namaFile, mimetype: 'application/pdf' });
   rememberBotMsg(sentPdf);
   // Masuk riwayat supaya AI paham konteksnya kalau klien membalas pengingat ini.
   store.tambahRiwayat(jid, 'assistant', `${pesan}\n[terlampir: ${namaFile}]`);
-  console.log(`🧾 Pengingat pelunasan + ${namaFile} terkirim ke ${nomor}`);
+  console.log(`🧾 Dokumen ${namaFile} + pesan terkirim ke ${nomor}`);
   return { ok: true, pesan: `terkirim ke ${nomor} teks=${sentTeks?.key?.id} pdf=${sentPdf?.key?.id}` };
 }
 function startCommandPoller() {
@@ -402,10 +402,11 @@ function startCommandPoller() {
             console.log(`Pricelist terkirim ke ${number} (gambar=${idGambar} pdf=${idPdf})`);
             await supa.markCommand(c.id, 'done', `terkirim ke ${number} gambar=${idGambar} pdf=${idPdf}`);
           }
-        } else if (c.command.startsWith('send-invoice:')) {
-          // Dari tool MCP tetra-ops kirim_pengingat_pelunasan (owner sudah menyetujui
-          // di Hermes). Format: send-invoice:{"nomor","pesan","pdf_url","nama_file"}
-          const hasil = await kirimInvoice(c.command.slice('send-invoice:'.length));
+        } else if (/^send-(invoice|document):/.test(c.command)) {
+          // Dari Tetra Ops: kirim_dokumen, tombol "Kirim ke klien" di Telegram, atau
+          // pengingat pelunasan -- owner sudah menyetujui di sana. Format keduanya:
+          // send-<jenis>:{"nomor","pesan","pdf_url","nama_file"}
+          const hasil = await kirimInvoice(c.command.slice(c.command.indexOf(':') + 1));
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else {
           await supa.markCommand(c.id, 'error', `Perintah tak dikenal: ${c.command}`);

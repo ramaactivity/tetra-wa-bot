@@ -7,11 +7,13 @@ const R = (p) => require.resolve(path.join(process.cwd(), p));
 
 const log = { kirim: [], notif: [], pause: [], sejarah: [], wa: [] };
 let ekstrak = {};
+const ops = []; let opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 let paused = {};
 let aiJawab = 'halo';
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
-  fetchPausedContacts: async () => paused, fetchLeadMessages: async () => [],
+  fetchPausedContacts: async () => paused,
+  fetchAddonNames: async () => ['Guest Books Photo'], fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
 });
 stub('src/lib/sheetSync.js', { syncToSheet: async () => {} });
@@ -23,6 +25,12 @@ stub('src/lib/ai.js', {
   getAIResponse: async () => { if (aiJawab instanceof Error) throw aiJawab; return aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
+  ekstrakQuotation: async () => ({ klien: { nama: 'PT Maju', attn: 'Bu Sari' }, acara: { kota: 'Jakarta' },
+    layanan: [{ kategori: 'photobooth_classic', jam: '4', format: '4r' }, { kategori: null }], addons: [], gross_up: true, usulan_diskon: { persen: 10, alasan: 'x' } }),
+});
+stub('src/lib/availability.js', {
+  checkAvailability: async () => null, enabled: () => true, summarize: () => '',
+  opsBase: () => 'https://ops.test', postOps: async (p, body) => { ops.push({ p, body }); return opsJawab; },
 });
 stub('src/lib/liveConfig.js', { isEnabled: () => true, get: () => ({ PAUSE_HOURS: 24, ADMIN_NOTIFY_JID: 'admin@s.whatsapp.net' }) });
 
@@ -123,6 +131,25 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(!r.kirim.includes('[DOK BACKDROP TETRA.pdf]'), 'PDF backdrop terkirim dua kali');
   assert.ok(!r.kirim.some((t) => /\[KIRIM/.test(t)), 'penanda KIRIM bocor');
 
+  // Quotation: penanda dibuang, draft diminta ke Tetra Ops, tidak dobel, gagal → admin tahu
+  const jidQ = '62844@s.whatsapp.net';
+  aiJawab = 'Siap Bu, penawarannya aku siapkan dan dicek admin dulu.\n[QUOTATION]';
+  ops.length = 0;
+  r = await kirim({ conversation: 'minta penawaran resmi ya kak, PT Maju, 4 jam 4R di Jakarta' }, jidQ);
+  assert.deepStrictEqual(r.kirim, ['Siap Bu, penawarannya aku siapkan dan dicek admin dulu.']);
+  const q = ops.find((o) => o.p === '/api/bot/quotation');
+  assert.ok(q, 'quotation tidak diminta');
+  assert.strictEqual(q.body.sumber.jenis, 'wa_bot'); assert.strictEqual(q.body.layanan.length, 1);
+  assert.strictEqual(q.body.layanan[0].jam, 4); assert.ok(!('usulan_diskon' in q.body), 'bot tidak boleh usul diskon');
+  assert.ok(q.body.external_id.startsWith('quo:62844@'));
+  await kirim({ conversation: 'ditunggu ya' }, jidQ);
+  const q2 = ops.filter((o) => o.p === '/api/bot/quotation');
+  assert.strictEqual(q2.at(-1).body.external_id, q.body.external_id, 'permintaan sama harus external_id sama');
+  opsJawab = { ok: false, status: 400, json: { error: 'Body tidak valid' } };
+  r = await kirim({ conversation: 'tolong kirim lagi penawarannya' }, jidQ);
+  assert.ok(r.notif.some((n) => /GAGAL/.test(n)), 'gagal quotation tidak dilaporkan ke admin');
+  opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
+
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));
   const jidB = '62811@s.whatsapp.net';
@@ -135,6 +162,10 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(r.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'), 'katalog tidak terkirim');
   assert.deepStrictEqual(r.wa[0], '[FORWARD]', 'bukti transfer tidak diteruskan ke admin');
   assert.match(r.wa[1], /Bukti DP masuk/); assert.match(r.wa[1], /Belum diisi: .*PIC/);
+  const kirimOps = ops.filter((o) => o.p === '/api/bot/booking');
+  assert.ok(kirimOps.length >= 1 && kirimOps[0].body.external_id.startsWith('wa:62811@'), 'booking tidak dikirim ke Tetra Ops');
+  assert.strictEqual(kirimOps.at(-1).body.data.tanggal_iso, '2026-12-05');
+  assert.match(r.wa[1], /Buka di Booking Masuk: https:\/\/ops\.test\/operations\/booking-masuk\/abc/);
   assert.strictEqual(r.pause.length, 0, 'tahap booking tidak boleh pause');
 
   // Data dicicil sampai lengkap → rekap "lengkap" ke admin

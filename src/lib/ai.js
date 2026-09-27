@@ -122,6 +122,11 @@ LAMPIRAN — tambahkan di baris paling akhir (tidak terlihat klien), SEKALI per 
 - "[KIRIM: katalog]" kalau klien minta contoh/pilihan desain frame sebelum DP.
 Jangan pakai penanda ini kalau di riwayat file yang sama sudah pernah dikirim.
 
+PENAWARAN RESMI / QUOTATION — kalau klien minta penawaran resmi, quotation, atau surat penawaran (umumnya korporat/instansi):
+- Pastikan dulu datanya cukup: nama klien atau instansi (+ nama PIC untuk "u.p."), layanan + durasi (+ format cetak kalau photobooth), dan kota/venue. Tanggal, jam, jumlah tamu, add-on, backdrop, dan perlu-tidaknya pajak dicantumkan ikut kalau sudah disebut. Tanyakan yang kurang, maks 2 per pesan.
+- Kalau sudah cukup: balas bahwa penawarannya kamu siapkan dan dicek admin dulu, nanti PDF-nya dikirim di chat ini (jangan janji jam pasti, jangan sebut diskon). Lalu di baris paling akhir tulis "[QUOTATION]".
+- Kalau klien mengubah isi setelah itu (mis. durasi), boleh "[QUOTATION]" lagi untuk penawaran baru.
+
 INFO KE ADMIN TANPA BERHENTI — untuk hal yang jawabannya dari admin tapi percakapan tetap kamu layani (tanya promo, backdrop custom/Luxury, hal "admin yang konfirmasi" di FAQ): tulis balasan biasa ke klien (bilang admin yang akan info bagian itu), lalu di baris paling akhir tambahkan "[INFO_ADMIN: <topik singkat>]". Penanda ini tidak terlihat klien. Cukup sekali per topik; jangan ulang kalau di riwayat kamu sudah bilang admin akan info topik yang sama.
 
 SETELAH HANDOFF — kalau di riwayat kamu sudah meneruskan ke admin tapi belum ada balasan admin (pesan berawalan "(admin)") dan klien chat lagi, admin sedang belum sempat. Lanjut layani semua yang bisa kamu jawab. Untuk hal yang tetap butuh admin, bilang sudah diteruskan dan admin akan membalas; jangan pakai [ADMIN_HANDOFF] lagi untuk hal yang sama.
@@ -129,7 +134,7 @@ SETELAH HANDOFF — kalau di riwayat kamu sudah meneruskan ke admin tapi belum a
 RIWAYAT — pesan berawalan "(admin)" adalah balasan manual admin Tetra: itu keputusan resmi, ikuti dan jangan dibantah. Pesan berawalan tanggal dalam kurung adalah chat lama. "CATATAN KLIEN" di bawah adalah ringkasan percakapan lama; pakai supaya tidak tanya ulang.
 
 HANDOFF — ketik "[ADMIN_HANDOFF]" (tanpa teks lain) lalu berhenti ketika:
-- Minta kontrak, invoice, penawaran resmi, PO, kwitansi.
+- Minta kontrak, invoice, PO, kwitansi. (Penawaran resmi/quotation: ikuti bagian PENAWARAN RESMI, bukan handoff.)
 - Produk yang tidak ada di katalog FAQ (mingle, instant photobooth, software/aplikasi, cetak foto saja).
 - Batal atau reschedule booking.
 - Klien komplain atau minta bicara manusia.
@@ -316,4 +321,31 @@ async function ekstrakBooking(dataLama, pesan, field) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking };
+// Susun permintaan quotation (kontrak Tetra Ops /api/bot/quotation) dari chat.
+// Harga TIDAK diisi di sini: Tetra Ops yang menghitung dari master paket/add-on.
+async function ekstrakQuotation(pesan, ringkasan, namaAddon = []) {
+  const teks = pesan.map((p) => `${p.role === 'user' ? 'KLIEN' : 'TETRA'}: ${p.content}`).join('\n');
+  const hariIni = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  const messages = [
+    { role: 'system', content:
+      'Susun permintaan penawaran (quotation) photobooth dari chat WhatsApp. Kembalikan HANYA objek JSON:\n' +
+      '{"klien":{"nama":"nama instansi/perusahaan kalau korporat, kalau pribadi nama orang","organisasi":null,"attn":"nama PIC untuk u.p.","email":null},' +
+      '"acara":{"judul":null,"jenis":"wedding|corporate|birthday|wisuda|gathering|instansi|reuni|event","tanggal":"YYYY-MM-DD","jam_mulai":"HH:MM","jam_selesai":"HH:MM","venue":null,"kota":null,"jumlah_tamu":null},' +
+      '"layanan":[{"kategori":"photobooth_classic|videobooth_360|magazine_combo|magazine_box_only|photostage_only|photostage_combo","jam":3,"format":"2r|4r|polaroid","qty":1}],' +
+      '"addons":[{"nama":"nama add-on","qty":1}],"backdrop":"White|Red|Silver|Gold|Emerald Green|Blue|Luxury #01|Luxury #02|dekorasi_klien","gross_up":false,"catatan":null}\n' +
+      `Hari ini ${hariIni}; tanggal tanpa tahun = tanggal terdekat ke depan. gross_up true hanya kalau klien minta pajak dicantumkan. ` +
+      'Isi hanya yang disebut/disepakati di chat; yang tidak ada tulis null (atau array kosong). Jangan menebak, jangan isi harga atau diskon. ' +
+      'format hanya untuk photobooth; jam = durasi layanan dalam jam (bilangan bulat). ' +
+      (namaAddon.length ? `addons[].nama WAJIB persis salah satu dari: ${namaAddon.join(' | ')}. Add-on yang tidak ada di daftar masukkan ke catatan.` : '') },
+    { role: 'user', content: `${ringkasan ? `CATATAN KLIEN:\n${ringkasan}\n\n` : ''}CHAT:\n${teks}` },
+  ];
+  const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
+  let raw;
+  try { raw = await ambil(PRIMARY); }
+  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('ekstrak quotation: tidak ada JSON');
+  return JSON.parse(m[0]);
+}
+
+module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation };

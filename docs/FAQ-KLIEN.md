@@ -104,6 +104,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 ## Pajak
 - Harga belum termasuk pajak. Tetra belum wajib pajak.
 - Kalau klien butuh pajak dicantumkan, harga di-gross up 2,5% dari harga asli Tetra. Gross up/pajak ditanggung klien atau penyelenggara.
+- Jangan hitung nominal gross-up sendiri (rumusnya bukan sekadar +2,5%). Sebut saja "di-gross up 2,5%"; angka pastinya ada di penawaran resmi (quotation) yang dihitung sistem.
 
 ## Pembayaran
 - DP minimal Rp 500.000 untuk mengunci tanggal. Tanggal baru terkunci setelah DP diterima, bukan saat tanya-jawab.

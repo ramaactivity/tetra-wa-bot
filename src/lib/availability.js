@@ -89,4 +89,22 @@ function summarize(result) {
   return out;
 }
 
-module.exports = { checkAvailability, enabled, summarize };
+// Endpoint bot lain di Tetra Ops (/api/bot/booking, /api/bot/quotation): origin
+// dan token sama dengan cek jadwal. Tidak pernah melempar error; pemanggil cek ok.
+const opsBase = () => new URL(BASE_URL).origin;
+async function postOps(path, body) {
+  try {
+    const res = await fetch(opsBase() + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, json };
+  } catch (e) {
+    return { ok: false, status: 0, json: { error: e.message } };
+  }
+}
+
+module.exports = { checkAvailability, enabled, summarize, opsBase, postOps };

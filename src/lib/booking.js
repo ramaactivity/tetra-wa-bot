@@ -13,6 +13,7 @@ const { loadJson, saveJson, tambahRiwayat, getRiwayat } = require('./store');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
 const { sendDocument } = require('./sender');
+const { postOps, opsBase } = require('./availability');
 
 const FILE = path.join(__dirname, '..', '..', 'data', 'booking.json');
 const KATALOG = path.join(__dirname, '..', '..', 'assets', 'KATALOG DESAIN FRAME TETRA.pdf');
@@ -137,6 +138,40 @@ async function teruskanKeAdmin(sock, msg) {
   rememberBotMsg(sent);
 }
 
+// Kirim ke "Booking Masuk" Tetra Ops (POST /api/bot/booking, idempoten per
+// external_id). Hanya kalau isinya berubah sejak kiriman terakhir. Gagal = dicatat,
+// tidak menghentikan alur ke klien; kiriman berikutnya mencoba lagi.
+async function sinkronOps(jid) {
+  const b = semua[jid];
+  if (!b) return;
+  const data = {};
+  for (const [k] of FIELD) data[k] = b.data[k] || null;
+  data.tanggal_iso = b.data.tanggal_iso || null;
+  const body = {
+    external_id: `wa:${jid}:${b.mulai}`,
+    wa_jid: jid,
+    client_wa: /^\d{8,15}$/.test(String(b.phone || '')) ? String(b.phone) : null,
+    client_name: b.nama || null,
+    sumber: b.sumber === 'admin' ? 'admin' : 'bukti-transfer',
+    dp_dilaporkan_at: new Date(b.mulai).toISOString(),
+    bukti_url: null,
+    lengkap: !!b.lengkap,
+    data,
+  };
+  const kunci = JSON.stringify(body);
+  if (b.disinkron === kunci) return;
+  const r = await postOps('/api/bot/booking', body);
+  if (!r.ok) {
+    console.error(`[booking→ops] ${jid.split('@')[0]}: HTTP ${r.status} ${JSON.stringify(r.json).slice(0, 200)}`);
+    return;
+  }
+  const url = String(r.json.url || '');
+  b.opsUrl = url.startsWith('/') ? opsBase() + url : url || b.opsUrl;
+  b.disinkron = kunci;
+  simpan();
+  console.log(`[booking→ops] ${jid.split('@')[0]}: ${r.json.status || 'ok'} ${b.opsUrl || ''}`);
+}
+
 // Rekap siap-input Tetra Ops. `judul` menjelaskan kenapa dikirim sekarang.
 function teksRekap(jid, judul) {
   const b = semua[jid];
@@ -151,7 +186,7 @@ function teksRekap(jid, judul) {
     ...isi,
     '',
     k.length ? `⏳ Belum diisi: ${k.map((x) => x.label).join(', ')}` : '✅ Data wajib lengkap — siap input ke Tetra Ops.',
-  ].join('\n');
+  ].join('\n') + (b.opsUrl ? `\n\nBuka di Booking Masuk: ${b.opsUrl}` : '');
 }
 
 async function laporAdmin(sock, jid, judul) {
@@ -190,6 +225,6 @@ const riwayatUntukEkstrak = (jid) => getRiwayat(jid).slice(-16);
 
 module.exports = {
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, kirimTeks, kirimKatalog,
-  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap,
+  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap, sinkronOps,
   semua: () => semua, simpan,
 };

@@ -14,7 +14,9 @@ const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin } = require('../lib/notify');
-const { getAIResponse, ringkasPercakapan, ekstrakBooking } = require('../lib/ai');
+const { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
+const { postOps } = require('../lib/availability');
+const crypto = require('crypto');
 const booking = require('../lib/booking');
 const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
 const path = require('path');
@@ -227,6 +229,7 @@ function registerMessageHandler(sock) {
       const ringkasan = getRingkasan(jid);
       if (ringkasan) pesan.unshift({ role: 'assistant', content: `CATATAN KLIEN: ${ringkasan}` });
       booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD));
+      await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
     } catch (e) {
       console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
@@ -241,6 +244,32 @@ function registerMessageHandler(sock) {
     await booking.kirimTeks(sock, jid, booking.teksForm(b, pembuka), 'form-booking→customer');
     await booking.kirimKatalog(sock, jid);
     await booking.laporAdmin(sock, jid, judulAdmin);
+  };
+
+  // Klien minta penawaran resmi: susun permintaan dari chat, minta Tetra Ops
+  // membuat DRAFT quotation (harga dihitung di sana). Rama menyetujui lewat
+  // Telegram, lalu Tetra Ops mengirim PDF lewat perintah send-document.
+  // external_id = hash isi permintaan: permintaan sama tidak membuat draft ganda.
+  const mintaQuotation = async (jid, msg) => {
+    try {
+      const req = await ekstrakQuotation(getRiwayat(jid).slice(-30), getRingkasan(jid), await supa.fetchAddonNames());
+      const digit = phoneDigits(msg);
+      req.klien = { ...(req.klien || {}), wa: /^\d{8,15}$/.test(digit) ? digit : null };
+      req.layanan = (req.layanan || []).filter((l) => l && l.kategori)
+        .map((l) => ({ ...l, jam: l.jam ? Math.round(Number(l.jam)) : null, qty: Number(l.qty) || 1 }));
+      req.addons = (req.addons || []).filter((a) => a && a.nama).map((a) => ({ nama: a.nama, qty: Number(a.qty) || 1 }));
+      req.sumber = { jenis: 'wa_bot', wa_jid: jid };
+      delete req.usulan_diskon;
+      const external_id = `quo:${jid}:${crypto.createHash('sha1').update(JSON.stringify(req)).digest('hex').slice(0, 12)}`;
+      const r = await postOps('/api/bot/quotation', { ...req, external_id });
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${JSON.stringify(r.json).slice(0, 300)}`);
+      tambahRiwayat(jid, 'assistant', `(catatan sistem) draft quotation ${r.json.doc_number || ''} dibuat, menunggu persetujuan admin`);
+      console.log(`[quotation] ${jid.split('@')[0]}: draft ${r.json.doc_number || r.json.id} dibuat`);
+    } catch (e) {
+      console.error(`[quotation] ${jid.split('@')[0]}: gagal:`, e.message);
+      await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid),
+        `klien minta penawaran resmi, draft otomatis GAGAL dibuat (${e.message.slice(0, 120)}) — tolong buat manual`).catch(() => {});
+    }
   };
 
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
@@ -413,6 +442,8 @@ function registerMessageHandler(sock) {
       const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
         .filter((k) => LAMPIRAN[k]);
       aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
+      const quotation = /\[QUOTATION\]/i.test(aiResponse);
+      aiResponse = aiResponse.replace(/\[QUOTATION\]/gi, '').trim();
 
       tambahRiwayat(jid, 'user', originalText);
       if (aiResponse) {
@@ -432,6 +463,7 @@ function registerMessageHandler(sock) {
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }
+      if (quotation) await mintaQuotation(jid, msg);
       await rangkumBilaPerlu(jid, ringkasPercakapan)
         .catch((e) => console.error(`[riwayat] gagal merangkum ${jid.split('@')[0]}:`, e.message));
 
