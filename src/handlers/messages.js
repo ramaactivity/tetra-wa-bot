@@ -146,8 +146,6 @@ const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
 const LAMPIRAN = {
   backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic',
     caption: 'Pilihan backdrop basic Tetra, sudah termasuk di paket.' },
-  pricelist: { file: 'PRICELIST TETRA PHOTOBOOTH.pdf', label: 'pricelist',
-    caption: 'Pricelist lengkap Tetra Photobooth 2026.' },
   katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame',
     caption: 'Contoh desain frame Tetra. Belum ada yang cocok? Desain custom juga bisa, gratis.' },
 };
@@ -442,7 +440,7 @@ function registerMessageHandler(sock) {
       const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
       const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
-        .filter((k) => LAMPIRAN[k]);
+        .filter((k) => LAMPIRAN[k] || k === 'pricelist');
       aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
       const quotation = /\[QUOTATION\]/i.test(aiResponse);
       aiResponse = aiResponse.replace(/\[QUOTATION\]/gi, '').trim();
@@ -453,8 +451,15 @@ function registerMessageHandler(sock) {
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
       }
       if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist');
+      // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
+      // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
+      if (lampiran.includes('pricelist') && !kirimPL &&
+          !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
+        await kirimPricelist(sock, jid, 'ai-pricelist');
+      }
       for (const k of lampiran) {
         const l = LAMPIRAN[k];
+        if (!l) continue;
         const tanda = `[kirim PDF ${l.label}]`;
         if (getRiwayat(jid).some((p) => String(p.content).includes(tanda))) continue;
         const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), l.caption);
