@@ -46,8 +46,9 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - 2 jam Rp 4.000.000 · 3 jam Rp 4.500.000.
 - Sama seperti Photo Stage, ditambah pilihan cetak instan classic photobooth untuk tamu.
 
-### Extend di hari H
-- Photobooth Classic dan Videobooth 360: tambah durasi di hari H Rp 500.000 per jam.
+### Extend & durasi di atas 8 jam
+- Photobooth Classic dan Videobooth 360: tambah durasi di hari H Rp 500.000 per jam (wajib diinfokan dulu ke crew).
+- Butuh lebih dari 8 jam sejak awal: hitung paket 8 jam + Rp 500.000 per jam tambahan (mis. 10 jam = Rp 5.000.000 + Rp 1.000.000 = Rp 6.000.000). Untuk durasi sangat panjang, bandingkan dengan paket 13 jam Rp 7.500.000 (2R) dan tawarkan yang lebih hemat.
 
 ### Add-on
 - Voucher Photobooth 100 pcs Rp 25.000
@@ -64,11 +65,12 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 ### Transport di luar Jabodetabek
 - Semua paket: ada biaya transport, admin yang info nominalnya.
 
-## Yang perlu disiapkan klien/venue (Photobooth Classic)
-- 1 meja (untuk printer) dan 2 kursi.
-- Area kosong ±2x3 meter untuk photobooth.
-- Colokan listrik dekat area photobooth. Daya yang dibutuhkan ±500 watt.
-- Lokasi diusahakan tidak kena matahari langsung dan dekat sumber listrik.
+## Yang perlu disiapkan klien/venue (Photobooth Classic, 360, Photo Stage)
+- Area minimal 3×4 meter, 1 meja (untuk printer) dan 2 kursi.
+- Colokan listrik dekat area photobooth, daya ±500 watt.
+- Akses masuk dan jalur loading peralatan, plus nomor PIC/panitia/WO yang bisa dihubungi selama acara.
+- Lokasi terbuka: area tidak boleh kena matahari langsung; penyewa sediakan tenda/pelindung dan lokasi cadangan kalau hujan. Kepastian lokasi outdoor tetap admin yang konfirmasi.
+- Magazine Box punya syarat sendiri (lihat katalog).
 
 ## Kapasitas foto
 - Sekali foto bisa sampai 10 orang lebih, tergantung luas area photobooth. Bisa disesuaikan lewat lensa.
@@ -80,6 +82,12 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 ## Crew & setup
 - Crew di lokasi biasanya 2 orang (lead + asisten).
 - Crew datang paling lambat 1 jam sebelum acara mulai. Setup alat sekitar 30 menit.
+- Layanan berakhir tepat sesuai durasi yang dipesan. Setelah terpasang, alat tidak dapat dipindahkan; kalau terpaksa dipindah, durasi tetap berjalan.
+- Khusus pernikahan: ada sesi khusus pengantin 15 menit.
+
+## Hasil foto
+- Tamu unduh langsung lewat QR code di lokasi; halaman unduh aktif 30 hari sejak acara.
+- Galeri lengkap untuk klien bisa diakses 90 hari; paket dengan flashdisk menerima semua file di flashdisk. Sarankan klien menyimpan salinan.
 
 ## Backdrop
 - Backdrop basic kain (sudah termasuk): Putih, Merah, Gold, Silver, Hijau Emerald. (Hitam sudah tidak ada.)
@@ -96,13 +104,21 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Harga belum termasuk pajak. Tetra belum wajib pajak.
 - Kalau klien butuh pajak dicantumkan, harga di-gross up 2,5% dari harga asli Tetra. Gross up/pajak ditanggung klien atau penyelenggara.
 
+## Pembayaran
+- DP minimal Rp 500.000 untuk mengunci tanggal. Tanggal baru terkunci setelah DP diterima, bukan saat tanya-jawab.
+- Pelunasan paling lambat H-1 sebelum acara.
+- Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.
+
 ## Setelah DP
 - Setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin sebagai bukti booking.
 - Setelah DP, klien diminta melengkapi data acara (boleh dicicil) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
-- Batal setelah DP: DP hangus sebagai cancellation fee.
-- Reschedule dan pembatalan ditangani admin.
+- Batal setelah DP: DP hangus sebagai cancellation fee (Rp 500.000).
+- Batal setelah pelunasan: >14 hari sebelum acara pelunasan kembali penuh; 14–3 hari sebelum acara kembali 50%; <3 hari tidak ada pengembalian (masih boleh ajukan reschedule). DP tetap ditahan.
+- Reschedule: diajukan paling lambat 30 hari sebelum acara dan hanya kalau tanggal baru tersedia; seluruh pembayaran pindah tanpa biaya pembatalan, selisih harga paket disesuaikan.
+- Pembatalan dari pihak Tetra: semua dana dikembalikan termasuk DP.
+- Proses reschedule/pembatalan tetap ditangani admin (bot cukup menjelaskan aturannya).
 
 ## Admin yang konfirmasi (jangan jawab sendiri)
-- Acara outdoor.
+- Kepastian lokasi outdoor.
 - Masa berlaku harga.
 - Harga backdrop Luxury / custom.
