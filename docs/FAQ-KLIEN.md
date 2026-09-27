@@ -55,9 +55,9 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Break Time 1 jam Rp 150.000 (jeda di tengah durasi)
 - Album Photostripe 20 halaman Rp 100.000
 - Guest Book Photo 25 lembar Rp 200.000
-- Photomagnet 50 cetak Rp 350.000
-- Costume Sleeve 1.000 lembar Rp 1.500.000
-- Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan: admin yang konfirmasi.
+- Photomagnet 50 cetak Rp 650.000
+- Custom Sleeve 1.000 lembar Rp 1.500.000 (sleeve pembungkus cetakan dengan desain custom)
+- Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan 100 pcs.
 
 ### Dua layanan sekaligus
 - Mis. Photobooth + 360, atau 2 unit photobooth: harga dijumlah normal. Diskon bundling hanya dari admin.
