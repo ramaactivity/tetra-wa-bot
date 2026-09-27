@@ -170,8 +170,9 @@ function parseWebsite(text) {
   for (const baris of t.split('\n')) {
     const m = baris.match(/^\s*[•\-*]?\s*([^:]{2,30}?)\s*:\s*(.*)$/);
     if (!m) continue;
+    // Nilai berangka tidak pernah dianggap kosong: "November 2026 (belum pasti)" tetap terbaca.
     for (const [k, re] of Object.entries(LABEL_WEB)) {
-      if (!out[k] && re.test(m[1].trim())) { const v = m[2].trim(); if (v && !isEmptyVal(v)) out[k] = v; }
+      if (!out[k] && re.test(m[1].trim())) { const v = m[2].trim(); if (v && (/\d/.test(v) || !isEmptyVal(v))) out[k] = v; }
     }
   }
   // Konteks dari kalimat pembuka: "(halaman Wedding)", "halaman photobooth wedding",
