@@ -10,11 +10,14 @@ const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, gabungSejarah, s
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
-const { sendReply } = require('../lib/sender');
+const { sendReply, sendDocument } = require('../lib/sender');
+const { rememberBotMsg } = require('../lib/botMessages');
+const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin } = require('../lib/notify');
 const { getAIResponse, ringkasPercakapan, ekstrakBooking } = require('../lib/ai');
 const booking = require('../lib/booking');
-const { kirimPricelist, mintaPricelist } = require('../lib/pricelist');
+const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
+const path = require('path');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
 const { cleanName } = require('../lib/followupEngine');
@@ -134,6 +137,16 @@ const MASIH_NGETIK_MS = 10000;  // presence "composing" lebih baru dari ini = ma
 const TUNGGU_MAKS_MS = 120000;  // batas total menunggu, apa pun yang terjadi
 const PESAN_TERLAMA_MS = 12 * 3600 * 1000; // pesan yang masuk selagi bot offline tetap dibalas (maks 12 jam)
 const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
+
+// Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
+// balasan teks, sekali per percakapan (label dicek di riwayat; format label sama
+// dengan booking.kirimKatalog supaya katalog tidak terkirim dua kali).
+const LAMPIRAN = {
+  backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic',
+    caption: 'Pilihan backdrop basic Tetra, sudah termasuk di paket.' },
+  katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame',
+    caption: 'Contoh desain frame Tetra. Belum ada yang cocok? Desain custom juga bisa, gratis.' },
+};
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
 // pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
@@ -397,11 +410,25 @@ function registerMessageHandler(sock) {
       // bot tetap melayani. Penanda dibuang sebelum dikirim ke klien.
       const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
+      const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
+        .filter((k) => LAMPIRAN[k]);
+      aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
 
       tambahRiwayat(jid, 'user', originalText);
-      tambahRiwayat(jid, 'assistant', aiResponse);
-      await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+      if (aiResponse) {
+        tambahRiwayat(jid, 'assistant', aiResponse);
+        await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+      }
       if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist');
+      for (const k of lampiran) {
+        const l = LAMPIRAN[k];
+        const tanda = `[kirim PDF ${l.label}]`;
+        if (getRiwayat(jid).some((p) => String(p.content).includes(tanda))) continue;
+        const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), l.caption);
+        rememberBotMsg(sent);
+        deliveryLog.track(sent, `${k}→customer`);
+        tambahRiwayat(jid, 'assistant', `${tanda}\n${l.caption}`);
+      }
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }

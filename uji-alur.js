@@ -18,7 +18,7 @@ stub('src/lib/sheetSync.js', { syncToSheet: async () => {} });
 stub('src/lib/sender.js', { sendReply: async (s, j, k, r, t) => log.kirim.push(t), sendDocument: async (s, j, f, c) => { log.kirim.push(`[DOK ${require('path').basename(f)}]`); return { key: { id: 'd' + Math.random() } }; } });
 stub('src/lib/deliveryLog.js', { track: () => {} });
 stub('src/lib/notify.js', { notifyAdmin: async (s, f, rule, r, extra) => log.notif.push(`${rule.name}:${extra}`) });
-stub('src/lib/pricelist.js', { kirimPricelist: async () => log.kirim.push('[PL]'), mintaPricelist: (t) => /pricelist/i.test(t) });
+stub('src/lib/pricelist.js', { kirimPricelist: async () => log.kirim.push('[PL]'), mintaPricelist: (t) => /pricelist/i.test(t), ASSETS_DIR: '/tmp' });
 stub('src/lib/ai.js', {
   getAIResponse: async () => { if (aiJawab instanceof Error) throw aiJawab; return aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
@@ -113,6 +113,15 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   aiJawab = 'Tanggal 7 November masih kosong.';
   r = await kirim({ conversation: 'tgl 7 nov kosong?' });
   assert.deepStrictEqual(r.kirim, ['Tanggal 7 November masih kosong.']);
+
+  // Lampiran backdrop: teks dulu, lalu PDF; penanda tidak bocor; tidak dobel
+  const jidD = '62833@s.whatsapp.net';
+  aiJawab = 'Backdrop basic ada 6 warna Kak, contohnya aku kirim ya.\n[KIRIM: backdrop]';
+  r = await kirim({ conversation: 'backdropnya ada warna apa aja kak?' }, jidD);
+  assert.deepStrictEqual(r.kirim, ['Backdrop basic ada 6 warna Kak, contohnya aku kirim ya.', '[DOK BACKDROP TETRA.pdf]']);
+  r = await kirim({ conversation: 'yang biru ada ya kak?' }, jidD);
+  assert.ok(!r.kirim.includes('[DOK BACKDROP TETRA.pdf]'), 'PDF backdrop terkirim dua kali');
+  assert.ok(!r.kirim.some((t) => /\[KIRIM/.test(t)), 'penanda KIRIM bocor');
 
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));

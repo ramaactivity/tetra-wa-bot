@@ -90,7 +90,8 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Galeri lengkap untuk klien bisa diakses 90 hari; paket dengan flashdisk menerima semua file di flashdisk. Sarankan klien menyimpan salinan.
 
 ## Backdrop
-- Backdrop basic kain (sudah termasuk): Putih, Merah, Gold, Silver, Hijau Emerald. (Hitam sudah tidak ada.)
+- Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold, Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
+- Ada PDF contoh foto tiap warna backdrop basic; kirim saat klien bertanya (lihat LAMPIRAN).
 - Backdrop di luar basic (tema khusus, warna lain, Luxury #01/#02): bisa diadakan, harga tentatif/custom sesuai kebutuhan. Jangan sebut angka; bilang admin yang info harganya, tapi tetap layani pertanyaan lain.
 - Klien boleh pakai backdrop dekorasi acaranya sendiri.
 

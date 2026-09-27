@@ -104,7 +104,7 @@ function teksForm(b, pembuka) {
     baris('Teks di frame (nama, tanggal, hashtag)', d.teks_frame),
     '',
     '*3. Backdrop*',
-    baris('Pilihan', d.backdrop || 'basic Tetra (Putih/Merah/Gold/Silver/Hijau Emerald) atau dekorasi acara'),
+    baris('Pilihan', d.backdrop || 'basic Tetra (White/Red/Silver/Gold/Emerald Green/Blue) atau dekorasi acara'),
     '',
     'Kalau masih bingung atau mau tanya-tanya dulu, langsung chat aja ya Kak. Aku bantu sampai beres.',
   ].join('\n');
