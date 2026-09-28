@@ -13,7 +13,7 @@ const { botSentIds } = require('../lib/botMessages');
 const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
-const { notifyAdmin } = require('../lib/notify');
+const { notifyAdmin, kirimTelegram } = require('../lib/notify');
 const { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
@@ -139,6 +139,18 @@ const MASIH_NGETIK_MS = 10000;  // presence "composing" lebih baru dari ini = ma
 const TUNGGU_MAKS_MS = 120000;  // batas total menunggu, apa pun yang terjadi
 const PESAN_TERLAMA_MS = 12 * 3600 * 1000; // pesan yang masuk selagi bot offline tetap dibalas (maks 12 jam)
 const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
+
+// Admin membalas manual saat bot masih memproses (28 Sep: pesan Boby dibalas admin
+// dan bot di menit yang sama). jid -> waktu balasan manual admin terakhir.
+const adminTerakhir = new Map();
+
+// Klaim tindakan yang bot TIDAK bisa lakukan (28 Sep: "sudah aku perbarui
+// jadwalnya" padahal Tetra Ops masih jam lama). Balasan seperti ini tidak dikirim.
+const RE_KLAIM = new RegExp(
+  '\\b(sudah|udah|telah|sdh)(\\s+\\w+){0,2}?\\s+(di)?' +
+  '(perbarui|update|ubah|ganti|geser|pindah(kan)?|reschedule|jadwal(kan)?|kunci|amankan|batalkan|refund|konfirmasi)\\b' +
+  '|\\b(dp|pembayaran|transfer|pelunasan)(nya)?\\s+(sudah|udah|telah)\\s+(masuk|diterima|terverifikasi|lunas)', 'i');
+const KALIMAT_AMAN = 'Untuk perubahan itu aku teruskan ke admin dulu ya Kak, biar dicek dan diperbarui di jadwal. Nanti admin konfirmasi langsung di chat ini.';
 
 // Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
 // balasan teks, sekali per percakapan (label dicek di riwayat; format label sama
@@ -272,6 +284,28 @@ function registerMessageHandler(sock) {
     }
   };
 
+  // Permintaan perubahan booking: bot tidak mengubah apa pun. Admin dikabari di WA
+  // dan Telegram CS Mintet; Tetra Ops (/api/bot/perubahan) menampilkan usulan
+  // untuk disetujui admin. Endpoint belum ada (404) = cukup notifikasi.
+  const laporPerubahan = async (jid, msg, perubahan, teksKlien) => {
+    const num = phoneDigits(msg);
+    const nama = msg.pushName || 'Klien';
+    await notifyAdmin(sock, num, { name: 'PERUBAHAN' }, getRiwayat(jid), perubahan).catch((e) => console.error('[perubahan] WA:', e.message));
+    await kirimTelegram(`✏️ Permintaan perubahan booking (perlu persetujuan admin)\n\n${nama} — wa.me/${num}\n` +
+      `Permintaan: ${perubahan}\nPesan klien: "${teksKlien.replace(/\s+/g, ' ').slice(0, 200)}"\n\n` +
+      'Bot belum mengubah apa pun dan sudah bilang ke klien bahwa admin yang mengonfirmasi.')
+      .catch((e) => console.error('[perubahan] Telegram:', e.message));
+    const bagian = perubahan.split('|').map((x) => x.trim());
+    const r = await postOps('/api/bot/perubahan', {
+      external_id: `chg:${jid}:${crypto.createHash('sha1').update(perubahan).digest('hex').slice(0, 12)}`,
+      wa_jid: jid, client_wa: /^\d{8,15}$/.test(num) ? num : null, client_name: nama,
+      jenis: (bagian[0] || '').toLowerCase().slice(0, 40), perubahan: bagian.slice(1).join(' | ') || perubahan,
+      pesan_klien: teksKlien.slice(0, 1000),
+    });
+    if (!r.ok && r.status !== 404) console.error(`[perubahan→ops] HTTP ${r.status} ${JSON.stringify(r.json).slice(0, 200)}`);
+    console.log(`[perubahan] ${jid.split('@')[0]}: ${perubahan}`);
+  };
+
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
   const handleBatch = async (msgs) => {
     const msg = msgs[msgs.length - 1];
@@ -279,6 +313,7 @@ function registerMessageHandler(sock) {
     const keys = msgs.map((m) => m.key);
     let originalText = '';
     let bolehBalas = false; // false = error apa pun tidak memicu balasan darurat (mis. kontak di-pause)
+    const mulaiProses = Date.now();
     try {
       originalText = msgs.map((m) => teksPesan(m.message)).filter(Boolean).join('\n');
       if (!originalText || jid === 'status@broadcast' || jid.endsWith('@g.us')) return;
@@ -444,6 +479,30 @@ function registerMessageHandler(sock) {
       aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
       const quotation = /\[QUOTATION\]/i.test(aiResponse);
       aiResponse = aiResponse.replace(/\[QUOTATION\]/gi, '').trim();
+      let perubahan = (aiResponse.match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1];
+      aiResponse = aiResponse.replace(/\[PERUBAHAN[^\]]*\]/gi, '').trim();
+
+      // Pengaman: klaim sudah mengubah/mengamankan sesuatu -> tulis ulang sekali;
+      // masih mengklaim -> kalimat aman, dan admin tetap dikabari.
+      if (RE_KLAIM.test(aiResponse)) {
+        console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
+        const ulang = await getAIResponse(getRiwayat(jid), originalText,
+          buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid) +
+          `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
+          'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
+          .catch(() => '');
+        const bersih = String(ulang).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
+        perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || `klien: "${originalText.slice(0, 150)}"`;
+        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih : KALIMAT_AMAN;
+      }
+
+      // Admin sudah membalas selama bot memproses: jangan ikut menjawab.
+      if ((adminTerakhir.get(jid) || 0) >= mulaiProses) {
+        tambahRiwayat(jid, 'user', originalText);
+        console.log(`[batal] ${jid.split('@')[0]}: admin sudah membalas saat bot memproses, balasan bot tidak dikirim`);
+        if (perubahan) await laporPerubahan(jid, msg, perubahan, originalText);
+        return;
+      }
 
       tambahRiwayat(jid, 'user', originalText);
       if (aiResponse) {
@@ -471,6 +530,7 @@ function registerMessageHandler(sock) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }
       if (quotation) await mintaQuotation(jid, msg);
+      if (perubahan) await laporPerubahan(jid, msg, perubahan, originalText);
       await rangkumBilaPerlu(jid, ringkasPercakapan)
         .catch((e) => console.error(`[riwayat] gagal merangkum ${jid.split('@')[0]}:`, e.message));
 
@@ -551,7 +611,13 @@ function registerMessageHandler(sock) {
       // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
       if (msg.messageStubType === 2) console.log(`[gagal-dekripsi] ${jid} (${type})`);
       if (!jid || !msg.message) continue;
-      if (msg.key.fromMe) { runSerial(jid, () => handleFromMe(msg)); continue; }
+      if (msg.key.fromMe) {
+        // Dicatat seketika, bukan di antrean: handleFromMe mengantre di belakang
+        // batch yang sedang diproses, padahal batch itu perlu tahu admin sudah membalas.
+        if (!botSentIds.has(msg.key.id)) adminTerakhir.set(jid, Date.now());
+        runSerial(jid, () => handleFromMe(msg));
+        continue;
+      }
       if (jid === 'status@broadcast' || jid.endsWith('@g.us')) continue;
       const ts = Number(msg.messageTimestamp) || 0;
       if (ts && Date.now() - ts * 1000 > PESAN_TERLAMA_MS) continue;

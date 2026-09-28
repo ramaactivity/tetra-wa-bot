@@ -15,6 +15,7 @@ const supa = require('./supa');
 const { loadJson, saveJson, HANDOFF_AI_MS } = require('./store');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
+const { kirimTelegram } = require('./notify');
 
 const HOURS = (n) => n * 3600 * 1000;
 
@@ -131,8 +132,6 @@ async function maybeSend(sock) {
 // bot ambil alih di jam ke-2) dikirim SEKALI ke Telegram topic CS Mintet. Kunci state = jid + waktu handoff, jadi handoff
 // baru untuk kontak yang sama tetap dieskalasi lagi.
 const ESKALASI_JAM = Number(process.env.ESKALASI_HANDOFF_JAM) || 1;
-const TG_CHAT = process.env.ESKALASI_TELEGRAM_CHAT_ID || '-1004377661750';
-const TG_THREAD = process.env.ESKALASI_TELEGRAM_THREAD_ID || '109';
 const ESKALASI_FILE = path.join(__dirname, '..', '..', 'data', 'eskalasi.json');
 
 async function eskalasi() {
@@ -158,13 +157,7 @@ async function eskalasi() {
   const text = `🔴 ${telat.length} klien sudah dioper bot ke admin tapi belum dibalas:\n\n${baris.join('\n')}\n\n` +
     `Kalau admin belum membalas ${Math.round(HANDOFF_AI_MS / 3600000)} jam sejak handoff dan klien chat lagi, bot melayani dulu.`;
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: TG_CHAT, message_thread_id: Number(TG_THREAD), text, disable_web_page_preview: true }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`Telegram ${res.status} ${(await res.text()).slice(0, 150)}`);
+  await kirimTelegram(text);
 
   for (const r of telat) sudah[r.wa_jid] = r.updated_at;
   saveJson(ESKALASI_FILE, sudah);

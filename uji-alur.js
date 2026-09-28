@@ -5,7 +5,7 @@ const path = require('path');
 const { proto } = require('@whiskeysockets/baileys');
 const R = (p) => require.resolve(path.join(process.cwd(), p));
 
-const log = { kirim: [], notif: [], pause: [], sejarah: [], wa: [] };
+const log = { kirim: [], notif: [], pause: [], sejarah: [], wa: [], tg: [] };
 let ekstrak = {};
 const ops = []; let opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 let paused = {};
@@ -19,10 +19,10 @@ stub('src/lib/supa.js', {
 stub('src/lib/sheetSync.js', { syncToSheet: async () => {} });
 stub('src/lib/sender.js', { sendReply: async (s, j, k, r, t) => log.kirim.push(t), sendDocument: async (s, j, f, c) => { log.kirim.push(`[DOK ${require('path').basename(f)}]`); return { key: { id: 'd' + Math.random() } }; } });
 stub('src/lib/deliveryLog.js', { track: () => {} });
-stub('src/lib/notify.js', { notifyAdmin: async (s, f, rule, r, extra) => log.notif.push(`${rule.name}:${extra}`) });
+stub('src/lib/notify.js', { notifyAdmin: async (s, f, rule, r, extra) => log.notif.push(`${rule.name}:${extra}`), kirimTelegram: async (t) => log.tg.push(t) });
 stub('src/lib/pricelist.js', { kirimPricelist: async () => log.kirim.push('[PL]'), mintaPricelist: (t) => /pricelist/i.test(t), ASSETS_DIR: '/tmp' });
 stub('src/lib/ai.js', {
-  getAIResponse: async () => { if (aiJawab instanceof Error) throw aiJawab; return aiJawab; },
+  getAIResponse: async (...a) => { if (aiJawab instanceof Error) throw aiJawab; return typeof aiJawab === 'function' ? aiJawab(...a) : aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
   ekstrakQuotation: async () => ({ klien: { nama: 'PT Maju', attn: 'Bu Sari' }, acara: { kota: 'Jakarta' },
@@ -54,7 +54,7 @@ registerMessageHandler(sock);
 let n = 0;
 const tunggu = (ms) => new Promise((r) => setTimeout(r, ms));
 async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
-  log.kirim = []; log.notif = []; log.pause = []; log.wa = [];
+  log.kirim = []; log.notif = []; log.pause = []; log.wa = []; log.tg = [];
   await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: jid, id: 'x' + Math.random() }, message, messageTimestamp: Math.floor(Date.now() / 1000) }] });
   await tunggu(400);
   return { ...log, jid };
@@ -158,6 +158,38 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   store.tambahRiwayat(jidP, 'assistant', '[kirim PDF pricelist] + gambar ringkas paket unlimited');
   r = await kirim({ conversation: 'yang 360 berapa lagi kak' }, jidP);
   assert.ok(!r.kirim.includes('[PL]'), 'pricelist terkirim dua kali');
+
+  // Klaim palsu "sudah aku perbarui": ditulis ulang; kalau tetap klaim -> kalimat aman + admin dikabari
+  const jidK = '62866@s.whatsapp.net';
+  aiJawab = 'Geser ke 10.00-13.00 aman Kak, sudah aku perbarui ya jadwalnya.';
+  r = await kirim({ conversation: 'kak jamnya digeser jam 10-1 bisa?' }, jidK);
+  assert.strictEqual(r.kirim.length, 1); assert.ok(!/sudah aku perbarui/.test(r.kirim[0]), 'klaim palsu terkirim');
+  assert.match(r.kirim[0], /teruskan ke admin/);
+  assert.ok(r.notif.some((n) => n.startsWith('PERUBAHAN:')), 'admin tidak dikabari (WA)');
+  assert.ok(r.tg.some((t) => /perubahan/i.test(t)), 'admin tidak dikabari (Telegram)');
+  let panggil = 0;
+  aiJawab = () => (++panggil === 1 ? 'Sudah aku ubah jadwalnya Kak.' : 'Aku teruskan ke admin ya Kak, nanti dikonfirmasi.\n[PERUBAHAN: jam | 08.00 -> 10.00-13.00]');
+  r = await kirim({ conversation: 'jadi jam 10 ya kak' }, jidK);
+  assert.deepStrictEqual(r.kirim, ['Aku teruskan ke admin ya Kak, nanti dikonfirmasi.']);
+  assert.ok(r.notif.includes('PERUBAHAN:jam | 08.00 -> 10.00-13.00'));
+
+  // Penanda PERUBAHAN biasa: tidak bocor, admin WA+Telegram, usulan ke Tetra Ops
+  ops.length = 0;
+  aiJawab = 'Permintaan geser jamnya aku teruskan ke admin ya Kak.\n[PERUBAHAN: jam | 08.00 -> 10.00-13.00]';
+  r = await kirim({ conversation: 'geser jam 10 bisa kak?' }, '62877001@s.whatsapp.net');
+  assert.deepStrictEqual(r.kirim, ['Permintaan geser jamnya aku teruskan ke admin ya Kak.']);
+  assert.strictEqual(r.tg.length, 1);
+  const chg = ops.find((o) => o.p === '/api/bot/perubahan');
+  assert.ok(chg && chg.body.jenis === 'jam' && /10\.00-13\.00/.test(chg.body.perubahan), 'usulan ke Tetra Ops salah');
+
+  // Admin membalas saat bot memproses -> balasan bot dibatalkan
+  const jidR = '62888@s.whatsapp.net';
+  aiJawab = async () => {
+    await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: jidR, id: 'admR', fromMe: true }, message: { conversation: 'Bisaa kaka, boleh.' } }] });
+    return 'Bisa Kak.';
+  };
+  r = await kirim({ conversation: 'bisa geser jam kak?' }, jidR);
+  assert.strictEqual(r.kirim.length, 0, 'bot ikut membalas padahal admin sudah membalas: ' + JSON.stringify(r.kirim));
 
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));
