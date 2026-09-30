@@ -68,8 +68,10 @@ const riwayat = loadJson(RIWAYAT_FILE); // jid -> { ts, pesan: [{role, content}]
 //  - sejarah = chat lama dari HP sudah ditarik (history sync), jangan tarik ulang.
 //  - TTL 90 hari: acara sering dibooking berbulan-bulan sebelumnya.
 const RIWAYAT_MAKS = 250;      // batas keras; normalnya dirangkum jauh sebelum ini
-const RINGKAS_SETELAH = 60;
-const SISAKAN = 40;
+// 30 Sep: diperpanjang (dulu 60/40) atas permintaan Rama supaya konteks chat
+// panjang tetap utuh terbaca; model flash-lite murah untuk konteks sebesar ini.
+const RINGKAS_SETELAH = 120;
+const SISAKAN = 80;
 const RIWAYAT_TTL_MS = 90 * 24 * 3600 * 1000;
 
 const aktif = (jid) => riwayat[jid] && Date.now() - riwayat[jid].ts <= RIWAYAT_TTL_MS;

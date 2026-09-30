@@ -77,7 +77,7 @@ KONTAK PERTAMA (konteks menyebut "KONTAK PERTAMA") — ini kesan pertama, jangan
 - Buka dengan sapaan hangat SEKALI: "Halo Kak <nama kalau ada>!". Kalau dari website, akui singkat (mis. "makasih sudah mampir ke website Tetra"), variasikan kalimatnya. Perkenalkan diri singkat sebagai admin Tetra.
 - Tanggapi SEMUA yang sudah diisi klien (acara, tanggal, jam, lokasi, jumlah tamu, paket yang diklik) dan sebut ulang singkat supaya klien tahu isiannya terbaca. Tanggal disebut → cek jadwal.
 - Jenis acara + jumlah tamu/jam sudah ada → langsung rekomendasi durasi + harga + alasan satu kalimat. Paket yang diklik di website → akui paket itu beserta harganya.
-- Template website terkirim tanpa isian atau terpotong → jangan bahas soal template/terpotong. Beri gambaran: paket all-in unlimited cetak mulai *Rp 2.000.000* (2 jam), lalu tanya 2 hal terpenting: tanggal dan lokasi acara (jenis acara kalau belum jelas dari halaman).
+- Klien minta "cek ketersediaan / rekomendasi paket" tapi jenis acara atau kebutuhannya belum jelas (mis. template website tanpa isian) → JANGAN sebut harga dan JANGAN rekomendasi paket dulu; rekomendasi tanpa tahu acaranya itu asal tebak. Bilang singkat kamu bantu carikan paket yang pas, lalu tanya 2 hal: acaranya apa dan rencana tanggal berapa. Lokasi, jam, dan jumlah tamu ditanya di pesan berikutnya. Jangan bahas soal template/terpotong.
 - Isian samar ("Oktober/November", tanggal tanpa tahun, lokasi umum) → akui yang sudah ada, tanya yang perlu dipastikan saja.
 - Pesan pertama boleh 4–7 baris. Aturan emoji, kata robot, dan maksimal 2 pertanyaan tetap berlaku.
 
@@ -122,7 +122,7 @@ ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Kamu TIDAK BISA melihat gambar/dokumen/voice note dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
 - Riset harga / benchmark / survei vendor: jawab rate card standar apa adanya (harga + yang termasuk). Jangan tanya skema kerja sama, bagi hasil, atau sponsor.
 
-BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya bukan obrolan dengan Tetra soal jasa photobooth: ucapan selamat/doa/broadcast ke banyak orang, auto-reply bot lain, promosi vendor, pesan salah kirim. Kalau ragu, balas biasa.
+BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya bukan obrolan dengan Tetra soal jasa photobooth: ucapan selamat/doa/broadcast ke banyak orang, auto-reply bot lain, promosi vendor, pesan salah kirim. Termasuk usaha lain (bakery, catering, dekor, MUA, WO) yang mengirim ucapan selamat untuk pengantin/klien mereka atau portofolio acara: itu broadcast, BUKAN permintaan photobooth, walaupun menyebut pernikahan/tanggal/kota. Jangan tanya tanggal acaranya. Kalau usaha lain terang-terangan mengajak kenalan/kerja sama, ikuti bagian VENDOR / REKANAN (calon rekanan baru). Kalau ragu, balas biasa.
 
 CEK JADWAL:
 Kamu punya alat cek_ketersediaan yang membaca jadwal asli Tetra Ops. Begitu tanggal disebut, panggil alat itu SEKALI — jangan menebak, jangan bilang "nanti aku cek" lalu diam. Hasilnya cukup disampaikan sekali; jangan cek ulang tanggal yang sama kecuali jamnya berubah. Kalau jam belum disebut, cek tanggalnya dulu lalu tanyakan jam. Kalau klien belum tahu jamnya, catat "jam menyusul" dan lanjut ke booking. Kalau alatnya gagal, bilang apa adanya bahwa jadwal sedang tidak bisa dibaca dan admin yang bantu.
@@ -390,4 +390,35 @@ async function ekstrakQuotation(pesan, ringkasan, namaAddon = []) {
   return JSON.parse(m[0]);
 }
 
-module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation };
+// Penilai sebelum follow-up: baca SELURUH transkrip, putuskan pantas dikirimi
+// pesan lanjutan atau tidak. Ragu, gagal, atau JSON rusak = TIDAK kirim.
+async function nilaiFollowup(transkrip, ringkasan) {
+  const messages = [
+    { role: 'system', content:
+      'Kamu supervisor CS Tetra Photobooth. Baca SELURUH transkrip chat WhatsApp di bawah dari awal sampai akhir, ' +
+      'lalu putuskan apakah pantas mengirim pesan follow-up penjualan ke kontak ini SEKARANG. ' +
+      'Kembalikan HANYA JSON: {"kirim":true|false,"status":"calon_klien_menggantung|sudah_menolak|pakai_vendor_lain|' +
+      'bukan_calon_klien|vendor_atau_usaha_lain|menunggu_jawaban_tetra|menunggu_admin|sudah_deal|lainnya","alasan":"satu kalimat"}.\n' +
+      'kirim=true HANYA kalau SEMUA benar:\n' +
+      '1. Kontak jelas calon klien yang menanyakan jasa photobooth untuk acaranya sendiri.\n' +
+      '2. Pesan terakhir dari TETRA/ADMIN dan pertanyaan klien sudah terjawab semua; klien yang belum membalas.\n' +
+      '3. Klien TIDAK menolak, tidak bilang sudah pakai/booking vendor lain, tidak bilang batal/tidak jadi, tidak minta berhenti dihubungi.\n' +
+      '4. Tidak ada urusan yang sedang menunggu admin (promo, diskon, harga khusus, quotation, keluhan, handoff).\n' +
+      '5. Bukan usaha lain (bakery, dekor, MUA, WO, vendor), bukan ucapan selamat/broadcast/portofolio/promosi/salah kirim.\n' +
+      '6. Belum DP/deal.\n' +
+      'Pesan ADMIN = keputusan resmi pemilik. Kalau ragu sedikit pun, kirim=false.' },
+    { role: 'user', content: `${ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n\n` : ''}TRANSKRIP:\n${transkrip}` },
+  ];
+  const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
+  try {
+    let raw;
+    try { raw = await ambil(PRIMARY); }
+    catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+    const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+    return { kirim: j.kirim === true, status: j.status || '?', alasan: j.alasan || '' };
+  } catch (e) {
+    return { kirim: false, status: 'gagal_nilai', alasan: e.message.slice(0, 100) };
+  }
+}
+
+module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup };

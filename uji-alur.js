@@ -10,11 +10,13 @@ let ekstrak = {};
 const ops = []; let opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 let paused = {};
 let aiJawab = 'halo';
+let leadsUji = [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }];
+let nilai = { kirim: true, status: 'calon_klien_menggantung' };
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
   fetchPausedContacts: async () => paused,
   fetchVendorContacts: async () => [{ name: 'Party Planner', phone: '+62 878-7189-3437' }, { name: 'Primera Wedding', phone: '0899-0471-515' }],
-  fetchRecentLeads: async () => [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }],
+  fetchRecentLeads: async () => leadsUji,
   fetchAddonNames: async () => ['Guest Books Photo'], fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
 });
@@ -27,6 +29,7 @@ stub('src/lib/ai.js', {
   getAIResponse: async (...a) => { if (aiJawab instanceof Error) throw aiJawab; return typeof aiJawab === 'function' ? aiJawab(...a) : aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
+  nilaiFollowup: async () => nilai,
   ekstrakQuotation: async () => ({ klien: { nama: 'PT Maju', attn: 'Bu Sari' }, acara: { kota: 'Jakarta' },
     layanan: [{ kategori: 'photobooth_classic', jam: '4', format: '4r' }, { kategori: null }], addons: [], gross_up: true, usulan_diskon: { persen: 10, alasan: 'x' } }),
 });
@@ -114,11 +117,11 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.match(rh[0], /wedding 5 des di Sentul/); assert.match(rh[1], /3 jam/);
   assert.strictEqual(rh[2], 'jadi gimana kak?'); assert.ok(store.sudahSejarah(jidH));
 
-  // Riwayat panjang dirangkum: sisa 40 pesan utuh + catatan klien
+  // Riwayat panjang dirangkum: sisa 80 pesan utuh + catatan klien
   const jidL = '62877@s.whatsapp.net';
-  for (let i = 0; i < 70; i++) store.tambahRiwayat(jidL, i % 2 ? 'assistant' : 'user', `pesan ${i}`);
+  for (let i = 0; i < 130; i++) store.tambahRiwayat(jidL, i % 2 ? 'assistant' : 'user', `pesan ${i}`);
   await kirim({ conversation: 'lanjut' }, jidL);
-  assert.strictEqual(store.getRiwayat(jidL).length, 40);
+  assert.strictEqual(store.getRiwayat(jidL).length, 80);
   assert.match(store.getRingkasan(jidL), /^RINGKAS \d+$/);
 
   aiJawab = 'Tanggal 7 November masih kosong.';
@@ -304,6 +307,38 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   log.kirim = [];
   await fe.followupBooking(sock, {}, 0);
   assert.strictEqual(log.kirim.length, 0, 'follow-up booking dobel');
+
+  // ── Follow-up klien: baca konteks utuh dulu (insiden 27–28 Sep) ──
+  // Paksa "jam kerja" 10.00 supaya tes tidak bergantung jam jalan.
+  require.cache[R('src/lib/liveConfig.js')].exports.get = () => ({ TIMEZONE_OFFSET: 10 - new Date().getUTCHours() });
+  const duaHari = new Date(Date.now() - 2 * 864e5).toISOString();
+  const lead = (jid, message) => ({ wa_jid: jid, name: 'Dini', phone: '628111', message, topic: 'lead', created_at: duaHari });
+  const siap = (jid, ...chat) => chat.forEach(([role, c]) => store.tambahRiwayat(jid, role, c));
+  const fu = async () => { log.kirim = []; await fe.runFollowupCycle(sock); return log.kirim; };
+  // 1. Admin sudah pernah balas manual → tidak di-follow-up bot
+  siap('fu1@lid', ['user', 'promo expo masih ada?'], ['assistant', '(admin) Spesial buat kaka promonya masih berlaku'], ['assistant', 'Yuk dibooking kak']);
+  // 2. Klien bilang sudah booking tempat lain (hanya ada di Supabase, tidak di riwayat)
+  siap('fu2@lid', ['user', 'harga 3 jam berapa?'], ['assistant', '3 jam Rp 2.500.000 ya Kak.']);
+  // 3. Pernah di-pause (handoff/admin) walau sudah kedaluwarsa
+  siap('fu3@lid', ['user', 'minta pricelist'], ['assistant', 'Ini pricelistnya Kak.']);
+  // 4. Penilai AI bilang bukan calon klien (broadcast vendor)
+  siap('fu4@lid', ['user', 'Selamat menempuh hidup baru Kak Silvia & Syahrul, Been Sae Bakery'], ['assistant', 'Aamiin.']);
+  leadsUji = [lead('fu1@lid', 'promo expo masih ada?'), lead('fu2@lid', 'harga 3 jam berapa?'),
+    { ...lead('fu2@lid', 'yahh maaf kak tadi sore aku booking tempat lain'), created_at: new Date(Date.now() - 1.5 * 864e5).toISOString() },
+    lead('fu3@lid', 'minta pricelist'), lead('fu4@lid', 'Selamat menempuh hidup baru')];
+  paused = { 'fu3@lid': Date.now() - 864e5 };
+  nilai = { kirim: false, status: 'vendor_atau_usaha_lain' };
+  aiJawab = 'Kak Dini, tanggal 7 Nov-nya jadi?';
+  assert.deepStrictEqual(await fu(), [], 'follow-up terkirim ke kontak yang harus dilewati');
+  // 5. Calon klien menggantung + penilai setuju → terkirim; kalimat basi ditahan
+  paused = {};
+  siap('fu5@lid', ['user', 'wedding november di Balitro, tamu belum tahu'], ['assistant', 'Wedding biasanya 4 jam paling aman Kak.']);
+  leadsUji = [lead('fu5@lid', 'wedding november di Balitro, tamu belum tahu')];
+  nilai = { kirim: true, status: 'calon_klien_menggantung' };
+  aiJawab = 'Halo Kak! Mau follow up, tim Tetra siap ramaikan acaranya.';
+  assert.deepStrictEqual(await fu(), [], 'kalimat basi lolos');
+  aiJawab = 'Kak Dini, tanggal wedding di Balitro sudah ketemu? Kabari aja, aku cek slotnya hari itu juga.';
+  assert.deepStrictEqual(await fu(), [aiJawab]);
 
   console.log('SEMUA UJI LOLOS');
   process.exit(0);
