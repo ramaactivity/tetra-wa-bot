@@ -282,7 +282,10 @@ async function panggil(endpoint, history, message, leadContext) {
         asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
         if (!teks || asing.length) {
           console.log(`[harga] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
-          return '[ADMIN_HANDOFF]';
+          // Vendor rekanan jangan merasa dilempar bot (Rama): kalimat santai + info admin, tanpa pause.
+          return /VENDOR REKANAN/.test(leadContext || '')
+            ? 'Bentar ya, harganya aku pastiin dulu ke admin hehe.\n[INFO_ADMIN: harga untuk vendor perlu dicek admin]'
+            : '[ADMIN_HANDOFF]';
         }
       }
       return teks;
