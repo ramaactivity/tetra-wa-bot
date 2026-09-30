@@ -155,11 +155,18 @@ const KALIMAT_AMAN = 'Untuk perubahan itu aku teruskan ke admin dulu ya Kak, bia
 // Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
 // balasan teks, sekali per percakapan (label dicek di riwayat; format label sama
 // dengan booking.kirimKatalog supaya katalog tidak terkirim dua kali).
+// `pernah` = pola nama file di riwayat: file yang sudah dikirim admin manual
+// ("(admin) [kirim dokumen: ...]") atau lewat lampiran lain tidak dikirim ulang.
 const LAMPIRAN = {
-  backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic',
+  backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic', pernah: /BACKDROP TETRA/i,
     caption: 'Pilihan backdrop basic Tetra, sudah termasuk di paket.' },
-  katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame',
+  katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame', pernah: /KATALOG DESAIN/i,
     caption: 'Contoh desain frame Tetra. Belum ada yang cocok? Desain custom juga bisa, gratis.' },
+  // PDF panduan juga memuat halaman layout, jadi layout tidak dikirim kalau panduan sudah.
+  layout: { file: 'LAYOUT PHOTOBOOTH.pdf', label: 'layout photobooth', pernah: /LAYOUT (PHOTOBOOTH|&)|layout photobooth|panduan ukuran/i,
+    caption: 'Bentuk & pilihan layout cetak Tetra: 2R photostrip, 4R, dan Polaroid.' },
+  panduan: { file: 'LAYOUT & PANDUAN UKURAN.pdf', label: 'panduan ukuran', pernah: /PANDUAN UKURAN/i,
+    caption: 'Panduan ukuran canvas untuk desain frame sendiri (2R 1200×3600 px, 4R 2400×3600 px, Polaroid 1800×2400 px per lembar).' },
 };
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
@@ -476,7 +483,8 @@ function registerMessageHandler(sock) {
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
       const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
         .filter((k) => LAMPIRAN[k] || k === 'pricelist');
-      aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
+      aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim()
+        .replace(/\*\*([^*\n]+)\*\*/g, '*$1*'); // tebal gaya Markdown -> gaya WhatsApp
       const quotation = /\[QUOTATION\]/i.test(aiResponse);
       aiResponse = aiResponse.replace(/\[QUOTATION\]/gi, '').trim();
       let perubahan = (aiResponse.match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1];
@@ -519,8 +527,11 @@ function registerMessageHandler(sock) {
       for (const k of lampiran) {
         const l = LAMPIRAN[k];
         if (!l) continue;
+        if (k === 'layout' && lampiran.includes('panduan')) continue; // panduan sudah memuat layout
         const tanda = `[kirim PDF ${l.label}]`;
-        if (getRiwayat(jid).some((p) => String(p.content).includes(tanda))) continue;
+        // Hanya catatan pengiriman file yang dicek, bukan kalimat obrolan ("ini panduan ukurannya").
+        const terkirim = getRiwayat(jid).flatMap((p) => String(p.content).match(/\[kirim (PDF|dokumen:)[^\]]*\]/gi) || []);
+        if (terkirim.some((c) => c.includes(tanda) || l.pernah.test(c))) continue;
         const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), l.caption);
         rememberBotMsg(sent);
         deliveryLog.track(sent, `${k}→customer`);

@@ -75,9 +75,20 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 ## Kapasitas foto
 - Sekali foto bisa sampai 10 orang lebih, tergantung luas area photobooth. Bisa disesuaikan lewat lensa.
 
-## Format cetak
-- Pilihan cetak di paket unlimited: 2R photostrip, 4R, dan Polaroid.
-- Semua format bisa portrait maupun landscape. Yang umumnya landscape adalah 4R.
+## Format cetak (jelaskan dengan bahasa awam; klien sering benar-benar belum tahu)
+- Pilihan cetak di paket unlimited (harga sama): 2R photostrip, 4R, dan Polaroid. Klien pilih SATU format untuk acaranya.
+- **2R / Photostrip**: strip panjang memanjang ke bawah, ukuran ±5×15 cm (2×6 inch), 2–4 pose/foto tersusun vertikal, ada area teks (nama acara/tanggal) di bawah. Sekali cetak tamu dapat **2 strip** (bisa dibagi berdua). Cocok untuk tamu yang suka foto beberapa gaya sekaligus, ramai-ramai, suasana fun.
+- **4R**: lembaran foto seukuran kartu pos ±10×15 cm (4×6 inch), 2–4 pose atau 1 foto besar, bisa portrait maupun landscape. Sekali cetak **1 lembar**. Paling fleksibel dan paling sering dipilih untuk wedding/corporate; area foto besar, muat rombongan.
+- **Polaroid**: gaya foto polaroid dengan bingkai tebal di bawah untuk teks, ±7,5×10 cm per lembar, 1–2 pose. Sekali cetak tamu dapat **2 lembar polaroid**. Cocok untuk kesan vintage/aesthetic.
+- Semua format bisa diatur jumlah dan susunan kolom fotonya (layout bisa dikustom). Klien memilih salah satu layout untuk acaranya.
+- Ada PDF "Layout Photobooth" berisi gambar bentuk ketiga format dan pilihan layout-nya: kirim saat klien bingung bedanya (lihat LAMPIRAN).
+
+## Desain frame sendiri (klien mau bikin/edit desain sendiri)
+- Boleh. Ukuran canvas: **2R/Photostrip 1200×3600 px**, **4R 2400×3600 px** (portrait; untuk landscape dibalik 3600×2400 px), **Polaroid 1800×2400 px per lembar** (satu kertas cetak berisi 2 polaroid berdampingan, total 3600×2400 px).
+- Kirim PDF "Layout & Panduan Ukuran" (lihat LAMPIRAN): berisi bentuk layout + ukuran canvas tiap format.
+- File yang dikirim ke Tetra: sebaiknya file yang masih bisa diedit (link Canva, PSD, AI, dan sejenisnya) supaya tim Tetra bisa menyesuaikan area foto dan ukuran. Kalau klien bingung, kirim PDF atau PNG juga boleh; tim Tetra yang menyesuaikan.
+- Desain sendiri dikirim paling lambat **H-3** sebelum acara.
+- Tetap bisa dibuatkan designer Tetra gratis kalau klien berubah pikiran.
 
 ## Crew & setup
 - Crew di lokasi biasanya 2 orang (lead + asisten).

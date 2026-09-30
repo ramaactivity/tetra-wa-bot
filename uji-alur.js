@@ -191,6 +191,25 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   r = await kirim({ conversation: 'bisa geser jam kak?' }, jidR);
   assert.strictEqual(r.kirim.length, 0, 'bot ikut membalas padahal admin sudah membalas: ' + JSON.stringify(r.kirim));
 
+  // Tebal Markdown dirapikan ke gaya WA
+  aiJawab = 'Harganya **Rp 2.000.000** ya Kak.';
+  r = await kirim({ conversation: 'harga 2 jam?' });
+  assert.deepStrictEqual(r.kirim, ['Harganya *Rp 2.000.000* ya Kak.']);
+
+  // Layout & panduan: panduan saja kalau keduanya; tidak dikirim ulang kalau admin sudah kirim manual
+  const jidL2 = '62899001@s.whatsapp.net';
+  aiJawab = 'Ini panduan ukurannya Kak.\n[KIRIM: layout] [KIRIM: panduan]';
+  r = await kirim({ conversation: 'minta template ukuran buat desain sendiri kak' }, jidL2);
+  assert.deepStrictEqual(r.kirim, ['Ini panduan ukurannya Kak.', '[DOK LAYOUT & PANDUAN UKURAN.pdf]']);
+  aiJawab = 'Bedanya begini Kak.\n[KIRIM: layout]';
+  r = await kirim({ conversation: 'bedanya 2R sama 4R apa?' }, jidL2);
+  assert.deepStrictEqual(r.kirim, ['Bedanya begini Kak.'], 'layout dikirim padahal panduan (berisi layout) sudah');
+  const jidL3 = '62899002@s.whatsapp.net';
+  store.tambahRiwayat(jidL3, 'assistant', '(admin) [kirim dokumen: LAYOUT & PANDUAN UKURAN .pdf]');
+  aiJawab = 'Panduannya sudah dikirim admin di atas ya Kak.\n[KIRIM: panduan]';
+  r = await kirim({ conversation: 'ukuran canvasnya berapa ya?' }, jidL3);
+  assert.ok(!r.kirim.some((t) => /PANDUAN/.test(t)), 'panduan dikirim ulang padahal admin sudah kirim');
+
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));
   const jidB = '62811@s.whatsapp.net';
