@@ -53,7 +53,26 @@ const retryCache = (() => {
   c.del = (k) => { if ((c.get(k) || 0) < RETRY_MAKS) del(k); };
   return c;
 })();
-const placeholderResendCache = buatCache(3600 * 1000);
+// Tiap permintaan "kirim ulang isi pesan" ke HP memunculkan popup "Syncing with
+// WhatsApp on Google Chrome (Ubuntu)" di HP (30 Sep: belasan-puluhan popup beruntun
+// saat pesan gagal dibuka setelah reconnect). Dibatasi 3 permintaan / 10 menit:
+// Baileys menganggap key yang get()-nya truthy sudah pernah diminta, jadi di atas
+// kuota get() mengembalikan true dan tidak ada permintaan baru ke HP.
+const KUOTA_SYNC = 3;
+const JENDELA_SYNC_MS = 10 * 60 * 1000;
+const placeholderResendCache = (() => {
+  const c = buatCache(3600 * 1000);
+  let riwayatMinta = [];
+  const get = c.get, set = c.set;
+  c.get = (k) => {
+    const v = get(k);
+    if (v !== undefined) return v;
+    riwayatMinta = riwayatMinta.filter((t) => Date.now() - t < JENDELA_SYNC_MS);
+    return riwayatMinta.length >= KUOTA_SYNC ? true : undefined;
+  };
+  c.set = (k, v) => { riwayatMinta.push(Date.now()); set(k, v); };
+  return c;
+})();
 
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 

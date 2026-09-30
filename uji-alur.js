@@ -95,6 +95,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.strictEqual(store.getRiwayat(jidA).at(-1).content, '(admin) Promo 5% ya kak');
 
   // Riwayat dari HP: diminta saat kontak pertama chat, digabung di depan
+  process.env.TARIK_SEJARAH = 'on'; // fitur ini mati secara bawaan (popup Syncing di HP)
   const jidH = '62899@s.whatsapp.net';
   aiJawab = 'oke';
   const nowS = Math.floor(Date.now() / 1000);

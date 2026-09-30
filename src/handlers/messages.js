@@ -685,7 +685,10 @@ function registerMessageHandler(sock) {
         sudahSubscribe.add(jid);
         sock.presenceSubscribe(jid).catch(() => {});
       }
-      if (!sudahSejarah(jid) && !sudahMinta.has(jid)) {
+      // Penarikan riwayat dari HP dimatikan (30 Sep): tidak pernah dijawab HP di Baileys 6
+      // (0 respons sejak 27 Sep) tapi tiap permintaan memunculkan popup "Syncing..." di HP.
+      // Nyalakan lagi dengan TARIK_SEJARAH=on kalau terbukti jalan (mis. di Baileys 7).
+      if (process.env.TARIK_SEJARAH === 'on' && !sudahSejarah(jid) && !sudahMinta.has(jid)) {
         sudahMinta.add(jid);
         mintaSejarah(sock, msg.key, ts * 1000, 1, ts * 1000);
       }
