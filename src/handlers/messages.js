@@ -205,6 +205,13 @@ const gagalBuka = new Map(); // jid -> { sejak, dilapor }
 const PULIH_MS = 10 * 60 * 1000;
 const LAPOR_ULANG_MS = 6 * 3600 * 1000;
 let sockTerakhir = null;
+// JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
+// dibuka itu urusan sesi perangkat sendiri, bukan pesan klien yang terlewat.
+function milikSendiri(jid) {
+  const u = sockTerakhir?.user;
+  const inti = (x) => String(x || '').split('@')[0].split(':')[0];
+  return !!jid && [u?.lid, u?.id].some((x) => x && inti(x) === inti(jid));
+}
 async function periksaGagalBuka() {
   const now = Date.now();
   const telat = [...gagalBuka].filter(([, g]) => now - g.sejak > PULIH_MS && (!g.dilapor || now - g.dilapor > LAPOR_ULANG_MS));
@@ -663,7 +670,7 @@ function registerMessageHandler(sock) {
         // sudah terbaca; itu bukan pesan klien yang terlewat, jangan jadi peringatan.
         const umurMenit = Math.round((Date.now() / 1000 - (Number(msg.messageTimestamp) || Date.now() / 1000)) / 60);
         console.log(`[gagal-dekripsi] ${jid} (${type}, umur ${umurMenit} mnt)`);
-        if (jid && umurMenit <= 60 && !msg.key.fromMe && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
+        if (jid && umurMenit <= 60 && !msg.key.fromMe && !milikSendiri(jid) && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
           gagalBuka.set(jid, { sejak: Date.now(), dilapor: 0 });
         }
       }
