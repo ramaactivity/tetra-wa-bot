@@ -13,6 +13,7 @@ let aiJawab = 'halo';
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
   fetchPausedContacts: async () => paused,
+  fetchVendorContacts: async () => [{ name: 'Party Planner', phone: '+62 878-7189-3437' }, { name: 'Primera Wedding', phone: '0899-0471-515' }],
   fetchRecentLeads: async () => [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }],
   fetchAddonNames: async () => ['Guest Books Photo'], fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
@@ -226,6 +227,17 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   await mh.periksaGagalBuka();
   assert.strictEqual(log.tg.length, 0, 'laporan dobel');
   await tunggu(300);
+
+  // Vendor rekanan: konteks vendor + harga khusus, tanpa KONTAK PERTAMA; vendor tanpa kesepakatan -> admin
+  let ctxVendor = '';
+  aiJawab = (h, m, ctx) => { ctxVendor = ctx; return 'Siap teh, aman tanggalnya. Masih 1,7 ya teh hihi'; };
+  r = await kirim({ conversation: 'Kaaa mau tanya, Minggu 4 Okt jam 19-21, 101 Hotel, unlimited 2 jam. Available?' }, '6287871893437@s.whatsapp.net');
+  assert.match(ctxVendor, /KONTAK INI VENDOR REKANAN: Party Planner/); assert.match(ctxVendor, /1\.700\.000/);
+  assert.ok(!/KONTAK PERTAMA dengan klien/.test(ctxVendor), 'vendor tidak boleh diperlakukan kontak pertama');
+  await kirim({ conversation: 'halo kak' }, '628990471515@s.whatsapp.net');
+  assert.match(ctxVendor, /VENDOR REKANAN: Primera Wedding/); assert.match(ctxVendor, /Belum ada kesepakatan harga tertulis/);
+  await kirim({ conversation: 'halo kak mau tanya harga' }, '6281200001111@s.whatsapp.net');
+  assert.ok(!/VENDOR REKANAN/.test(ctxVendor), 'nomor biasa dianggap vendor');
 
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));

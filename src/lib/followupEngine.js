@@ -18,6 +18,7 @@ const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
 const { loadJson, saveJson, tambahRiwayat, getRiwayat } = require('./store');
 const booking = require('./booking');
+const vendorLib = require('./vendor');
 const { parseLeadDetails, mergeDetails, missingFields } = require('./smartLead');
 
 const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'followup.json');
@@ -79,7 +80,17 @@ function buildLeadContext(panggilan, details, missing, historyLines) {
   return [...known, belum, riwayat].join('\n');
 }
 
-async function generateFollowupMessage(panggilan, leadContext) {
+async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
+  // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
+  // gaya akrab, tanpa "masih tertarik?" (keputusan Rama 30 Sep 2026).
+  if (vendor) {
+    const p = `Tulis SATU pesan WhatsApp singkat (maks 3 baris) ke vendor rekanan ${vendor.nama} untuk ` +
+      `menindaklanjuti urusan yang terakhir dibahas di riwayat (mis. konfirmasi jadwal, desain frame, data acara). ` +
+      `Gaya akrab sesuai ATURAN VENDOR. JANGAN tanya "masih tertarik", JANGAN tawarkan paket/DP, JANGAN gaya sales. ` +
+      `Kalau di riwayat tidak ada urusan yang perlu ditindaklanjuti, balas persis [DIAM].`;
+    try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
+    catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
+  }
   const prompt =
     `Tulis SATU pesan follow-up WhatsApp untuk klien yang beberapa hari lalu tanya pricelist tapi belum lanjut. ` +
     `Sapa hangat, ingatkan Tetra masih siap bantu photobooth-nya, dan tawarkan lock slot tanggal dengan DP *Rp 500.000*. ` +
@@ -155,7 +166,7 @@ async function runFollowupCycle(sock) {
 
     const panggilan = cleanName(last.name) || 'Kak';
     const leadContext = buildLeadContext(panggilan, details, missing, historyLines);
-    const msg = await generateFollowupMessage(panggilan, leadContext);
+    const msg = await generateFollowupMessage(panggilan, leadContext, await vendorLib.cari(last.phone));
     if (!msg || typeof msg !== 'string') continue;
     if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
       state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam

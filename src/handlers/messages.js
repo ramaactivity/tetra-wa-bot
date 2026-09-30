@@ -18,6 +18,7 @@ const { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = r
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
+const vendorLib = require('../lib/vendor');
 const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
 const path = require('path');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
@@ -79,7 +80,7 @@ function isSpecialProduct(t) {
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
 // nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
 // terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
-function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
+function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = null) {
   const det = smart.parseLeadDetails(fullText);
   const seg = smart.detectSegment(fullText);
   const known = [];
@@ -101,7 +102,7 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
   }
   const nama = w.nama || cleanName(namaWA);
   if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
-  if (!getRiwayat(jid).some((p) => p.role === 'assistant')) lines.push('Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+  if (!vendor && !getRiwayat(jid).some((p) => p.role === 'assistant')) lines.push('Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
   const ringkasan = getRingkasan(jid);
   if (ringkasan) lines.push(`\nCATATAN KLIEN (ringkasan percakapan lama):\n${ringkasan}`);
   return lines.join('\n');
@@ -410,6 +411,7 @@ function registerMessageHandler(sock) {
       bolehBalas = true;
 
       const t = originalText.toLowerCase();
+      const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
       const fullText = fullUserText(jid, originalText);
 
       // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
@@ -453,7 +455,7 @@ function registerMessageHandler(sock) {
       }
 
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
-      if (isKemitraan(t)) {
+      if (!vendor && isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
           'Untuk kerja sama atau kemitraan, ini langsung dibahas sama founder kami. Aku teruskan ya Kak, nanti dibalas di chat ini.', originalText);
         return;
@@ -497,7 +499,7 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid));
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -531,7 +533,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid) +
+          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');

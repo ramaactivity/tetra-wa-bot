@@ -387,6 +387,22 @@ async function hapusPause(waJid) {
 // Nama add-on aktif di master Tetra Ops. Quotation mencocokkan nama persis,
 // jadi AI harus memilih dari daftar ini. Cache 1 jam.
 let cacheAddon = { t: 0, nama: [] };
+// Kontak vendor di Tetra Ops (nama + nomor). Cache 1 jam; gagal = pakai cache lama.
+let cacheVendor = { t: 0, data: [] };
+async function fetchVendorContacts() {
+  if (!supa) return [];
+  if (Date.now() - cacheVendor.t < 3600 * 1000) return cacheVendor.data;
+  try {
+    const { data, error } = await supa.from('contacts').select('name, phone').eq('type', 'vendor').eq('is_active', true);
+    if (error) { console.error('[supa] fetchVendorContacts:', error.message); return cacheVendor.data; }
+    cacheVendor = { t: Date.now(), data: data || [] };
+    return cacheVendor.data;
+  } catch (e) {
+    console.error('[supa] fetchVendorContacts:', e.message);
+    return cacheVendor.data;
+  }
+}
+
 async function fetchAddonNames() {
   if (!supa) return [];
   if (Date.now() - cacheAddon.t < 3600 * 1000 && cacheAddon.nama.length) return cacheAddon.nama;
@@ -402,6 +418,7 @@ async function fetchAddonNames() {
 }
 
 module.exports = {
+  fetchVendorContacts,
   fetchAddonNames,
   fetchHandoffAI,
   fetchLeadMessages,
