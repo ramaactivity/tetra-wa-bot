@@ -13,6 +13,7 @@ let aiJawab = 'halo';
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
   fetchPausedContacts: async () => paused,
+  fetchRecentLeads: async () => [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }],
   fetchAddonNames: async () => ['Guest Books Photo'], fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
 });
@@ -209,6 +210,22 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   aiJawab = 'Panduannya sudah dikirim admin di atas ya Kak.\n[KIRIM: panduan]';
   r = await kirim({ conversation: 'ukuran canvasnya berapa ya?' }, jidL3);
   assert.ok(!r.kirim.some((t) => /PANDUAN/.test(t)), 'panduan dikirim ulang padahal admin sudah kirim');
+
+  // Pesan tak terbuka (Bad MAC): pulih -> diam; tidak pulih 10 menit -> admin dikabari (klien dikenal saja)
+  const mh = require(R('src/handlers/messages.js'));
+  const stub = (j) => handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: j, id: 's' + Math.random() }, messageStubType: 2 }] });
+  await stub('62700111@lid'); await stub('62700222@lid'); await stub('62700333@lid');
+  await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: '62700222@lid', id: 'ok1' }, message: { conversation: 'halo' }, messageTimestamp: Math.floor(Date.now() / 1000) }] });
+  for (const g of mh._gagalBuka.values()) g.sejak -= 11 * 60 * 1000;
+  log.tg = []; log.wa = [];
+  await mh.periksaGagalBuka();
+  assert.strictEqual(log.tg.length, 1, 'harus tepat 1 laporan (Sidik); yang pulih & tak dikenal tidak');
+  assert.match(log.tg[0], /Sidik CIMB \(wa\.me\/6285776848169\)/);
+  assert.ok(log.wa.some((t) => /tidak bisa dibuka bot/.test(t)), 'admin WA tidak dikabari');
+  log.tg = [];
+  await mh.periksaGagalBuka();
+  assert.strictEqual(log.tg.length, 0, 'laporan dobel');
+  await tunggu(300);
 
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));

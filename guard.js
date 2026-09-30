@@ -53,7 +53,8 @@ const HEARTBEAT_STALE_MS = 240000;  // bot bump updated_at tiap 90 dtk; 4 menit 
 const RECONNECT_LOOP_MIN = 8;       // "Koneksi putus" sebanyak ini tanpa 1 pun "tersambung"
 const LOOP_RESTART_COOLDOWN_MS = 600000; // maks 1 restart-bersih per 10 menit untuk loop
 const OFFLINE_RESTART_MS = 300000;       // link WA tidak 'open' 5 menit = restart bersih
-const BADMAC_ALERT_MIN = 20;        // Bad MAC sebanyak ini di 400 baris terakhir = lonjakan
+const BADMAC_ALERT_MIN = 20;        // Bad MAC sebanyak ini dalam satu tick = tick bermasalah
+const BADMAC_BERUNTUN_TICK = 20;    // 20 tick bermasalah berturut-turut (10 menit) baru alarm
 const ALERT_COOLDOWN_MS = 1800000;  // alert berulang untuk kondisi yang sama: 30 menit
 const REMINDER_MS = 3600000;        // pengingat pairing: 1 jam
 const LOG_TAIL_LINES = 400;
@@ -162,14 +163,21 @@ function bacaBarisBaru(file, state, key) {
 }
 
 // Bunuh index.js yang TIDAK dikelola PM2: dua socket di satu session = Bad MAC.
-function killStrayInstances(pm2Pid) {
+// Instance "liar" = index.js yang BUKAN anak daemon PM2. Dulu dibandingkan dengan PID
+// dari pm2Status: saat restart PID berganti, sehingga proses bot yang SAH ikut di-SIGKILL
+// (30 Sep 10:20). SIGKILL di tengah penulisan auth_info bisa merusak session = Bad MAC.
+function killStrayInstances() {
   try {
-    const out = execSync(`pgrep -f 'node .*tetra-wa-bot/index.js' || true`, { encoding: 'utf8' });
+    const daemon = Number(fs.readFileSync(`${PM2_HOME}/pm2.pid`, 'utf8').trim());
+    if (!daemon) return 0;
+    const out = execSync(`pgrep -f '^node [^ ]*tetra-wa-bot/index.js' || true`, { encoding: 'utf8' });
     let killed = 0;
     for (const p of out.trim().split('\n').map(Number).filter(Boolean)) {
-      if (p !== Number(pm2Pid)) { try { process.kill(p, 'SIGKILL'); killed++; } catch { /* sudah mati */ } }
+      const ppid = Number(execSync(`ps -o ppid= -p ${p} || true`, { encoding: 'utf8' }).trim());
+      if (!ppid || ppid === daemon) continue; // dikelola PM2 (atau sudah mati)
+      try { process.kill(p, 'SIGTERM'); killed++; } catch { /* sudah mati */ }
     }
-    if (killed) log(`⚠️  Bunuh ${killed} instance index.js liar (di luar PM2).`);
+    if (killed) log(`⚠️  Hentikan ${killed} instance index.js liar (bukan anak PM2).`);
     return killed;
   } catch {
     return 0;
@@ -219,10 +227,14 @@ async function tick() {
 
   // 0. Instance ganda di luar PM2
   const st = pm2Status();
-  if (st) killStrayInstances(st.pid);
+  killStrayInstances();
 
-  // 1. Proses tidak online
+  // 1. Proses tidak online. Harus terlihat 2 tick berturut-turut (±30 dtk): status
+  //    'stopping'/'launching' sesaat saat restart terencana bukan alasan menyalakan
+  //    ulang (30 Sep 10:10 guard ikut 'start' di tengah pm2 restart).
   if (!st || st.pm2_env.status !== 'online') {
+    state.bukanOnline = (state.bukanOnline || 0) + 1;
+    if (state.bukanOnline < 2) { saveState(state); return; }
     if (t - (state.lastRestart || 0) > RESTART_COOLDOWN_MS) {
       log('Bot tidak online — start.');
       pm2(['start', 'tetra-bot']);
@@ -232,6 +244,8 @@ async function tick() {
     }
     return;
   }
+
+  if (state.bukanOnline) { state.bukanOnline = 0; saveState(state); }
 
   const outLines = tailLines(OUT_LOG, LOG_TAIL_LINES);
   const errLines = tailLines(ERR_LOG, LOG_TAIL_LINES);
@@ -244,12 +258,19 @@ async function tick() {
   const errBaru = bacaBarisBaru(ERR_LOG, state, 'errLogOffset');
   const outBaru = bacaBarisBaru(OUT_LOG, state, 'outLogOffset');
   saveState(state);
+  // Ledakan singkat setelah reconnect itu normal: WA mengirim ulang pesan tertunda,
+  // sebagian gagal dibuka lalu dipulihkan Baileys (1 kegagalan = puluhan baris log).
+  // Alarm hanya kalau Bad MAC TERUS muncul >= 10 menit (tiap tick). Pesan klien yang
+  // benar-benar tak terbaca dilaporkan bot sendiri (handlers/messages.js) per nama klien.
   const badMac = countIn(errBaru, 'Bad MAC');
-  if (badMac >= BADMAC_ALERT_MIN) {
+  state.badmacBeruntun = badMac >= BADMAC_ALERT_MIN ? (state.badmacBeruntun || 0) + 1 : 0;
+  saveState(state);
+  if (state.badmacBeruntun >= BADMAC_BERUNTUN_TICK) {
+    const jid = [...new Set(outBaru.join('\n').match(/\[gagal-dekripsi\] \S+/g) || [])].slice(0, 5).join(', ');
     await alertSekali(state, 'badmac', ALERT_COOLDOWN_MS,
-      `🧨 *Tetra Guard* — ${badMac} error *Bad MAC* BARU dalam 30 detik terakhir.\n` +
-      `Ini tanda session Signal tidak sinkron. Penyebab umum: ada instance lain memakai session yang sama, ` +
-      `atau auth\\_info pernah disalin/dipulihkan. Guard TIDAK bertindak otomatis — cek \`pgrep -af tetra-wa-bot\` di server.`);
+      `🧨 *Tetra Guard* — error *Bad MAC* terus muncul ${Math.round(state.badmacBeruntun * LOOP_MS / 60000)} menit tanpa henti.\n` +
+      `${jid ? `Kontak terdampak: ${jid}\n` : ''}` +
+      `Cek \`pgrep -af tetra-wa-bot\` (harus 1 proses). Guard TIDAK bertindak otomatis dan tidak menyentuh auth\\_info.`);
   }
 
   // 6. 440 = session diambil alih instance lain

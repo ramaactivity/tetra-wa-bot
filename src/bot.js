@@ -29,6 +29,32 @@ const supa = require('./lib/supa');
 const live = require('./lib/liveConfig');
 const store = require('./lib/store');
 
+// ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
+// Antarmuka CacheStore Baileys: get/set/del/flushAll. TTL per entri.
+function buatCache(ttlMs) {
+  const m = new Map(); // key -> { v, exp }
+  const hidup = (k) => { const e = m.get(k); if (e && e.exp < Date.now()) { m.delete(k); return undefined; } return e; };
+  return {
+    get: (k) => hidup(k)?.v,
+    set: (k, v) => { m.set(k, { v, exp: Date.now() + ttlMs }); if (m.size > 5000) m.delete(m.keys().next().value); },
+    del: (k) => m.delete(k),
+    flushAll: () => m.clear(),
+  };
+}
+// Baileys: retry >= MAKS -> del(key) lalu berhenti; reconnect berikutnya pesan yang
+// sama dikirim ulang server dan hitungan mulai dari 0 lagi (loop tanpa ujung).
+// Di sini key yang sudah mencapai batas tidak benar-benar dihapus selama 24 jam,
+// jadi Baileys terus melihatnya "sudah habis" dan tidak meminta retry lagi.
+// Pesan klien yang gagal tetap dilaporkan ke admin oleh handlers/messages.js.
+const RETRY_MAKS = 5; // = maxMsgRetryCount default Baileys
+const retryCache = (() => {
+  const c = buatCache(24 * 3600 * 1000);
+  const del = c.del;
+  c.del = (k) => { if ((c.get(k) || 0) < RETRY_MAKS) del(k); };
+  return c;
+})();
+const placeholderResendCache = buatCache(3600 * 1000);
+
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 
 // Referensi socket aktif (di-update tiap (re)connect) supaya command poller bisa
@@ -89,6 +115,11 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
+    // Hitungan retry dekripsi disimpan DI LUAR socket (saran resmi Baileys). Tanpa ini
+    // tiap reconnect (500 "Stream Errored (ack)" ±50 menit sekali) mengulang retry
+    // pesan lama yang sama dari nol -> badai Bad MAC tiap 50 menit (29-30 Sep 2026).
+    msgRetryCounterCache: retryCache,
+    placeholderResendCache,
     // Jangan sinkron riwayat penuh saat connect: itu ribuan pesan lama yang harus
     // didekripsi sekaligus -- sumber Bad MAC di awal koneksi, dan tidak dibutuhkan bot.
     syncFullHistory: false,

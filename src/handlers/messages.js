@@ -196,7 +196,43 @@ function mintaSejarah(sock, key, tsMs, halaman, sejakMs) {
 const ngetik = new Map();       // jid -> ts terakhir terlihat mengetik
 const sudahSubscribe = new Set();
 
+// ── Pesan klien yang tidak bisa dibuka (Bad MAC) ─────────────────────────────
+// Baileys meminta kirim ulang & minta isi pesan dari HP Tetra; biasanya pulih
+// dalam hitungan menit. Yang TIDAK pulih dalam 10 menit dilaporkan ke admin supaya
+// dibalas manual dari HP -- tidak ada pesan klien yang hilang diam-diam.
+const gagalBuka = new Map(); // jid -> { sejak, dilapor }
+const PULIH_MS = 10 * 60 * 1000;
+const LAPOR_ULANG_MS = 6 * 3600 * 1000;
+let sockTerakhir = null;
+async function periksaGagalBuka() {
+  const now = Date.now();
+  const telat = [...gagalBuka].filter(([, g]) => now - g.sejak > PULIH_MS && (!g.dilapor || now - g.dilapor > LAPOR_ULANG_MS));
+  if (!telat.length) return;
+  // Hanya kontak yang dikenal (pernah chat sebagai lead / ada riwayat); sisanya log saja.
+  const leads = await supa.fetchRecentLeads(new Date(now - 60 * 24 * 3600 * 1000).toISOString());
+  for (const [jid, g] of telat) {
+    g.dilapor = now;
+    const l = leads.find((x) => x.wa_jid === jid);
+    if (!l && !getRiwayat(jid).length) { console.log(`[gagal-dekripsi] ${jid}: tidak pulih 10 menit, kontak tak dikenal — tidak dilaporkan`); continue; }
+    const nama = l?.name || 'Klien';
+    const num = String(l?.phone || jid).split('@')[0];
+    const jam = new Date(g.sejak + 7 * 3600 * 1000).toISOString().slice(11, 16);
+    const teks = `⚠️ Pesan WhatsApp dari ${nama} (wa.me/${num}) tidak bisa dibuka bot sejak ${jam} WIB.\n` +
+      'Bot TIDAK tahu isinya dan belum membalas. Buka chat ini di HP Tetra dan balas manual.';
+    console.log(`[gagal-dekripsi] ${jid}: tidak pulih 10 menit — admin dikabari`);
+    await kirimTelegram(teks).catch((e) => console.error('[gagal-dekripsi] Telegram:', e.message));
+    const adminJid = live.get().ADMIN_NOTIFY_JID;
+    if (adminJid && sockTerakhir) {
+      await sockTerakhir.sendMessage(adminJid, { text: teks }).then(rememberBotMsg)
+        .catch((e) => console.error('[gagal-dekripsi] WA admin:', e.message));
+    }
+  }
+  for (const [jid, g] of gagalBuka) if (now - g.sejak > 24 * 3600 * 1000) gagalBuka.delete(jid);
+}
+setInterval(() => periksaGagalBuka().catch((e) => console.error('[gagal-dekripsi]', e.message)), 60 * 1000).unref();
+
 function registerMessageHandler(sock) {
+  sockTerakhir = sock;
   // Pesan keluar dari perangkat lain (admin bales manual dari HP) → bot diam.
   const handleFromMe = async (msg) => {
     const jid = msg.key.remoteJid;
@@ -620,8 +656,14 @@ function registerMessageHandler(sock) {
       const jid = msg.key?.remoteJid;
       // Stub CIPHERTEXT (2) = pesan gagal didekripsi (Bad MAC). Dicatat per JID
       // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
-      if (msg.messageStubType === 2) console.log(`[gagal-dekripsi] ${jid} (${type})`);
+      if (msg.messageStubType === 2) {
+        console.log(`[gagal-dekripsi] ${jid} (${type})`);
+        if (jid && !msg.key.fromMe && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
+          gagalBuka.set(jid, { sejak: Date.now(), dilapor: 0 });
+        }
+      }
       if (!jid || !msg.message) continue;
+      if (!msg.key.fromMe) gagalBuka.delete(jid); // pesan dari kontak ini terbaca lagi = pulih
       if (msg.key.fromMe) {
         // Dicatat seketika, bukan di antrean: handleFromMe mengantre di belakang
         // batch yang sedang diproses, padahal batch itu perlu tahu admin sudah membalas.
@@ -650,4 +692,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext };
+module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka };
