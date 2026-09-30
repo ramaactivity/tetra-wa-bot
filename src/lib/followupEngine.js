@@ -119,6 +119,7 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     `(link galeri hanya kalau belum pernah dikirim di transkrip).\n` +
     `- Tutup dengan SATU pertanyaan yang gampang dijawab dan MEMAJUKAN booking (tanggal, jam, durasi, atau mau diamankan slotnya), bukan "gimana Kak?" atau basa-basi (weekend/weekday).\n` +
     `- Maks 3 kalimat pendek, gaya chat orang asli, tanpa bullet, emoji maks 1.\n` +
+    `- Keputusan/ucapan ADMIN di transkrip adalah keputusan resmi: jangan diulang, dibantah, atau dijanjikan ulang.\n` +
     `- DILARANG: mengaku sudah melakukan sesuatu (sudah koordinasi/cek/catat), bilang slot masih aman/tersedia, menjanjikan promo/diskon, ` +
     `harga yang tidak ada di transkrip, dan kata/frasa "follow up", "sekadar mengingatkan", "ramaikan", "berkesan", "momen spesial", "keduluan", "siap bantu".\n` +
     `Contoh BURUK: "Halo Kak! Mau follow up rencana photobooth-nya. Tim Tetra siap ramaikan acaranya biar makin berkesan. Slotnya bisa diamankan dengan DP Rp 500.000."\n` +
@@ -174,17 +175,16 @@ async function runFollowupCycle(sock) {
     if (!msgs.some((m) => /pricelist|lead/i.test(m.topic || ''))) continue; // cuma yang tanya harga
     if (booking.get(jid)) continue;                                     // sudah DP → followupBooking
 
-    // Pagar keras (tanpa AI). Admin/handoff pernah pegang klien = follow-up urusan
-    // admin. Vendor rekanan dikecualikan: follow-up-nya konfirmasi urusan berjalan.
+    // Pagar keras (tanpa AI). Pernah dipegang admin TIDAK otomatis dilewati (keputusan
+    // Rama 30 Sep: agent harus adaptif); penilai AI membaca balasan admin sebagai
+    // keputusan resmi. Yang sedang dipegang admin (pause aktif) sudah dilewati di atas.
     const pesan = transkripGabungan(jid, msgs);
     const vendor = await vendorLib.cari(last.phone);
     const lewati = (alasan) => { state[jid] = now; console.log(`[followup] lewati ${jid}: ${alasan}`); };
-    if (!vendor && paused && jid in paused) { lewati('pernah dipegang admin/handoff'); continue; }
-    if (!vendor && pesan.some((p) => String(p.content).startsWith('(admin)'))) { lewati('ada balasan admin'); continue; }
     if (pesan.some((p) => p.role === 'user' && RE_TOLAK.test(p.content))) { lewati('klien sudah menolak/pakai vendor lain'); continue; }
     // Satu follow-up per percakapan: yang lagi hanya kalau klien sempat membalas sesudahnya.
     if (state[jid] && !pesan.some((p) => p.role === 'user' && (p.t || 0) > state[jid])) continue;
-    if (pesan.at(-1)?.role === 'user') { lewati('pesan terakhir klien belum dijawab — urusan admin, bukan follow-up'); continue; }
+    if (pesan.at(-1)?.role === 'user') { lewati('pesan terakhir klien belum dijawab — urusan balasan/assist, bukan follow-up'); continue; }
 
     const transkrip = barisTranskrip(pesan.slice(-80)).join('\n');
     const ringkasan = getRingkasan(jid);

@@ -239,6 +239,30 @@ async function periksaGagalBuka() {
 }
 setInterval(() => periksaGagalBuka().catch((e) => console.error('[gagal-dekripsi]', e.message)), 60 * 1000).unref();
 
+// ── Mode assist (keputusan Rama 30 Sep 2026) ────────────────────────────────
+// Kontak yang sedang dipegang admin (pause admin/handoff) tapi pesan barunya
+// tidak dibalas admin >= ASSIST_MENIT: bot menilai sendiri. Pertanyaan sederhana
+// yang jawabannya pasti ada di info resmi -> bot jawab; hal krusial -> tetap diam.
+// Pola dari TGO (auto_fallback_to_ai), tanpa mengubah pause admin.
+const ASSIST_MENIT = Number(process.env.ASSIST_MENIT) || 30;
+const ASSIST_MAKS_MS = 12 * 3600 * 1000;   // pesan lebih tua dari ini: jangan tiba-tiba dijawab
+// ponytail: status "sudah dinilai" di memori; restart = dinilai ulang sekali, aman karena AI bisa [DIAM] lagi.
+const assistDinilai = new Map();           // jid -> t pesan klien terakhir yang sudah dinilai
+let jalankanAssist = null;                 // diisi registerMessageHandler (butuh socket aktif)
+setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error('[assist]', e.message)), 5 * 60 * 1000).unref();
+
+const KONTEKS_ASSIST = (menit) =>
+  `\n\nMODE AMBIL ALIH: chat ini sedang dipegang admin, tapi pesan terbaru klien belum dibalas admin selama ${menit} menit. ` +
+  'Kamu BOLEH menjawab HANYA kalau pertanyaannya sederhana, tidak krusial, dan jawabannya pasti ada di info resmi ' +
+  '(harga paket standar, isi paket, cara booking & DP minimal, jam operasional, format cetak, backdrop basic, transport, galeri, cek jadwal). ' +
+  'Pesan berawalan "(admin)" adalah keputusan resmi: jangan diulang, dibantah, atau diralat. ' +
+  'Kalau pertanyaannya SULIT atau krusial, JANGAN dijawab: balas persis "[SULIT: <topik singkat>]" supaya admin dikabari. Sulit = ' +
+  'diskon/promo/harga khusus/negosiasi, pembayaran atau konfirmasi DP/pelunasan, perubahan/batal/reschedule booking, komplain, ' +
+  'hal yang sedang dibahas atau dijanjikan admin, hal yang tadi diteruskan ke admin, atau kamu tidak yakin jawabannya. ' +
+  'Kalau pesannya tidak perlu dijawab (ok, makasih, ucapan, stiker), balas persis [DIAM]. ' +
+  'Jangan pakai [ADMIN_HANDOFF], [QUOTATION], [PERUBAHAN], atau [KIRIM]. ' +
+  'Kalau menjawab: jangan perkenalkan diri, jawab langsung dan singkat; boleh bilang bagian lain tetap admin yang lanjutkan.';
+
 function registerMessageHandler(sock) {
   sockTerakhir = sock;
   // Pesan keluar dari perangkat lain (admin bales manual dari HP) → bot diam.
@@ -355,6 +379,73 @@ function registerMessageHandler(sock) {
     });
     if (!r.ok && r.status !== 404) console.error(`[perubahan→ops] HTTP ${r.status} ${JSON.stringify(r.json).slice(0, 200)}`);
     console.log(`[perubahan] ${jid.split('@')[0]}: ${perubahan}`);
+  };
+
+  jalankanAssist = async () => {
+    if (!live.isEnabled()) return;
+    const jam = new Date(Date.now() + (live.get().TIMEZONE_OFFSET ?? 7) * 3600e3).getUTCHours();
+    if (jam < 6 || jam >= 23) return; // jam operasional Tetra 06.00–23.00
+    const paused = await supa.fetchPausedContacts();
+    if (!paused) return;
+    const now = Date.now();
+    let hp = null; // jid -> nomor asli (jid sering @lid), diambil sekali per putaran bila perlu
+    const nomor = async (jid) => {
+      if (!hp) {
+        hp = {};
+        for (const l of await supa.fetchRecentLeads(new Date(now - 30 * 864e5).toISOString())) hp[l.wa_jid] ||= l.phone;
+      }
+      return hp[jid] || jid.split('@')[0];
+    };
+    for (const [jid, until] of Object.entries(paused)) {
+      if (until <= now || jid.endsWith('@g.us')) continue;
+      const riw = getRiwayat(jid);
+      let i = riw.length;
+      while (i > 0 && riw[i - 1].role === 'user') i--;
+      const baru = riw.slice(i);
+      if (!baru.length || !baru[0].t) continue;
+      const umur = now - baru[0].t;
+      const tAkhir = baru.at(-1).t;
+      if (umur < ASSIST_MENIT * 60e3 || now - tAkhir > ASSIST_MAKS_MS || assistDinilai.get(jid) === tAkhir) continue;
+      assistDinilai.set(jid, tAkhir);
+      const num = await nomor(jid);
+      await runSerial(jid, () => assistSatu(jid, num, riw.slice(0, i), baru, Math.round(umur / 60e3)));
+    }
+  };
+
+  const assistSatu = async (jid, num, hist, baru, menit) => {
+    const teks = baru.map((p) => p.content).join('\n');
+    const mulai = Date.now();
+    const vendor = await vendorLib.cari(num);
+    let jawab = await getAIResponse(hist, teks,
+      buildLeadContext(fullUserText(jid, ''), jid, teks, '', vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + KONTEKS_ASSIST(menit));
+    const nama = jid.split('@')[0];
+    // Bot tidak menjawab tapi klien menunggu: admin WAJIB tahu (WA admin + Telegram CS Mintet).
+    const kabari = async (topik) => {
+      const kutip = teks.replace(/\s+/g, ' ').slice(0, 200);
+      await notifyAdmin(sock, num, { name: 'INFO' }, getRiwayat(jid),
+        `klien menunggu ${menit} menit, perlu admin: ${topik}`).catch((e) => console.error('[assist] WA:', e.message));
+      await kirimTelegram(`⏳ Klien menunggu ${menit} menit, belum dibalas admin — wa.me/${num}\n` +
+        `Perlu admin: ${topik}\nPesan klien: "${kutip}"`).catch((e) => console.error('[assist] Telegram:', e.message));
+      console.log(`[assist] ${nama}: tidak dijawab bot (${topik}) — admin dikabari`);
+    };
+    const sulit = jawab.match(/\[(SULIT|ADMIN_HANDOFF|QUOTATION|PERUBAHAN)(?::\s*([^\]]*))?\]/i);
+    if (sulit) return kabari(sulit[2] || sulit[1].toLowerCase());
+    if (/\[DIAM\]/i.test(jawab)) { console.log(`[assist] ${nama}: tidak perlu dijawab`); return; }
+    const info = (jawab.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
+    jawab = jawab.replace(/\[(INFO_ADMIN|KIRIM)[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
+    if (!jawab || /\[/.test(jawab) || RE_KLAIM.test(jawab)) {
+      console.log(`[assist] ${nama}: balasan tidak aman, tidak dikirim: ${jawab.slice(0, 120)}`);
+      return kabari('bot tidak yakin menjawab');
+    }
+    // Admin membalas selama bot menilai / pause dicabut: jangan ikut menjawab.
+    if ((adminTerakhir.get(jid) || 0) >= mulai || getRiwayat(jid).at(-1)?.role !== 'user') {
+      console.log(`[assist] ${nama}: admin sudah membalas, batal`);
+      return;
+    }
+    tambahRiwayat(jid, 'assistant', jawab);
+    await sendReply(sock, jid, [], { name: 'assist' }, jawab);
+    if (info) await notifyAdmin(sock, num, { name: 'INFO' }, getRiwayat(jid), info).catch(() => {});
+    console.log(`[assist] ${nama}: dijawab bot setelah admin diam ${menit} menit`);
   };
 
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
@@ -707,4 +798,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka };
+module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };

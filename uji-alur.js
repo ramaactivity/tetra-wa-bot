@@ -340,6 +340,55 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   aiJawab = 'Kak Dini, tanggal wedding di Balitro sudah ketemu? Kabari aja, aku cek slotnya hari itu juga.';
   assert.deepStrictEqual(await fu(), [aiJawab]);
 
+  // ── Mode assist: admin pegang tapi diam >= 30 menit ──
+  const { _assist } = require(R('src/handlers/messages.js'));
+  const siapAssist = (jid, tanya) => {
+    siap(jid, ['user', 'harga 3 jam berapa?'], ['assistant', '(admin) 3 jam 2,5jt kak']);
+    store.tambahRiwayat(jid, 'user', tanya);
+    store.getRiwayat(jid).at(-1).t = Date.now() - 31 * 60e3;
+    paused[jid] = Date.now() + 20 * 3600e3;
+  };
+  const assist = async () => { log.kirim = []; log.notif = []; log.tg = []; await _assist(); await tunggu(50); return log; };
+  paused = {};
+  // Pertanyaan umum → dijawab bot
+  siapAssist('as1@lid', 'jam operasional sampai jam berapa kak?');
+  aiJawab = 'Jam operasional kami 06.00–23.00 WIB Kak.';
+  r = await assist();
+  assert.deepStrictEqual(r.kirim, ['Jam operasional kami 06.00–23.00 WIB Kak.']);
+  assert.strictEqual(store.getRiwayat('as1@lid').at(-1).content, 'Jam operasional kami 06.00–23.00 WIB Kak.');
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'assist menjawab dua kali');
+  // Pertanyaan sulit → tidak dijawab, admin WA + Telegram dikabari
+  delete paused['as1@lid'];
+  siapAssist('as2@lid', 'bisa diskon lagi ga kak?');
+  aiJawab = '[SULIT: minta diskon]';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0);
+  assert.match(r.notif[0], /minta diskon/); assert.match(r.tg[0], /minta diskon/);
+  // Klaim palsu → tidak dikirim, admin dikabari
+  delete paused['as2@lid'];
+  siapAssist('as3@lid', 'jamnya bisa mundur jadi jam 2?');
+  aiJawab = 'Siap Kak, sudah aku ubah jadwalnya jadi jam 14.00.';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'klaim palsu lolos di mode assist');
+  assert.strictEqual(r.tg.length, 1);
+  // Admin membalas saat bot sedang memproses → bot batal kirim
+  delete paused['as3@lid'];
+  siapAssist('as4@lid', 'lokasi basecamp di mana kak?');
+  aiJawab = async () => {
+    await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: 'as4@lid', id: 'admAs4', fromMe: true }, message: { conversation: 'Di Bogor kak' } }] });
+    return 'Basecamp kami di Bogor Kak.';
+  };
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'bot menjawab padahal admin sudah membalas');
+  // Pesan belum 30 menit → belum dinilai
+  delete paused['as4@lid'];
+  siap('as5@lid', ['assistant', '(admin) oke kak']); store.tambahRiwayat('as5@lid', 'user', 'kak satu lagi');
+  paused['as5@lid'] = Date.now() + 3600e3;
+  aiJawab = 'jawaban';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'assist terlalu cepat');
+
   console.log('SEMUA UJI LOLOS');
   process.exit(0);
 })().catch((e) => { console.error('GAGAL:', e.message); process.exit(1); });

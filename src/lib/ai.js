@@ -175,6 +175,43 @@ function konteksWaktu() {
     `Jangan balik bertanya tanggal berapa besok -- kamu sudah tahu.`;
 }
 
+// Penjaga harga (keputusan: zero mistake soal angka). Setiap nominal rupiah di
+// balasan harus muncul di sumber yang dilihat model (daftar harga, FAQ, konteks
+// vendor, chat termasuk harga dari admin, hasil alat) atau turunan wajarnya:
+// × 2/3 unit, diskon 10%, jumlah/selisih dua nominal. TGO tidak punya ini.
+function angkaRupiah(teks) {
+  const out = [];
+  const re = /(rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)\s*(jt|juta|rb|ribu|k)?(?![\w])/gi;
+  for (const m of String(teks).matchAll(re)) {
+    const sat = (m[3] || '').toLowerCase();
+    if (!m[1] && !sat) continue; // angka biasa (jam, tamu, tanggal) bukan harga
+    let n = /^\d{1,3}([.,]\d{3})+$/.test(m[2]) ? Number(m[2].replace(/[.,]/g, '')) : Number(m[2].replace(',', '.'));
+    if (sat === 'jt' || sat === 'juta') n *= 1e6;
+    else if (sat === 'rb' || sat === 'ribu' || sat === 'k') n *= 1e3;
+    if (n >= 10000) out.push(Math.round(n));
+  }
+  return out;
+}
+function hargaAsing(teks, sumber) {
+  const dasar = [...new Set(angkaRupiah(sumber))];
+  const boleh = new Set();
+  for (const a of dasar) {
+    [a, a * 2, a * 3, Math.round(a * 0.9)].forEach((x) => boleh.add(x));
+    for (const b of dasar) { boleh.add(a + b); boleh.add(Math.abs(a - b)); }
+  }
+  return angkaRupiah(teks).filter((n) => !boleh.has(n));
+}
+
+// Log pemakaian AI per panggilan (token, alat) → data/llm-usage.jsonl, untuk hitung
+// biaya & audit. ponytail: file tumbuh ±150 KB/hari, rotasi kalau sudah jadi masalah.
+const USAGE_FILE = path.join(__dirname, '..', '..', 'data', 'llm-usage.jsonl');
+function catatPemakaian(model, data, msg) {
+  const u = data?.usage || {};
+  const baris = { t: Date.now(), model, masuk: u.prompt_tokens || 0, keluar: u.completion_tokens || 0,
+    alat: (msg?.tool_calls || []).map((c) => c.function?.name) };
+  fs.appendFile(USAGE_FILE, JSON.stringify(baris) + '\n', () => {});
+}
+
 async function kirim({ url, key, model }, messages, pakaiAlat = true) {
   const body = { model, messages, temperature: 0.4, stream: false };
   if (pakaiAlat && availAktif()) body.tools = TOOLS;
@@ -187,6 +224,7 @@ async function kirim({ url, key, model }, messages, pakaiAlat = true) {
   if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
   const msg = data?.choices?.[0]?.message;
+  catatPemakaian(model, data, msg);
   if (!msg) throw new Error('balasan kosong dari model');
   return msg;
 }
@@ -208,8 +246,21 @@ async function panggil(endpoint, history, message, leadContext) {
     const msg = await kirim(endpoint, messages);
     const panggilanAlat = msg.tool_calls || [];
     if (!panggilanAlat.length) {
-      const teks = (msg.content || '').trim();
+      let teks = (msg.content || '').trim();
       if (!teks) throw new Error('balasan kosong dari model');
+      let asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
+      if (asing.length) {
+        console.log(`[harga] nominal tanpa sumber ${asing.join(', ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
+        messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
+          `KOREKSI SISTEM: nominal ${asing.map((n) => 'Rp ' + n.toLocaleString('id-ID')).join(', ')} tidak ada di daftar harga, FAQ, maupun chat. ` +
+          'Tulis ulang balasan untuk klien HANYA dengan harga resmi; kalau harganya memang tidak ada, bilang admin yang info.' });
+        teks = ((await kirim(endpoint, messages, false)).content || '').trim();
+        asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
+        if (!teks || asing.length) {
+          console.log(`[harga] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
+          return '[ADMIN_HANDOFF]';
+        }
+      }
       return teks;
     }
 
@@ -406,7 +457,8 @@ async function nilaiFollowup(transkrip, ringkasan) {
       '4. Tidak ada urusan yang sedang menunggu admin (promo, diskon, harga khusus, quotation, keluhan, handoff).\n' +
       '5. Bukan usaha lain (bakery, dekor, MUA, WO, vendor), bukan ucapan selamat/broadcast/portofolio/promosi/salah kirim.\n' +
       '6. Belum DP/deal.\n' +
-      'Pesan ADMIN = keputusan resmi pemilik. Kalau ragu sedikit pun, kirim=false.' },
+      'Pesan ADMIN = keputusan resmi pemilik. Pernah dilayani admin BOLEH di-follow-up kalau urusan dengan admin sudah tuntas dan klien yang belum membalas; ' +
+      'jangan kalau admin masih punya janji/urusan terbuka. Kalau ragu sedikit pun, kirim=false.' },
     { role: 'user', content: `${ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n\n` : ''}TRANSKRIP:\n${transkrip}` },
   ];
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
@@ -421,4 +473,4 @@ async function nilaiFollowup(transkrip, ringkasan) {
   }
 }
 
-module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup };
+module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing };
