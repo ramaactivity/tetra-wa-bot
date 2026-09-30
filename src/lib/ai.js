@@ -184,8 +184,10 @@ function angkaRupiah(teks) {
   const re = /(rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)\s*(jt|juta|rb|ribu|k)?(?![\w])/gi;
   for (const m of String(teks).matchAll(re)) {
     const sat = (m[3] || '').toLowerCase();
-    if (!m[1] && !sat) continue; // angka biasa (jam, tamu, tanggal) bukan harga
-    let n = /^\d{1,3}([.,]\d{3})+$/.test(m[2]) ? Number(m[2].replace(/[.,]/g, '')) : Number(m[2].replace(',', '.'));
+    const ribuan = /^\d{1,3}([.,]\d{3})+$/.test(m[2]);
+    let n = ribuan ? Number(m[2].replace(/[.,]/g, '')) : Number(m[2].replace(',', '.'));
+    // Tanpa "Rp"/satuan: hanya angka berpemisah ribuan >= 100.000 (admin sering tulis "2.300.000").
+    if (!m[1] && !sat && !(ribuan && n >= 100000)) continue;
     if (sat === 'jt' || sat === 'juta') n *= 1e6;
     else if (sat === 'rb' || sat === 'ribu' || sat === 'k') n *= 1e3;
     if (n >= 10000) out.push(Math.round(n));
@@ -194,12 +196,34 @@ function angkaRupiah(teks) {
 }
 function hargaAsing(teks, sumber) {
   const dasar = [...new Set(angkaRupiah(sumber))];
-  const boleh = new Set();
-  for (const a of dasar) {
-    [a, a * 2, a * 3, Math.round(a * 0.9)].forEach((x) => boleh.add(x));
-    for (const b of dasar) { boleh.add(a + b); boleh.add(Math.abs(a - b)); }
+  // Kelipatan 1–10 (unit, jam extend, pcs add-on) + diskon 10%; lalu jumlah dua
+  // kelipatan (bundling, paket + extend: 10 jam = 5jt + 2×500rb) dan selisih (sisa pelunasan).
+  const l1 = new Set();
+  for (const a of dasar) { for (let k = 1; k <= 10; k++) l1.add(a * k); l1.add(Math.round(a * 0.9)); }
+  const boleh = new Set(l1);
+  const arr = [...l1];
+  for (const x of arr) for (const y of arr) boleh.add(x + y);
+  for (const a of dasar) for (const b of dasar) boleh.add(Math.abs(a - b));
+  // ponytail: kombinasi di atas rapat (ada add-on 100–200rb), jadi harga karangan yang
+  // bulat bisa lolos. Risiko terbesar = harga paket Classic salah durasi: dicek tajam di bawah.
+  const salah = angkaRupiah(teks).filter((n) => !boleh.has(n));
+  const tabel = {};
+  for (const m of String(sumber).matchAll(/-\s*(\d+)\s*Jam\s*:\s*Rp\s*([\d.]+)/gi)) tabel[m[1]] ||= Number(m[2].replace(/\./g, ''));
+  // Harga khusus = nominal yang tertulis di luar daftar harga & FAQ umum (konteks vendor, chat admin).
+  const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(faq()).join(''));
+  const nilaiTabel = new Set(Object.values(tabel).flatMap((v) => [v, v * 2, v * 3, Math.round(v * 0.9)]));
+  for (const baris of String(teks).split('\n')) {
+    if (/360|videobooth|magazine|photo ?stage/i.test(baris)) continue;
+    for (const m of baris.matchAll(/(\d+)\s*jam\b([^\n]{0,40})/gi)) {
+      const resmi = tabel[m[1]];
+      const n = angkaRupiah(m[2])[0];
+      if (!resmi || !n) continue;
+      const cocok = [resmi, resmi * 2, resmi * 3, Math.round(resmi * 0.9)].includes(n);
+      const hargaKhusus = !nilaiTabel.has(n) && khusus.includes(n); // harga vendor / dari admin di chat
+      if (!cocok && !hargaKhusus && !salah.includes(n)) salah.push(n);
+    }
   }
-  return angkaRupiah(teks).filter((n) => !boleh.has(n));
+  return salah;
 }
 
 // Log pemakaian AI per panggilan (token, alat) → data/llm-usage.jsonl, untuk hitung
@@ -473,4 +497,4 @@ async function nilaiFollowup(transkrip, ringkasan) {
   }
 }
 
-module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing };
+module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
