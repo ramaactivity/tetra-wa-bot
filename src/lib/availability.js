@@ -25,8 +25,9 @@ function enabled() {
 }
 
 // Cek ketersediaan unit untuk satu window.
-// params: { date:'YYYY-MM-DD', start:'HH:mm', end:'HH:mm', city?:string }
-// return: objek response Tetra Ops (units_free, available, conflicts,
+// params: { date:'YYYY-MM-DD', start:'HH:mm', end:'HH:mm', city?:string, units?:1..3 }
+// return: objek response Tetra Ops (units_free, units_requested, available =
+//         units_free >= units, conflicts,
 //         buffer_applied_minutes, assumptions, ...) ATAU null kalau gagal/OFF.
 // Model sering mengecek tanggal yang sama berkali-kali dalam satu percakapan
 // (23 Sep: 7x untuk satu tanggal dalam 8 menit). Simpan hasil 5 menit.
@@ -34,7 +35,7 @@ const cache = new Map(); // key -> { ts, data }
 const CACHE_MS = 5 * 60 * 1000;
 
 async function checkAvailability(params = {}) {
-  const key = JSON.stringify([params.date, params.start, params.end, params.city || '']);
+  const key = JSON.stringify([params.date, params.start, params.end, params.city || '', unitsOf(params)]);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_MS) return hit.data;
   const data = await checkAvailabilityRaw(params);
@@ -42,11 +43,16 @@ async function checkAvailability(params = {}) {
   return data;
 }
 
-async function checkAvailabilityRaw({ date, start, end, city } = {}) {
+// Tetra Ops menolak units di luar 1..3 (400). Lebih dari 3 = cek 3 (semua unit);
+// sisanya urusan admin (Tetra cuma punya 3).
+const unitsOf = (p) => Math.min(3, Math.max(1, parseInt(p.units, 10) || 1));
+
+async function checkAvailabilityRaw(params = {}) {
+  const { date, start, end, city } = params;
   if (!token()) return null; // belum dikonfigurasi → diam (mode admin-confirm)
   if (!date || !start || !end) return null; // param kurang → jangan panggil
 
-  const qs = new URLSearchParams({ date, start, end });
+  const qs = new URLSearchParams({ date, start, end, units: String(unitsOf(params)) });
   if (city) qs.set('city', city);
   const url = `${BASE_URL}?${qs.toString()}`;
 
@@ -76,9 +82,12 @@ function summarize(result) {
   if (!result) return '';
   const total = result.units_total ?? 3;
   const free = result.units_free ?? 0;
+  const minta = result.units_requested ?? 1;
   const head = result.available
-    ? `🟢 ${result.window}: ${free}/${total} unit KOSONG`
-    : `🔴 ${result.window}: PENUH (0/${total})`;
+    ? `🟢 ${result.window}: ${free}/${total} unit KOSONG` + (minta > 1 ? `, klien minta ${minta} → CUKUP` : '')
+    : minta > 1 && free > 0
+      ? `🔴 ${result.window}: sisa ${free} unit, klien minta ${minta} → TIDAK CUKUP`
+      : `🔴 ${result.window}: PENUH (0/${total})`;
   let out = `📅 Ketersediaan ${head}`;
   if (Array.isArray(result.conflicts) && result.conflicts.length) {
     out += `\nBentrok: ${result.conflicts.map((c) => `${c.project} (${c.time})`).join(', ')}`;

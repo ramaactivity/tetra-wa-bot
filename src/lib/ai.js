@@ -34,6 +34,11 @@ const TOOLS = [
           start: { type: 'string', description: 'Jam mulai, format HH:mm (24 jam)' },
           end: { type: 'string', description: 'Jam selesai, format HH:mm (24 jam)' },
           city: { type: 'string', description: 'Kota lokasi acara, kalau disebut pelanggan' },
+          units: {
+            type: 'integer',
+            description: 'Jumlah unit/booth yang diminta pelanggan di acara yang sama (1–3). ' +
+              'Isi hanya kalau pelanggan menyebut lebih dari 1 booth/unit/spot; bukan jumlah tamu atau jam.',
+          },
         },
         required: ['date'],
       },
@@ -94,6 +99,11 @@ HARGA RESMI — PHOTOBOOTH CLASSIC UNLIMITED CETAK (paket lain, add-on, dan exte
 - 6 Jam  : Rp 4.000.000
 - 8 Jam  : Rp 5.000.000
 - Extend on the spot, per jam: Rp 500.000
+
+LEBIH DARI 1 UNIT (mis. "2 booth", "2 spot", "paket 3 jam x 2"): Tetra punya 3 unit, jadi satu acara bisa pakai 2–3 unit.
+- Harga = harga paket per unit × jumlah unit, sebut per unitnya, mis. "*Rp 2.500.000*/unit × 2 = *Rp 5.000.000*". Tanpa diskon; harga spesial hanya dari admin.
+- Cek jadwal dengan units = jumlah unit yang diminta. Jangan tanya jumlah unit kalau klien tidak menyebut (anggap 1).
+- Klien minta lebih dari 3 unit: jangan janji, bilang admin yang cek, tambahkan [INFO_ADMIN: klien minta <n> unit].
 
 SUDAH TERMASUK: cetak foto unlimited (2R photostrip, 4R, atau Polaroid), peralatan profesional (printer, kamera, lighting), setup + properti foto, crew, desain frame custom sesuai acara (logo/tema klien bisa dipakai; desain di-ACC klien sebelum hari H), softfile real-time via QR code, flashdisk kayu berisi seluruh file, backdrop basic, dan free transport se-Jabodetabek.
 
@@ -229,7 +239,19 @@ async function panggil(endpoint, history, message, leadContext) {
               status: 'gagal_baca',
               instruksi: 'Jadwal benar-benar tidak terbaca. Bilang apa adanya, tawarkan dibantu admin.',
             });
-          } else if (sehari.units_free > 0) {
+          } else if (!sehari.available && sehari.units_free > 0) {
+            // Klien minta >1 unit, sisa unit kurang.
+            hasil = JSON.stringify({
+              status: 'unit_tidak_cukup',
+              tanggal: arg.date,
+              unit_diminta: sehari.units_requested,
+              unit_kosong: sehari.units_free,
+              instruksi:
+                `Tanggal ini hanya sisa ${sehari.units_free} unit, klien minta ${sehari.units_requested}. ` +
+                'Bilang apa adanya, tawarkan jumlah unit yang tersisa atau tanggal lain; jangan janji. ' +
+                'Tambahkan [INFO_ADMIN: klien minta ' + sehari.units_requested + ' unit, sisa ' + sehari.units_free + '].',
+            });
+          } else if (sehari.available) {
             hasil = JSON.stringify({
               status: 'tanggal_masih_tersedia',
               tanggal: arg.date,
@@ -251,17 +273,24 @@ async function panggil(endpoint, history, message, leadContext) {
             });
           }
           console.log(`[ai] cek_ketersediaan ${arg.date} (sehari): ` +
-            (sehari ? `${sehari.units_free}/${sehari.units_total} unit kosong` : 'gagal'));
+            (sehari ? `${sehari.units_free}/${sehari.units_total} unit kosong, minta ${sehari.units_requested ?? 1}` : 'gagal'));
         } else {
           const data = await checkAvailability(arg);
+          // Minta >1 unit tapi sisa kurang: admin perlu tahu (Tetra cuma punya 3).
+          const kurangUnit = data && !data.available && data.units_free > 0;
           hasil = data
-            ? JSON.stringify(data)
+            ? JSON.stringify(kurangUnit ? {
+                ...data,
+                instruksi: `Hanya sisa ${data.units_free} unit, klien minta ${data.units_requested}. ` +
+                  'Bilang apa adanya, tawarkan jumlah unit yang tersisa atau jam/tanggal lain; jangan janji. ' +
+                  `Tambahkan [INFO_ADMIN: klien minta ${data.units_requested} unit, sisa ${data.units_free}].`,
+              } : data)
             : JSON.stringify({
                 status: 'gagal_baca',
                 instruksi: 'Jadwal benar-benar tidak terbaca. Bilang apa adanya, tawarkan dibantu admin.',
               });
           console.log(`[ai] cek_ketersediaan ${arg.date} ${arg.start}-${arg.end}: ` +
-            (data ? `${data.units_free}/${data.units_total} unit kosong` : 'gagal'));
+            (data ? `${data.units_free}/${data.units_total} unit kosong, minta ${data.units_requested ?? 1}` : 'gagal'));
         }
       } catch (e) {
         hasil = JSON.stringify({ error: e.message });
@@ -318,6 +347,8 @@ async function ekstrakBooking(dataLama, pesan, field) {
       'Isi hanya kolom yang dinyatakan jelas oleh klien, atau yang disepakati klien di chat (paket/jam yang ia setujui). ' +
       'Jangan menebak; kalau tidak ada, jangan tulis kuncinya. Tulis nilai ringkas apa adanya. ' +
       'Kalau klien mengoreksi nilai lama, pakai nilai terbaru. ' +
+      'jumlah_unit: angka saja (mis. "2"), hanya kalau klien menyebut jumlah booth/unit/spot photobooth ' +
+      '("2 booth", "dua unit", "2 spot", "paket 3 jam x 2"); jumlah tamu, jam, durasi, atau lembar foto BUKAN jumlah unit. ' +
       `Hari ini ${new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)}; kalau tanggal acara diketahui, ` +
       'WAJIB isi tanggal_iso (tahun tidak disebut = tanggal terdekat ke depan).' },
     { role: 'user', content: `DATA SAAT INI:\n${JSON.stringify(dataLama)}\n\nCHAT TERBARU:\n${teks}` },
@@ -346,6 +377,7 @@ async function ekstrakQuotation(pesan, ringkasan, namaAddon = []) {
       `Hari ini ${hariIni}; tanggal tanpa tahun = tanggal terdekat ke depan. gross_up true hanya kalau klien minta pajak dicantumkan. ` +
       'Isi hanya yang disebut/disepakati di chat; yang tidak ada tulis null (atau array kosong). Jangan menebak, jangan isi harga atau diskon. ' +
       'format hanya untuk photobooth; jam = durasi layanan dalam jam (bilangan bulat). ' +
+      'qty = jumlah unit/booth layanan itu di acara yang sama ("2 booth", "x 2 unit"); tidak disebut = 1; jumlah tamu atau jam BUKAN qty. ' +
       (namaAddon.length ? `addons[].nama WAJIB persis salah satu dari: ${namaAddon.join(' | ')}. Add-on yang tidak ada di daftar masukkan ke catatan.` : '') },
     { role: 'user', content: `${ringkasan ? `CATATAN KLIEN:\n${ringkasan}\n\n` : ''}CHAT:\n${teks}` },
   ];

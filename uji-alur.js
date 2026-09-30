@@ -251,6 +251,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(r.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'), 'katalog tidak terkirim');
   assert.deepStrictEqual(r.wa[0], '[FORWARD]', 'bukti transfer tidak diteruskan ke admin');
   assert.match(r.wa[1], /Bukti DP masuk/); assert.match(r.wa[1], /Belum diisi: .*PIC/);
+  assert.ok(!/Jumlah unit/.test(r.wa[1]), '1 unit tidak perlu disebut di rekap');
   const kirimOps = ops.filter((o) => o.p === '/api/bot/booking');
   assert.ok(kirimOps.length >= 1 && kirimOps[0].body.external_id.startsWith('wa:62811@'), 'booking tidak dikirim ke Tetra Ops');
   assert.strictEqual(kirimOps.at(-1).body.data.tanggal_iso, '2026-12-05');
@@ -263,9 +264,12 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   r = await kirim({ conversation: 'pengantin Budi & Sari, jam 13-16, PIC Andi 0812, 4R desain hal 5 no 2, backdrop gold' }, jidB);
   assert.ok(booking.get(jidB).lengkap); assert.match(r.wa.at(-1), /Data booking lengkap/);
   // Ubah jam setelah lengkap → rekap "Update"
-  ekstrak = { jam: '14.00-17.00' };
-  r = await kirim({ conversation: 'eh jamnya mundur jadi 14-17 ya' }, jidB);
+  ekstrak = { jam: '14.00-17.00', jumlah_unit: '2' };
+  r = await kirim({ conversation: 'eh jamnya mundur jadi 14-17 ya, sama jadi 2 booth' }, jidB);
   assert.match(r.wa.at(-1), /Update data booking/); assert.match(r.wa.at(-1), /14\.00-17\.00/);
+  // Multi-unit: tampil di rekap admin & terkirim apa adanya ke Tetra Ops
+  assert.match(r.wa.at(-1), /Jumlah unit: 2 \(2 spot photobooth\)/);
+  assert.strictEqual(ops.filter((o) => o.p === '/api/bot/booking').at(-1).body.data.jumlah_unit, '2');
 
   // Gambar di tahap booking → diteruskan, bot tetap melayani, tidak mulai ulang
   r = await kirim({ imageMessage: {} }, jidB);
