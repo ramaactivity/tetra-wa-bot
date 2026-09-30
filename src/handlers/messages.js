@@ -659,8 +659,11 @@ function registerMessageHandler(sock) {
       // Stub CIPHERTEXT (2) = pesan gagal didekripsi (Bad MAC). Dicatat per JID
       // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
       if (msg.messageStubType === 2) {
-        console.log(`[gagal-dekripsi] ${jid} (${type})`);
-        if (jid && !msg.key.fromMe && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
+        // Umur pesan: setelah restart/reconnect WA menyodorkan ulang pesan LAMA yang dulu
+        // sudah terbaca; itu bukan pesan klien yang terlewat, jangan jadi peringatan.
+        const umurMenit = Math.round((Date.now() / 1000 - (Number(msg.messageTimestamp) || Date.now() / 1000)) / 60);
+        console.log(`[gagal-dekripsi] ${jid} (${type}, umur ${umurMenit} mnt)`);
+        if (jid && umurMenit <= 60 && !msg.key.fromMe && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
           gagalBuka.set(jid, { sejak: Date.now(), dilapor: 0 });
         }
       }
