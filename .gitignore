@@ -12,3 +12,4 @@ PAIRING-CODE.txt
 *.bak
 *.bak-*
 .env.local.bak*
+data/*.jsonl

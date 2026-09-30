@@ -17,6 +17,22 @@ function faq() {
   catch { return ''; }
 }
 
+// Pelajaran dari pengalaman = skill Hermes `cs-mintet-pelajaran`, dirawat agent CS Mintet
+// (profil tetra-wa-bot) lewat skill_manage: tinjauan harian chat WA + koreksi Rama di
+// Telegram. Dibaca tiap panggilan, jadi pelajaran baru langsung berlaku tanpa restart.
+// Baris bernominal rupiah dibuang: harga hanya dari daftar harga resmi & FAQ.
+const PELAJARAN_FILE = process.env.PELAJARAN_FILE ||
+  path.join(process.env.HOME || '/home/ubuntu', '.hermes/profiles/tetra-wa-bot/skills/cs-mintet-pelajaran/SKILL.md');
+function pelajaran() {
+  try {
+    const bagian = (fs.readFileSync(PELAJARAN_FILE, 'utf-8').split(/^## Pelajaran[^\n]*$/m)[1] || '').split(/^## /m)[0];
+    const baris = bagian.split('\n').filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length).slice(0, 40);
+    return baris.length
+      ? '\n\nPELAJARAN DARI PENGALAMAN (hasil tinjauan chat & koreksi Rama; FAQ, harga resmi, dan keputusan admin tetap menang):\n' + baris.join('\n')
+      : '';
+  } catch { return ''; }
+}
+
 // Alat yang boleh dipanggil model. Hanya BACA jadwal Tetra Ops -- model tidak
 // bisa membuat, mengubah, atau membatalkan booking dari sini.
 const TOOLS = [
@@ -258,7 +274,7 @@ async function panggil(endpoint, history, message, leadContext) {
     ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
     : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + faq() + konteksWaktu() + konteksLead },
+    { role: 'system', content: SYSTEM_PROMPT + faq() + pelajaran() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
     { role: 'user', content: message },
   ];
@@ -500,4 +516,4 @@ async function nilaiFollowup(transkrip, ringkasan) {
   }
 }
 
-module.exports = { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { pelajaran, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
