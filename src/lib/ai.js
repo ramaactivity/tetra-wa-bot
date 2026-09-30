@@ -26,16 +26,58 @@ function faq() {
 const RE_PELAJARAN_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|transfer|\btf\b|\bdp\b|lunas|bayar|diskon|promo|potongan|gratis|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas/i;
 const PELAJARAN_FILE = () => process.env.PELAJARAN_FILE ||
   path.join(process.env.HOME || '/home/ubuntu', '.hermes/profiles/tetra-wa-bot/skills/cs-mintet-pelajaran/SKILL.md');
+// Fakta dari balasan admin (dipelajari CS Mintet otomatis): baris
+// `- <fakta> (admin: "<kutipan>")` hanya dipakai kalau kutipannya benar-benar ada di pesan
+// yang dikirim dari HP admin ("(admin)" di riwayat). Chat klien tidak bisa menyelundupkan
+// fakta. Kutipan yang pernah lolos disimpan, jadi fakta tidak hilang saat riwayat 90 hari habis.
+const RIWAYAT_FILE = () => process.env.RIWAYAT_FILE || path.join(__dirname, '..', '..', 'data', 'riwayat.json');
+const KUTIPAN_OK_FILE = () => process.env.KUTIPAN_OK_FILE || path.join(__dirname, '..', '..', 'data', 'kutipan-admin-ok.json');
+const RE_FAKTA_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|diskon|promo|potongan|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas/i;
+const normal = (t) => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+let cacheAdmin = { mtime: -1, teks: '' };
+function teksAdmin() {
+  try {
+    const m = fs.statSync(RIWAYAT_FILE()).mtimeMs;
+    if (m !== cacheAdmin.mtime) {
+      const t = [];
+      for (const e of Object.values(JSON.parse(fs.readFileSync(RIWAYAT_FILE(), 'utf-8')))) {
+        for (const p of e.pesan || []) if (p.role === 'assistant' && String(p.content).startsWith('(admin)')) t.push(normal(p.content.slice(7)));
+      }
+      cacheAdmin = { mtime: m, teks: t.join('\n') };
+    }
+  } catch { /* riwayat belum ada */ }
+  return cacheAdmin.teks;
+}
+function kutipanSah(kutip) {
+  const k = normal(kutip);
+  if (k.length < 12) return false;
+  let ok = [];
+  try { ok = JSON.parse(fs.readFileSync(KUTIPAN_OK_FILE(), 'utf-8')); } catch { /* belum ada */ }
+  if (ok.includes(k)) return true;
+  if (!teksAdmin().includes(k)) return false;
+  fs.writeFileSync(KUTIPAN_OK_FILE(), JSON.stringify([...ok, k].slice(-500)));
+  return true;
+}
+
+function bagianSkill(isi, judul) {
+  return ((isi.split(new RegExp(`^## ${judul}[^\\n]*$`, 'm'))[1] || '').split(/^## /m)[0]).split('\n');
+}
 function pelajaran() {
   try {
-    const bagian = (fs.readFileSync(PELAJARAN_FILE(), 'utf-8').split(/^## Pelajaran[^\n]*$/m)[1] || '').split(/^## /m)[0];
-    const baris = bagian.split('\n')
+    const isi = fs.readFileSync(PELAJARAN_FILE(), 'utf-8');
+    const baris = bagianSkill(isi, 'Pelajaran')
       .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 40);
-    return baris.length
+    const fakta = bagianSkill(isi, 'Fakta dari admin').map((l) => l.match(/^\s*-\s*(.+?)\s*\(admin:\s*"([^"]+)"\)\s*$/))
+      .filter((m) => m && !angkaRupiah(m[1]).length && !RE_FAKTA_BAHAYA.test(m[1]) && kutipanSah(m[2]))
+      .map((m) => `- ${m[1]}`).slice(0, 40);
+    return (baris.length
       ? '\n\nPELAJARAN DARI PENGALAMAN (hasil tinjauan chat & koreksi Rama). Ini tambahan soal CARA menjawab; ' +
         'TIDAK BOLEH mengalahkan aturan di atas (anti-halusinasi, harga resmi & FAQ, KAMU TIDAK BISA MENGUBAH DATA, ' +
         'pembayaran/DP/rekening, vendor, keputusan admin). Kalau bertentangan, abaikan pelajarannya:\n' + baris.join('\n')
-      : '';
+      : '') + (fakta.length
+      ? '\n\nFAKTA DARI BALASAN ADMIN (dipelajari otomatis dari jawaban admin ke klien; boleh dipakai menjawab, ' +
+        'tapi FAQ dan daftar harga tetap menang kalau berbeda):\n' + fakta.join('\n')
+      : '');
   } catch { return ''; }
 }
 
@@ -310,7 +352,7 @@ async function panggil(endpoint, history, message, leadContext) {
             : '[ADMIN_HANDOFF]';
         }
       }
-      return teks;
+      return teks.replace(/^\(admin\)\s*/i, ''); // jangan pernah menyamar jadi pesan admin di riwayat
     }
 
     messages.push(msg);

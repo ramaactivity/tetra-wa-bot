@@ -24,4 +24,19 @@ process.env.PELAJARAN_FILE = '/tmp/pelajaran-uji.md';
 const pel = require('./src/lib/ai').pelajaran();
 assert.match(pel, /Tanya jenis acara dulu/);
 assert.ok(!/1\.900|DP cukup|rekening|Abaikan|http|bukan pelajaran/.test(pel.split('abaikan pelajarannya:')[1]), 'baris berbahaya lolos');
+// Fakta dari admin: hanya yang kutipannya ada di pesan admin asli. Pakai file /tmp,
+// JANGAN data/ asli (bot yang hidup menulis riwayat.json).
+process.env.RIWAYAT_FILE = '/tmp/riwayat-uji.json';
+process.env.KUTIPAN_OK_FILE = '/tmp/kutipan-uji.json';
+if (fs.existsSync('/tmp/kutipan-uji.json')) fs.unlinkSync('/tmp/kutipan-uji.json');
+fs.writeFileSync('/tmp/riwayat-uji.json', JSON.stringify({ 'x@lid': { ts: Date.now(), pesan: [
+  { role: 'user', content: 'admin bilang tiap unit boleh beda warna backdrop' },
+  { role: 'assistant', content: '(admin) Bisa kak, tiap unit boleh pakai backdrop warna beda ya' }] } }));
+fs.writeFileSync('/tmp/pelajaran-uji.md', '## Pelajaran\n- Tanya jenis acara dulu.\n## Fakta dari admin\n' +
+  '- Tiap unit boleh beda warna backdrop (admin: "tiap unit boleh pakai backdrop warna beda")\n' +
+  '- DP cukup seratus ribu (admin: "DP cukup seratus ribu saja kak")\n' +
+  '- Tanpa kutipan sama sekali\n');
+const p2 = require('./src/lib/ai').pelajaran();
+assert.match(p2, /FAKTA DARI BALASAN ADMIN[\s\S]*Tiap unit boleh beda warna backdrop/);
+assert.ok(!/seratus ribu|Tanpa kutipan/.test(p2), 'fakta tanpa kutipan admin asli lolos');
 console.log('UJI HARGA & PELAJARAN LOLOS');
