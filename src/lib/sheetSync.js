@@ -10,6 +10,8 @@ const ROW_FILE = '/tmp/tetra_sheet_row.json';
 const APPEND_CMD = '/home/ubuntu/.venv_xlsx/bin/python3 /home/ubuntu/tetra-wa-bot/sheet_append.py';
 
 function syncToSheet(enriched) {
+  // Instance uji (nomor cadangan) tidak boleh menulis ke Sheet produksi.
+  if (process.env.SHEET_SYNC === 'off') return;
   try {
     const row = toRow(enriched);
     fs.writeFileSync(ROW_FILE, JSON.stringify([row]));

@@ -13,7 +13,8 @@ const current = {
   SALAM_REPLY: base.SALAM_REPLY,
   COOLDOWN_HOURS: base.COOLDOWN_HOURS,
   PAUSE_HOURS: base.PAUSE_HOURS,
-  ADMIN_NOTIFY_JID: base.ADMIN_NOTIFY_JID,
+  // Env menang atas config.js; instance uji mengosongkannya (tanpa notif ke admin).
+  ADMIN_NOTIFY_JID: process.env.ADMIN_NOTIFY_JID ?? base.ADMIN_NOTIFY_JID,
   BUSINESS_START_HOUR: base.BUSINESS_START_HOUR,
   BUSINESS_END_HOUR: base.BUSINESS_END_HOUR,
   TIMEZONE_OFFSET: base.TIMEZONE_OFFSET,

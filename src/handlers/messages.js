@@ -50,7 +50,8 @@ function teksPesan(message) {
 function phoneDigits(msg) {
   const jid = msg.key?.remoteJid || '';
   if (jid.endsWith('@lid')) {
-    const pn = msg.key?.senderPn;
+    // Baileys 7: nomor HP ada di remoteJidAlt (senderPn = nama lama di 6.x).
+    const pn = msg.key?.remoteJidAlt || msg.key?.senderPn;
     if (pn && pn.includes('@')) return pn.split('@')[0];
   }
   return jid.split('@')[0];
