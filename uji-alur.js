@@ -12,6 +12,7 @@ let paused = {};
 let aiJawab = 'halo';
 let leadsUji = [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }];
 let nilai = { kirim: true, status: 'calon_klien_menggantung' };
+let eksperimenUji = [];
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
   fetchPausedContacts: async () => paused,
@@ -30,6 +31,7 @@ stub('src/lib/ai.js', {
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
   nilaiFollowup: async () => nilai,
+  eksperimen: () => eksperimenUji,
   ekstrakQuotation: async () => ({ klien: { nama: 'PT Maju', attn: 'Bu Sari' }, acara: { kota: 'Jakarta' },
     layanan: [{ kategori: 'photobooth_classic', jam: '4', format: '4r' }, { kategori: null }], addons: [], gross_up: true, usulan_diskon: { persen: 10, alasan: 'x' } }),
 });
@@ -72,6 +74,18 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   r = await kirim({ imageMessage: {} });
   assert.match(r.kirim[0], /Admin cek dulu/); assert.strictEqual(r.pause[0].s, 'ai');
   assert.ok(Math.abs(r.pause[0].jam - 2) < 0.01, 'handoff AI harus pause 2 jam');
+
+  // Tahap percakapan & eksperimen A/B masuk konteks AI (keputusan Rama 1 Okt)
+  let ctxUji = '';
+  eksperimenUji = [{ id: 'E9', persona: 'wedding', tahap: 'SAPA', A: 'cara A', B: 'cara B' }];
+  aiJawab = (h, m, ctx) => { ctxUji = ctx; return 'Halo Kak!'; };
+  r = await kirim({ conversation: 'halo kak mau tanya photobooth buat wedding' }, 'e9@lid');
+  assert.match(ctxUji, /TAHAP PERCAKAPAN: SAPA/); assert.match(ctxUji, /Persona: wedding/);
+  assert.match(ctxUji, /EKSPERIMEN E9 \(varian [AB]\)/);
+  r = await kirim({ conversation: 'tanggal 12 des kak' }, 'e9@lid');
+  assert.match(ctxUji, /TAHAP PERCAKAPAN: GALI/, 'kontak lanjutan masih dianggap baru');
+  assert.ok(!/EKSPERIMEN E9/.test(ctxUji), 'eksperimen SAPA ikut di tahap GALI');
+  eksperimenUji = [];
 
   aiJawab = '[DIAM]';
   r = await kirim({ conversation: 'Selamat menempuh hidup baru!' });

@@ -14,3 +14,4 @@ PAIRING-CODE.txt
 .env.local.bak*
 data/*.jsonl
 data/kutipan-admin-ok.json
+data/eksperimen.jsonl

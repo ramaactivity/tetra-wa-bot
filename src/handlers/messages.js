@@ -14,7 +14,7 @@ const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin, kirimTelegram } = require('../lib/notify');
-const { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
+const { eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
@@ -80,6 +80,54 @@ function isSpecialProduct(t) {
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
 // nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
 // terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
+// ── Tahap percakapan, persona, eksperimen A/B (keputusan Rama 1 Okt) ─────────
+// Bot harus membaca SELURUH konteks, bukan satu bubble: kontak baru disapa dan digali
+// dulu, klien lama dilanjutkan; tiap tipe klien punya pendekatan sendiri (pola dari
+// skill Hermes cs-mintet-pelajaran) dan CS Mintet bisa menguji dua pendekatan (A/B).
+// Tahan salah ketik klien ("weeding", "weding", "nikahan").
+const RE_WEDDING = /w+e+d+i*n+g|nikah|resepsi|akad|lamaran|engagement|ngunduh|pengantin|manten/i;
+function personaKlien(fullText, det) {
+  const seg = smart.detectSegment(fullText).segment;
+  if (seg && seg !== 'private') return seg;
+  return RE_WEDDING.test(`${det.jenisAcara || ''} ${fullText}`) ? 'wedding' : 'private';
+}
+function tamuDari(teks) {
+  const m = teks.match(/(\d{2,4})\s*(?:an\s*)?(?:orang|org|tamu|pax|undangan|peserta)\b/i) ||
+    teks.match(/(?:tamu|undangan|peserta)\D{0,15}(\d{2,4})/i);
+  return m ? m[1] : null;
+}
+function tahapPercakapan(jid, det, fullText, pesanBaru) {
+  const riw = getRiwayat(jid);
+  const bot = riw.filter((p) => p.role === 'assistant' && !/^[[(]/.test(String(p.content)));
+  if (!bot.length && !getRingkasan(jid)) return { tahap: 'SAPA', belum: [], hari: 0 };
+  const terakhir = riw.at(-1)?.t || 0;
+  const hari = terakhir ? Math.floor((Date.now() - terakhir) / 864e5) : 0;
+  const belum = [!det.jenisAcara && 'jenis acara', !det.tanggal && 'tanggal', !det.lokasi && 'lokasi',
+    !tamuDari(fullText) && 'perkiraan jumlah tamu'].filter(Boolean);
+  const sudahRekomendasi = bot.some((p) => /\d\s*jam/i.test(p.content) && /rp\s?\d|\d\s*(jt|juta)/i.test(p.content));
+  let tahap = belum.length >= 2 ? 'GALI' : !sudahRekomendasi ? 'REKOMENDASI' : 'KERAGUAN/CLOSING';
+  if (/\b(dp|booking|book|transfer|rekening|cara (pesan|booking|bayar)|amankan|lock|fix|deal|jadi ambil)\b/i.test(pesanBaru)) tahap = 'CLOSING';
+  return { tahap, belum, hari };
+}
+// Varian tetap per kontak (hash), dicatat sekali ke data/eksperimen.jsonl untuk dinilai CS Mintet.
+const EKSP_FILE = path.join(__dirname, '..', '..', 'data', 'eksperimen.jsonl');
+let eksTercatat = null;
+function varianEksperimen(jid, persona, tahap) {
+  const e = eksperimen().find((x) => (x.persona === 'semua' || x.persona === persona) &&
+    (x.tahap === 'SEMUA' || tahap.startsWith(x.tahap) || x.tahap.startsWith(tahap)));
+  if (!e) return '';
+  const v = parseInt(crypto.createHash('md5').update(`${jid}|${e.id}`).digest('hex').slice(0, 8), 16) % 2 ? 'B' : 'A';
+  if (!eksTercatat) {
+    eksTercatat = new Set();
+    try { require('fs').readFileSync(EKSP_FILE, 'utf-8').split('\n').filter(Boolean).forEach((l) => { const j = JSON.parse(l); eksTercatat.add(`${j.jid}|${j.id}`); }); } catch { /* belum ada */ }
+  }
+  if (!eksTercatat.has(`${jid}|${e.id}`)) {
+    eksTercatat.add(`${jid}|${e.id}`);
+    require('fs').appendFile(EKSP_FILE, JSON.stringify({ t: Date.now(), jid, id: e.id, varian: v, persona, tahap }) + '\n', () => {});
+  }
+  return `\nEKSPERIMEN ${e.id} (varian ${v}) untuk pesan ini: ${e[v]}. Tetap patuhi aturan dan STRATEGI CS lainnya.`;
+}
+
 function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = null) {
   const det = smart.parseLeadDetails(fullText);
   const seg = smart.detectSegment(fullText);
@@ -88,7 +136,8 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   if (det.tanggal) known.push(`tanggal=${det.tanggal}`);
   if (det.lokasi) known.push(`lokasi=${det.lokasi}`);
   const missing = smart.missingFields(det);
-  const lines = [`Persona: ${smart.segmentLabel(seg.segment)}`];
+  const persona = personaKlien(fullText, det);
+  const lines = [`Persona: ${persona} (${smart.segmentLabel(seg.segment)})`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
   if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
@@ -102,7 +151,13 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   }
   const nama = w.nama || cleanName(namaWA);
   if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
-  if (!vendor && !getRiwayat(jid).some((p) => p.role === 'assistant')) lines.push('Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+  if (!vendor) {
+    const tp = tahapPercakapan(jid, det, fullText, pesanBaru);
+    if (tp.tahap === 'SAPA') lines.push('TAHAP PERCAKAPAN: SAPA — belum pernah ada percakapan. Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+    else lines.push(`TAHAP PERCAKAPAN: ${tp.tahap}${tp.hari >= 3 ? ` + LANJUTAN (klien kembali setelah ${tp.hari} hari)` : ''}. ` +
+      `Belum diketahui: ${tp.belum.join(', ') || '-'}. Ikuti tujuan tahap ini di STRATEGI CS.`);
+    lines.push(varianEksperimen(jid, persona, tp.tahap).trim());
+  }
   const ringkasan = getRingkasan(jid);
   if (ringkasan) lines.push(`\nCATATAN KLIEN (ringkasan percakapan lama):\n${ringkasan}`);
   return lines.join('\n');

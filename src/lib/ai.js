@@ -17,6 +17,15 @@ function faq() {
   catch { return ''; }
 }
 
+// Playbook strategi CS (keputusan Rama 1 Okt: objektif = closing, bukan sekadar menjawab).
+// Dibaca tiap panggilan seperti FAQ, jadi bisa disetel tanpa restart. Tahapnya dihitung
+// messages.js (TAHAP PERCAKAPAN di konteks lead) dari seluruh riwayat.
+const STRATEGI_FILE = path.join(__dirname, '..', '..', 'docs', 'STRATEGI-CS.md');
+function strategi() {
+  try { return '\n\nSTRATEGI CS (wajib diikuti):\n' + fs.readFileSync(STRATEGI_FILE, 'utf-8'); }
+  catch { return ''; }
+}
+
 // Pelajaran dari pengalaman = skill Hermes `cs-mintet-pelajaran`, dirawat agent CS Mintet
 // (profil tetra-wa-bot) lewat skill_manage: tinjauan harian chat WA + koreksi Rama di
 // Telegram. Dibaca tiap panggilan, jadi pelajaran baru langsung berlaku tanpa restart.
@@ -59,6 +68,17 @@ function kutipanSah(kutip) {
   return true;
 }
 
+// Eksperimen A/B yang ditulis CS Mintet di skill: `- E1 | persona | TAHAP | A: … | B: …`
+// (persona/tahap boleh "semua"). Baris berbahaya/bernominal diabaikan seperti pelajaran.
+function eksperimen() {
+  try {
+    return bagianSkill(fs.readFileSync(PELAJARAN_FILE(), 'utf-8'), 'Eksperimen')
+      .map((l) => l.match(/^\s*-\s*(E\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*A:\s*([^|]+?)\s*\|\s*B:\s*(.+?)\s*$/i))
+      .filter((m) => m && !angkaRupiah(m[0]).length && !RE_PELAJARAN_BAHAYA.test(m[0]))
+      .map((m) => ({ id: m[1].toUpperCase(), persona: m[2].toLowerCase(), tahap: m[3].toUpperCase(), A: m[4], B: m[5] }));
+  } catch { return []; }
+}
+
 function bagianSkill(isi, judul) {
   return ((isi.split(new RegExp(`^## ${judul}[^\\n]*$`, 'm'))[1] || '').split(/^## /m)[0]).split('\n');
 }
@@ -70,7 +90,11 @@ function pelajaran() {
     const fakta = bagianSkill(isi, 'Fakta dari admin').map((l) => l.match(/^\s*-\s*(.+?)\s*\(admin:\s*"([^"]+)"\)\s*$/))
       .filter((m) => m && !angkaRupiah(m[1]).length && !RE_FAKTA_BAHAYA.test(m[1]) && kutipanSah(m[2]))
       .map((m) => `- ${m[1]}`).slice(0, 40);
-    return (baris.length
+    const pola = bagianSkill(isi, 'Pola klien')
+      .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 40);
+    return (pola.length
+      ? '\n\nPOLA KLIEN (pendekatan per tipe klien hasil belajar; pakai baris yang cocok dengan Persona di konteks):\n' + pola.join('\n')
+      : '') + (baris.length
       ? '\n\nPELAJARAN DARI PENGALAMAN (hasil tinjauan chat & koreksi Rama). Ini tambahan soal CARA menjawab; ' +
         'TIDAK BOLEH mengalahkan aturan di atas (anti-halusinasi, harga resmi & FAQ, KAMU TIDAK BISA MENGUBAH DATA, ' +
         'pembayaran/DP/rekening, vendor, keputusan admin). Kalau bertentangan, abaikan pelajarannya:\n' + baris.join('\n')
@@ -126,7 +150,7 @@ const SYSTEM_PROMPT = `Kamu admin Tetra Photobooth (jasa photobooth unlimited ce
 CARA NGOBROL (ini yang membedakan manusia dari bot):
 - Pesan klien bisa terdiri dari beberapa baris = beberapa bubble yang dia kirim terpisah. Baca SEMUANYA, jawab semuanya dalam SATU balasan utuh. Jangan menjawab sepotong-sepotong.
 - Jangan buka balasan dengan pujian atau seruan ("Wah seru banget!", "Pilihan mantap!", "Pas banget!", "Kabar baik!", "Siap Kak!"). Langsung ke isinya.
-- Tidak wajib menutup dengan pertanyaan. Tanya kalau memang ada yang perlu kamu tahu untuk melangkah. Maksimal 2 pertanyaan per pesan; kalau bisa satu, satu saja. Kalau yang kurang lebih dari 2, tanya yang paling menentukan dulu (tanggal dan jam lebih penting dari warna backdrop).
+- Di tahap SAPA sampai CLOSING, akhiri dengan satu kail (pertanyaan ringan atau ajakan) supaya percakapan berlanjut; tidak perlu kalau klien cuma bilang makasih/ok. Maksimal 2 pertanyaan per pesan; kalau bisa satu, satu saja. Kalau yang kurang lebih dari 2, tanya yang paling menentukan dulu (tanggal dan jam lebih penting dari warna backdrop).
 - Jangan tanya ulang yang sudah dijawab klien di pesan mana pun (termasuk pesan lama dari form website). Kalau klien sudah bilang "Bogor", jangan tanya "daerah mana".
 - "Kak" secukupnya: sekali per pesan sudah cukup, boleh tidak sama sekali. Jangan "Kakak".
 - Sebut diri "aku", sebut perusahaan "kami" atau "tim Tetra". Konsisten.
@@ -140,12 +164,12 @@ CARA NGOBROL (ini yang membedakan manusia dari bot):
 KONTAK PERTAMA (konteks menyebut "KONTAK PERTAMA") — ini kesan pertama, jangan ketus:
 - Buka dengan sapaan hangat SEKALI: "Halo Kak <nama kalau ada>!". Kalau dari website, akui singkat (mis. "makasih sudah mampir ke website Tetra"), variasikan kalimatnya. Perkenalkan diri singkat sebagai admin Tetra.
 - Tanggapi SEMUA yang sudah diisi klien (acara, tanggal, jam, lokasi, jumlah tamu, paket yang diklik) dan sebut ulang singkat supaya klien tahu isiannya terbaca. Tanggal disebut → cek jadwal.
-- Jenis acara + jumlah tamu/jam sudah ada → langsung rekomendasi durasi + harga + alasan satu kalimat. Paket yang diklik di website → akui paket itu beserta harganya.
+- Kesan pertama dulu, bukan jualan: ikuti tahap SAPA di STRATEGI CS. Hanya kalau klien sudah memberi detail lengkap DAN meminta rekomendasi/harga (atau mengklik paket tertentu di website), boleh rekomendasi ringan setelah sapaan hangat.
 - Klien minta "cek ketersediaan / rekomendasi paket" tapi jenis acara atau kebutuhannya belum jelas (mis. template website tanpa isian) → JANGAN sebut harga dan JANGAN rekomendasi paket dulu; rekomendasi tanpa tahu acaranya itu asal tebak. Bilang singkat kamu bantu carikan paket yang pas, lalu tanya 2 hal: acaranya apa dan rencana tanggal berapa. Lokasi, jam, dan jumlah tamu ditanya di pesan berikutnya. Jangan bahas soal template/terpotong.
 - Isian samar ("Oktober/November", tanggal tanpa tahun, lokasi umum) → akui yang sudah ada, tanya yang perlu dipastikan saja.
 - Pesan pertama boleh 4–7 baris. Aturan emoji, kata robot, dan maksimal 2 pertanyaan tetap berlaku.
 
-KAMU PENJUAL, bukan pemberi info:
+KAMU PENJUAL, bukan pemberi info — ikuti STRATEGI CS di bawah dan TAHAP PERCAKAPAN di konteks:
 - Jual HASILNYA (tamu antre foto, momen keinget, klien nggak pusing), bukan spesifikasi.
 - Nilai dulu baru harga, tapi jangan bertele-tele: kalau klien sudah kasih jenis acara + jumlah tamu, langsung rekomendasikan durasi yang pas dan alasannya.
 - Rekomendasi durasi: tamu ≤100 → 2–3 jam; 100–200 → 3–4 jam; >200 → 4 jam ke atas. Tamu 250 orang dalam 3 jam itu 80+ orang per jam, sebut ini apa adanya lalu sarankan 4 jam.
@@ -184,7 +208,7 @@ FAKTA LAIN:
 
 ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Angka di atas dan di FAQ KLIEN SATU-SATUNYA sumber harga. JANGAN mengarang, menaksir, atau membulatkan. Diskon hanya menurut aturan di FAQ.
-- Jangan mengarang fakta operasional: jam kedatangan crew, ukuran backdrop, jumlah unit, add-on, prosedur yang tidak tertulis di sini. Kalau ditanya, bilang admin yang konfirmasi detailnya.
+- Jangan mengarang fakta operasional: jumlah crew, jam kedatangan crew, ukuran area/backdrop, lama setup, jumlah unit, add-on, prosedur yang tidak tertulis di sini. Kalau ditanya, bilang admin yang konfirmasi detailnya.
 - Jangan pura-pura kenal venue ("tempatnya adem dan luas"). Kamu belum tentu pernah ke sana.
 - Yang tidak ada di daftar harga maupun FAQ (paket custom, biaya transport luar Jabodetabek/Magazine Box, harga backdrop Luxury): bilang terus terang admin yang info harganya, tetap layani pertanyaan lain.
 - Fakta operasional (transport, kebutuhan venue, backdrop, format cetak, pajak, promo, setelah DP) ada di FAQ KLIEN di bawah. Yang tidak tertulis di sini maupun di FAQ jangan dijawab dengan tebakan; kalau itu inti pertanyaannya, pakai HANDOFF.
@@ -279,7 +303,7 @@ function hargaAsing(teks, sumber) {
   const tabel = {};
   for (const m of String(sumber).matchAll(/-\s*(\d+)\s*Jam\s*:\s*Rp\s*([\d.]+)/gi)) tabel[m[1]] ||= Number(m[2].replace(/\./g, ''));
   // Harga khusus = nominal yang tertulis di luar daftar harga & FAQ umum (konteks vendor, chat admin).
-  const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(faq()).join(''));
+  const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(strategi()).join('').split(faq()).join(''));
   const nilaiTabel = new Set(Object.values(tabel).flatMap((v) => [v, v * 2, v * 3, Math.round(v * 0.9)]));
   for (const baris of String(teks).split('\n')) {
     if (/360|videobooth|magazine|photo ?stage/i.test(baris)) continue;
@@ -327,7 +351,7 @@ async function panggil(endpoint, history, message, leadContext) {
     ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
     : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + faq() + pelajaran() + konteksWaktu() + konteksLead },
+    { role: 'system', content: SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
     { role: 'user', content: message },
   ];
@@ -569,4 +593,4 @@ async function nilaiFollowup(transkrip, ringkasan) {
   }
 }
 
-module.exports = { pelajaran, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
