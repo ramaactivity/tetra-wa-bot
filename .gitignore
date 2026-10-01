@@ -12,3 +12,6 @@ PAIRING-CODE.txt
 *.bak
 *.bak-*
 .env.local.bak*
+data/*.jsonl
+data/kutipan-admin-ok.json
+data/eksperimen.jsonl

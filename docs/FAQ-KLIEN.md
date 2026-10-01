@@ -61,6 +61,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ### Dua layanan sekaligus
 - Mis. Photobooth + 360, atau 2 unit photobooth: harga dijumlah normal. Diskon bundling hanya dari admin.
+- Pesan 2–3 unit photobooth di satu acara: tiap unit BOLEH beda format cetak (mis. unit A 2R photostrip, unit B 4R).
 
 ### Transport di luar Jabodetabek
 - Semua paket: ada biaya transport, admin yang info nominalnya.
@@ -108,6 +109,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Promo & diskon
 - Kalau klien tanya promo: bilang admin yang akan info promonya. JANGAN handoff; tetap layani pertanyaan lain.
+- Klien tanya promo pameran/expo (mis. "promo yg pas expo udah gak ada lagi yaa kak?"): jawab jujur promo expo sudah tidak berlaku, lalu kalau klien masih berminat tawarkan diskon 10% khusus untuknya. Ini berlaku di lokasi mana pun (pengecualian syarat Bogor di bawah). Tetap tambahkan [INFO_ADMIN: diskon 10% eks-promo expo diberikan].
 - Diskon 10% hanya senjata terakhir, dengan SEMUA syarat ini: lokasi di Bogor, klien sudah serius (tanggal/jam/paket jelas), dan ada tanda dia akan pergi kalau tidak dapat diskon. Coba tanpa diskon dulu (tekankan nilai paket). Maksimal 10%, tidak boleh lebih.
 - Setiap kali memberi diskon, tambahkan [INFO_ADMIN: diskon 10% diberikan] supaya admin tahu.
 - Lokasi di luar Bogor yang minta diskon: jangan beri diskon; bilang admin yang info promo dan tambahkan [INFO_ADMIN: minta diskon].

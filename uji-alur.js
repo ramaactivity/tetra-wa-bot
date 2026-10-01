@@ -10,10 +10,14 @@ let ekstrak = {};
 const ops = []; let opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 let paused = {};
 let aiJawab = 'halo';
+let leadsUji = [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }];
+let nilai = { kirim: true, status: 'calon_klien_menggantung' };
+let eksperimenUji = [];
 const stub = (p, exp) => { require.cache[R(p)] = { id: R(p), filename: R(p), loaded: true, exports: exp }; };
 stub('src/lib/supa.js', {
   fetchPausedContacts: async () => paused,
-  fetchRecentLeads: async () => [{ wa_jid: '62700111@lid', name: 'Sidik CIMB', phone: '6285776848169' }],
+  fetchVendorContacts: async () => [{ name: 'Party Planner', phone: '+62 878-7189-3437' }, { name: 'Primera Wedding', phone: '0899-0471-515' }],
+  fetchRecentLeads: async () => leadsUji,
   fetchAddonNames: async () => ['Guest Books Photo'], fetchLeadMessages: async () => [],
   insertLead: async () => {}, upsertPause: async (j, u, s) => log.pause.push({ s, jam: (u - Date.now()) / 3600000 }),
 });
@@ -26,6 +30,8 @@ stub('src/lib/ai.js', {
   getAIResponse: async (...a) => { if (aiJawab instanceof Error) throw aiJawab; return typeof aiJawab === 'function' ? aiJawab(...a) : aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
+  nilaiFollowup: async () => nilai,
+  eksperimen: () => eksperimenUji,
   ekstrakQuotation: async () => ({ klien: { nama: 'PT Maju', attn: 'Bu Sari' }, acara: { kota: 'Jakarta' },
     layanan: [{ kategori: 'photobooth_classic', jam: '4', format: '4r' }, { kategori: null }], addons: [], gross_up: true, usulan_diskon: { persen: 10, alasan: 'x' } }),
 });
@@ -69,6 +75,18 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.match(r.kirim[0], /Admin cek dulu/); assert.strictEqual(r.pause[0].s, 'ai');
   assert.ok(Math.abs(r.pause[0].jam - 2) < 0.01, 'handoff AI harus pause 2 jam');
 
+  // Tahap percakapan & eksperimen A/B masuk konteks AI (keputusan Rama 1 Okt)
+  let ctxUji = '';
+  eksperimenUji = [{ id: 'E9', persona: 'wedding', tahap: 'SAPA', A: 'cara A', B: 'cara B' }];
+  aiJawab = (h, m, ctx) => { ctxUji = ctx; return 'Halo Kak!'; };
+  r = await kirim({ conversation: 'halo kak mau tanya photobooth buat wedding' }, 'e9@lid');
+  assert.match(ctxUji, /TAHAP PERCAKAPAN: SAPA/); assert.match(ctxUji, /Persona: wedding/);
+  assert.match(ctxUji, /EKSPERIMEN E9 \(varian [AB]\)/);
+  r = await kirim({ conversation: 'tanggal 12 des kak' }, 'e9@lid');
+  assert.match(ctxUji, /TAHAP PERCAKAPAN: GALI/, 'kontak lanjutan masih dianggap baru');
+  assert.ok(!/EKSPERIMEN E9/.test(ctxUji), 'eksperimen SAPA ikut di tahap GALI');
+  eksperimenUji = [];
+
   aiJawab = '[DIAM]';
   r = await kirim({ conversation: 'Selamat menempuh hidup baru!' });
   assert.strictEqual(r.kirim.length, 0);
@@ -94,6 +112,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.strictEqual(store.getRiwayat(jidA).at(-1).content, '(admin) Promo 5% ya kak');
 
   // Riwayat dari HP: diminta saat kontak pertama chat, digabung di depan
+  process.env.TARIK_SEJARAH = 'on'; // fitur ini mati secara bawaan (popup Syncing di HP)
   const jidH = '62899@s.whatsapp.net';
   aiJawab = 'oke';
   const nowS = Math.floor(Date.now() / 1000);
@@ -112,11 +131,11 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.match(rh[0], /wedding 5 des di Sentul/); assert.match(rh[1], /3 jam/);
   assert.strictEqual(rh[2], 'jadi gimana kak?'); assert.ok(store.sudahSejarah(jidH));
 
-  // Riwayat panjang dirangkum: sisa 40 pesan utuh + catatan klien
+  // Riwayat panjang dirangkum: sisa 80 pesan utuh + catatan klien
   const jidL = '62877@s.whatsapp.net';
-  for (let i = 0; i < 70; i++) store.tambahRiwayat(jidL, i % 2 ? 'assistant' : 'user', `pesan ${i}`);
+  for (let i = 0; i < 130; i++) store.tambahRiwayat(jidL, i % 2 ? 'assistant' : 'user', `pesan ${i}`);
   await kirim({ conversation: 'lanjut' }, jidL);
-  assert.strictEqual(store.getRiwayat(jidL).length, 40);
+  assert.strictEqual(store.getRiwayat(jidL).length, 80);
   assert.match(store.getRingkasan(jidL), /^RINGKAS \d+$/);
 
   aiJawab = 'Tanggal 7 November masih kosong.';
@@ -151,10 +170,13 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(r.notif.some((n) => /GAGAL/.test(n)), 'gagal quotation tidak dilaporkan ke admin');
   opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 
-  // [KIRIM: pricelist] -> gambar + PDF lewat kirimPricelist, sekali saja
+  // [KIRIM: pricelist] digerbang (keputusan Rama 1 Okt): kebutuhan belum digali -> tidak dikirim
   const jidP = '62855@s.whatsapp.net';
   aiJawab = 'Ini gambaran paketnya Kak.\n[KIRIM: pricelist]';
-  r = await kirim({ conversation: 'minta daftar harga semua paketnya kak' }, jidP);
+  r = await kirim({ conversation: 'saya ada rencana wedding, boleh info pricelist nya kak' }, jidP);
+  assert.deepStrictEqual(r.kirim, ['Ini gambaran paketnya Kak.'], 'PL terkirim sebelum kebutuhan digali');
+  // Klien minta lagi setelah ditanya -> boleh, sekali saja
+  r = await kirim({ conversation: 'pricelist nya dulu aja kak' }, jidP);
   assert.deepStrictEqual(r.kirim, ['Ini gambaran paketnya Kak.', '[PL]']);
   store.tambahRiwayat(jidP, 'assistant', '[kirim PDF pricelist] + gambar ringkas paket unlimited');
   r = await kirim({ conversation: 'yang 360 berapa lagi kak' }, jidP);
@@ -227,6 +249,17 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.strictEqual(log.tg.length, 0, 'laporan dobel');
   await tunggu(300);
 
+  // Vendor rekanan: konteks vendor + harga khusus, tanpa KONTAK PERTAMA; vendor tanpa kesepakatan -> admin
+  let ctxVendor = '';
+  aiJawab = (h, m, ctx) => { ctxVendor = ctx; return 'Siap teh, aman tanggalnya. Masih 1,7 ya teh hihi'; };
+  r = await kirim({ conversation: 'Kaaa mau tanya, Minggu 4 Okt jam 19-21, 101 Hotel, unlimited 2 jam. Available?' }, '6287871893437@s.whatsapp.net');
+  assert.match(ctxVendor, /KONTAK INI VENDOR REKANAN: Party Planner/); assert.match(ctxVendor, /1\.700\.000/);
+  assert.ok(!/KONTAK PERTAMA dengan klien/.test(ctxVendor), 'vendor tidak boleh diperlakukan kontak pertama');
+  await kirim({ conversation: 'halo kak' }, '628990471515@s.whatsapp.net');
+  assert.match(ctxVendor, /VENDOR REKANAN: Primera Wedding/); assert.match(ctxVendor, /Belum ada kesepakatan harga tertulis/);
+  await kirim({ conversation: 'halo kak mau tanya harga' }, '6281200001111@s.whatsapp.net');
+  assert.ok(!/VENDOR REKANAN/.test(ctxVendor), 'nomor biasa dianggap vendor');
+
   // ── Tahap booking ──
   const booking = require(R('src/lib/booking.js'));
   const jidB = '62811@s.whatsapp.net';
@@ -239,6 +272,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(r.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'), 'katalog tidak terkirim');
   assert.deepStrictEqual(r.wa[0], '[FORWARD]', 'bukti transfer tidak diteruskan ke admin');
   assert.match(r.wa[1], /Bukti DP masuk/); assert.match(r.wa[1], /Belum diisi: .*PIC/);
+  assert.ok(!/Jumlah unit/.test(r.wa[1]), '1 unit tidak perlu disebut di rekap');
   const kirimOps = ops.filter((o) => o.p === '/api/bot/booking');
   assert.ok(kirimOps.length >= 1 && kirimOps[0].body.external_id.startsWith('wa:62811@'), 'booking tidak dikirim ke Tetra Ops');
   assert.strictEqual(kirimOps.at(-1).body.data.tanggal_iso, '2026-12-05');
@@ -251,9 +285,12 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   r = await kirim({ conversation: 'pengantin Budi & Sari, jam 13-16, PIC Andi 0812, 4R desain hal 5 no 2, backdrop gold' }, jidB);
   assert.ok(booking.get(jidB).lengkap); assert.match(r.wa.at(-1), /Data booking lengkap/);
   // Ubah jam setelah lengkap → rekap "Update"
-  ekstrak = { jam: '14.00-17.00' };
-  r = await kirim({ conversation: 'eh jamnya mundur jadi 14-17 ya' }, jidB);
+  ekstrak = { jam: '14.00-17.00', jumlah_unit: '2' };
+  r = await kirim({ conversation: 'eh jamnya mundur jadi 14-17 ya, sama jadi 2 booth' }, jidB);
   assert.match(r.wa.at(-1), /Update data booking/); assert.match(r.wa.at(-1), /14\.00-17\.00/);
+  // Multi-unit: tampil di rekap admin & terkirim apa adanya ke Tetra Ops
+  assert.match(r.wa.at(-1), /Jumlah unit: 2 \(2 spot photobooth\)/);
+  assert.strictEqual(ops.filter((o) => o.p === '/api/bot/booking').at(-1).body.data.jumlah_unit, '2');
 
   // Gambar di tahap booking → diteruskan, bot tetap melayani, tidak mulai ulang
   r = await kirim({ imageMessage: {} }, jidB);
@@ -287,6 +324,87 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   log.kirim = [];
   await fe.followupBooking(sock, {}, 0);
   assert.strictEqual(log.kirim.length, 0, 'follow-up booking dobel');
+
+  // ── Follow-up klien: baca konteks utuh dulu (insiden 27–28 Sep) ──
+  // Paksa "jam kerja" 10.00 supaya tes tidak bergantung jam jalan.
+  require.cache[R('src/lib/liveConfig.js')].exports.get = () => ({ TIMEZONE_OFFSET: 10 - new Date().getUTCHours() });
+  const duaHari = new Date(Date.now() - 2 * 864e5).toISOString();
+  const lead = (jid, message) => ({ wa_jid: jid, name: 'Dini', phone: '628111', message, topic: 'lead', created_at: duaHari });
+  const siap = (jid, ...chat) => chat.forEach(([role, c]) => store.tambahRiwayat(jid, role, c));
+  const fu = async () => { log.kirim = []; await fe.runFollowupCycle(sock); return log.kirim; };
+  // 1. Admin sudah pernah balas manual → tidak di-follow-up bot
+  siap('fu1@lid', ['user', 'promo expo masih ada?'], ['assistant', '(admin) Spesial buat kaka promonya masih berlaku'], ['assistant', 'Yuk dibooking kak']);
+  // 2. Klien bilang sudah booking tempat lain (hanya ada di Supabase, tidak di riwayat)
+  siap('fu2@lid', ['user', 'harga 3 jam berapa?'], ['assistant', '3 jam Rp 2.500.000 ya Kak.']);
+  // 3. Pernah di-pause (handoff/admin) walau sudah kedaluwarsa
+  siap('fu3@lid', ['user', 'minta pricelist'], ['assistant', 'Ini pricelistnya Kak.']);
+  // 4. Penilai AI bilang bukan calon klien (broadcast vendor)
+  siap('fu4@lid', ['user', 'Selamat menempuh hidup baru Kak Silvia & Syahrul, Been Sae Bakery'], ['assistant', 'Aamiin.']);
+  leadsUji = [lead('fu1@lid', 'promo expo masih ada?'), lead('fu2@lid', 'harga 3 jam berapa?'),
+    { ...lead('fu2@lid', 'yahh maaf kak tadi sore aku booking tempat lain'), created_at: new Date(Date.now() - 1.5 * 864e5).toISOString() },
+    lead('fu3@lid', 'minta pricelist'), lead('fu4@lid', 'Selamat menempuh hidup baru')];
+  paused = { 'fu3@lid': Date.now() - 864e5 };
+  nilai = { kirim: false, status: 'vendor_atau_usaha_lain' };
+  aiJawab = 'Kak Dini, tanggal 7 Nov-nya jadi?';
+  assert.deepStrictEqual(await fu(), [], 'follow-up terkirim ke kontak yang harus dilewati');
+  // 5. Calon klien menggantung + penilai setuju → terkirim; kalimat basi ditahan
+  paused = {};
+  siap('fu5@lid', ['user', 'wedding november di Balitro, tamu belum tahu'], ['assistant', 'Wedding biasanya 4 jam paling aman Kak.']);
+  leadsUji = [lead('fu5@lid', 'wedding november di Balitro, tamu belum tahu')];
+  nilai = { kirim: true, status: 'calon_klien_menggantung' };
+  aiJawab = 'Halo Kak! Mau follow up, tim Tetra siap ramaikan acaranya.';
+  assert.deepStrictEqual(await fu(), [], 'kalimat basi lolos');
+  aiJawab = 'Kak Dini, tanggal wedding di Balitro sudah ketemu? Kabari aja, aku cek slotnya hari itu juga.';
+  assert.deepStrictEqual(await fu(), [aiJawab]);
+
+  // ── Mode assist: admin pegang tapi diam >= 30 menit ──
+  const { _assist } = require(R('src/handlers/messages.js'));
+  const siapAssist = (jid, tanya) => {
+    siap(jid, ['user', 'harga 3 jam berapa?'], ['assistant', '(admin) 3 jam 2,5jt kak']);
+    store.tambahRiwayat(jid, 'user', tanya);
+    store.getRiwayat(jid).at(-1).t = Date.now() - 31 * 60e3;
+    paused[jid] = Date.now() + 20 * 3600e3;
+  };
+  const assist = async () => { log.kirim = []; log.notif = []; log.tg = []; await _assist(); await tunggu(50); return log; };
+  paused = {};
+  // Pertanyaan umum → dijawab bot
+  siapAssist('as1@lid', 'jam operasional sampai jam berapa kak?');
+  aiJawab = 'Jam operasional kami 06.00–23.00 WIB Kak.';
+  r = await assist();
+  assert.deepStrictEqual(r.kirim, ['Jam operasional kami 06.00–23.00 WIB Kak.']);
+  assert.strictEqual(store.getRiwayat('as1@lid').at(-1).content, 'Jam operasional kami 06.00–23.00 WIB Kak.');
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'assist menjawab dua kali');
+  // Pertanyaan sulit → tidak dijawab, admin WA + Telegram dikabari
+  delete paused['as1@lid'];
+  siapAssist('as2@lid', 'bisa diskon lagi ga kak?');
+  aiJawab = '[SULIT: minta diskon]';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0);
+  assert.match(r.notif[0], /minta diskon/); assert.match(r.tg[0], /minta diskon/);
+  // Klaim palsu → tidak dikirim, admin dikabari
+  delete paused['as2@lid'];
+  siapAssist('as3@lid', 'jamnya bisa mundur jadi jam 2?');
+  aiJawab = 'Siap Kak, sudah aku ubah jadwalnya jadi jam 14.00.';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'klaim palsu lolos di mode assist');
+  assert.strictEqual(r.tg.length, 1);
+  // Admin membalas saat bot sedang memproses → bot batal kirim
+  delete paused['as3@lid'];
+  siapAssist('as4@lid', 'lokasi basecamp di mana kak?');
+  aiJawab = async () => {
+    await handlers['messages.upsert']({ type: 'notify', messages: [{ key: { remoteJid: 'as4@lid', id: 'admAs4', fromMe: true }, message: { conversation: 'Di Bogor kak' } }] });
+    return 'Basecamp kami di Bogor Kak.';
+  };
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'bot menjawab padahal admin sudah membalas');
+  // Pesan belum 30 menit → belum dinilai
+  delete paused['as4@lid'];
+  siap('as5@lid', ['assistant', '(admin) oke kak']); store.tambahRiwayat('as5@lid', 'user', 'kak satu lagi');
+  paused['as5@lid'] = Date.now() + 3600e3;
+  aiJawab = 'jawaban';
+  r = await assist();
+  assert.strictEqual(r.kirim.length, 0, 'assist terlalu cepat');
 
   console.log('SEMUA UJI LOLOS');
   process.exit(0);

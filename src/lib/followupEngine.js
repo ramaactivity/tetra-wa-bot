@@ -12,19 +12,18 @@
 // dengan jeda minimal 1 hari dan maksimal 1 pesan per 7 hari per kontak.
 const path = require('path');
 const supa = require('./supa');
-const { getAIResponse } = require('./ai');
+const { getAIResponse, nilaiFollowup } = require('./ai');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
-const { loadJson, saveJson, tambahRiwayat, getRiwayat } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, getRiwayat, getRingkasan } = require('./store');
 const booking = require('./booking');
-const { parseLeadDetails, mergeDetails, missingFields } = require('./smartLead');
+const vendorLib = require('./vendor');
 
 const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'followup.json');
 const MIN_AGE_MS = 24 * 3600 * 1000;        // minimal 1 hari diam
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000;     // maksimal 7 hari (lebih lama = basi)
 const LOOKBACK_MS = 14 * 24 * 3600 * 1000;   // cuma cek lead 2 minggu terakhir
-const RESEND_AFTER_MS = 7 * 24 * 3600 * 1000; // jangan follow-up ulang dalam 7 hari
 const TICK_MS = 6 * 3600 * 1000;             // cek tiap 6 jam
 
 // Pagar anti-blokir. WhatsApp menandai nomor yang mengirim pesan keluar beruntun
@@ -60,35 +59,72 @@ function cleanName(raw) {
   return s;
 }
 
-const MISSING_LABEL = { jenis: 'jenis acara', tanggal: 'tanggal acara', lokasi: 'lokasi/venue' };
+// ── Baca konteks utuh sebelum follow-up ─────────────────────────────────────
+// Insiden 27–28 Sep 2026: follow-up hanya membaca 8 pesan klien dari Supabase
+// (dipotong 160 huruf). Balasan admin dan pesan selama pause tidak terbaca, jadi
+// bot menagih DP ke klien yang sudah bilang "aku booking tempat lain", dan
+// menawari photobooth ke bakery yang cuma broadcast ucapan selamat.
+// Sekarang: transkrip gabungan (riwayat bot + admin + leads), pagar keras tanpa
+// AI, lalu penilai AI yang harus bilang "kirim". Ragu = diam.
 
-// Susun konteks lead (dari seluruh history) jadi string utk system prompt AI.
-function buildLeadContext(panggilan, details, missing, historyLines) {
-  const known = [
-    `Panggilan klien: ${panggilan}`,
-    `Jenis acara: ${details.jenisAcara || '(belum disebut)'}`,
-    `Tanggal acara: ${details.tanggal || '(belum disebut)'}`,
-    `Lokasi/venue: ${details.lokasi || '(belum disebut)'}`,
-  ];
-  const belum = missing.length
-    ? `Yang BELUM klien beri (hanya ini yang boleh ditanyakan): ${missing.map((m) => MISSING_LABEL[m] || m).join(', ')}.`
-    : 'Semua detail acara (jenis, tanggal, lokasi) SUDAH lengkap — JANGAN tanya ulang.';
-  const riwayat = historyLines.length
-    ? `Riwayat chat klien (kronologis):\n${historyLines.join('\n')}`
-    : '(tidak ada riwayat)';
-  return [...known, belum, riwayat].join('\n');
+// Klien sudah memutuskan tidak lanjut. Pagar keras: tidak diserahkan ke AI.
+const RE_TOLAK = new RegExp([
+  '(booking|book|pakai|pake|ambil|dapet|dapat|deal|pesan)\\b.{0,30}\\b(tempat|vendor|yang|photobooth) lain',
+  '(udah|sudah|udh) (ada|dapet|dapat|pakai|pake|booking) (vendor|photobooth|pb)',
+  '\\b(gak|ga|nggak|enggak|tidak|ngga) jadi\\b', '\\bbatal\\b', '\\bcancel', 'belum berjodoh',
+  '\\b(gak|ga|nggak|tidak|ngga) (perlu|usah) (lagi|dulu)', 'jangan (hubungi|chat|wa)',
+].join('|'), 'i');
+
+const norm = (t) => String(t || '').replace(/^\(pesan [^)]*\)\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Riwayat bot (sisi klien, bot, dan balasan manual admin) + pesan klien di
+// Supabase yang tidak tercatat di riwayat (mis. masuk saat pause, sebelum 27 Sep).
+function transkripGabungan(jid, leads) {
+  const riw = getRiwayat(jid);
+  const ada = riw.map((p) => norm(p.content));
+  const extra = leads
+    .filter((l) => l.message && !ada.some((a) => a.includes(norm(l.message).slice(0, 80))))
+    .map((l) => ({ role: 'user', content: l.message, t: l._t }));
+  return [...riw, ...extra].sort((a, b) => (a.t || 0) - (b.t || 0));
 }
 
-async function generateFollowupMessage(panggilan, leadContext) {
-  const prompt =
-    `Tulis SATU pesan follow-up WhatsApp untuk klien yang beberapa hari lalu tanya pricelist tapi belum lanjut. ` +
-    `Sapa hangat, ingatkan Tetra masih siap bantu photobooth-nya, dan tawarkan lock slot tanggal dengan DP *Rp 500.000*. ` +
-    `Sesuaikan dengan KONTEKS LEAD di system prompt: akui detail yang sudah klien sebut, jangan tanya ulang, ` +
-    `kenali keraguan/pertanyaan klien di riwayat (mis. listrik/watt, format cetak, harga) dan yakinkan dengan santun. ` +
-    `Hanya tanya yang masih kurang. Pendek (maks 4 baris), akhiri satu pertanyaan terbuka.\n` +
-    `Balas persis [DIAM] tanpa teks lain kalau dari riwayat: ini bukan calon klien (ucapan, broadcast, ` +
-    `auto-reply, vendor lain), klien sudah bilang transfer/bayar DP, atau klien sudah menolak.`;
+function barisTranskrip(pesan) {
+  const jam = (t) => t ? new Date(t + 7 * 3600e3).toISOString().slice(5, 16).replace('T', ' ') : '--';
+  return pesan.map((p) => {
+    const c = String(p.content || '');
+    const siapa = p.role === 'user' ? 'KLIEN' : c.startsWith('(admin)') ? 'ADMIN' : 'TETRA';
+    return `[${jam(p.t)}] ${siapa}: ${c.replace(/^\(admin\)\s*/, '').replace(/\s+/g, ' ').slice(0, 600)}`;
+  });
+}
 
+// Kalimat basi & klaim palsu yang pernah lolos. Ketemu = pesan tidak dikirim.
+const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|berkesan|momen spesial|siap (bantu|membantu)|keduluan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|\[/i;
+
+async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
+  // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
+  // gaya akrab, tanpa "masih tertarik?" (keputusan Rama 30 Sep 2026).
+  if (vendor) {
+    const p = `Tulis SATU pesan WhatsApp singkat (maks 3 baris) ke vendor rekanan ${vendor.nama} untuk ` +
+      `menindaklanjuti urusan yang terakhir dibahas di riwayat (mis. konfirmasi jadwal, desain frame, data acara). ` +
+      `Gaya akrab sesuai ATURAN VENDOR. JANGAN tanya "masih tertarik", JANGAN tawarkan paket/DP, JANGAN gaya sales. ` +
+      `Kalau di riwayat tidak ada urusan yang perlu ditindaklanjuti, balas persis [DIAM].`;
+    try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
+    catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
+  }
+  const prompt =
+    `Tulis SATU pesan WhatsApp lanjutan dari admin Tetra ke ${panggilan} yang belum membalas. Tujuannya satu: dia mau membalas.\n` +
+    `- Buka langsung dengan hal spesifik miliknya dari TRANSKRIP (acaranya, tanggal, venue, atau pertanyaan terakhirnya). Jangan buka dengan basa-basi.\n` +
+    `- Beri SATU alasan nyata untuk membalas sekarang, dan hanya dari fakta di transkrip/system prompt: jawab keraguan yang pernah ia sebut, ` +
+    `rekomendasi durasi sesuai jumlah tamu, tawaran cek slot kalau tanggalnya belum dicek, atau contoh hasil di https://tetraphoto.com/galeri ` +
+    `(link galeri hanya kalau belum pernah dikirim di transkrip).\n` +
+    `- Tutup dengan SATU pertanyaan yang gampang dijawab dan MEMAJUKAN booking (tanggal, jam, durasi, atau mau diamankan slotnya), bukan "gimana Kak?" atau basa-basi (weekend/weekday).\n` +
+    `- Maks 3 kalimat pendek, gaya chat orang asli, tanpa bullet, emoji maks 1.\n` +
+    `- Keputusan/ucapan ADMIN di transkrip adalah keputusan resmi: jangan diulang, dibantah, atau dijanjikan ulang.\n` +
+    `- DILARANG: mengaku sudah melakukan sesuatu (sudah koordinasi/cek/catat), bilang slot masih aman/tersedia, menjanjikan promo/diskon, ` +
+    `harga yang tidak ada di transkrip, dan kata/frasa "follow up", "sekadar mengingatkan", "ramaikan", "berkesan", "momen spesial", "keduluan", "siap bantu".\n` +
+    `Contoh BURUK: "Halo Kak! Mau follow up rencana photobooth-nya. Tim Tetra siap ramaikan acaranya biar makin berkesan. Slotnya bisa diamankan dengan DP Rp 500.000."\n` +
+    `Contoh BAGUS: "Kak Diela, tanggal wedding di Balitro-nya sudah ketemu? Kalau sudah, kabari aja, aku cek slotnya hari itu juga. Untuk wedding biasanya 4 jam paling aman, tamu nggak numpuk antre."\n` +
+    `Kalau dari transkrip ternyata tidak pantas dikirimi pesan, balas persis [DIAM].`;
   try {
     return await getAIResponse([], prompt, leadContext);
   } catch (e) {
@@ -136,30 +172,41 @@ async function runFollowupCycle(sock) {
 
     if (age < MIN_AGE_MS || age > MAX_AGE_MS) continue;                 // diam 1–7 hari
     if (paused && paused[jid] && paused[jid] > now) continue;           // admin sedang pegang
-    if (state[jid] && now - state[jid] < RESEND_AFTER_MS) continue;     // sudah di-followup
     if (!msgs.some((m) => /pricelist|lead/i.test(m.topic || ''))) continue; // cuma yang tanya harga
     if (booking.get(jid)) continue;                                     // sudah DP → followupBooking
 
-    // Kumpulkan detail acara dari SELURUH riwayat (bukan cuma pesan terakhir),
-    // karena klien sering kasih detail terpencar di beberapa pesan.
-    let details = { jenisAcara: null, tanggal: null, lokasi: null };
-    for (const m of msgs) {
-      details = mergeDetails(details, parseLeadDetails(m.message || ''));
-    }
-    const missing = missingFields(details);
+    // Pagar keras (tanpa AI). Pernah dipegang admin TIDAK otomatis dilewati (keputusan
+    // Rama 30 Sep: agent harus adaptif); penilai AI membaca balasan admin sebagai
+    // keputusan resmi. Yang sedang dipegang admin (pause aktif) sudah dilewati di atas.
+    const pesan = transkripGabungan(jid, msgs);
+    const vendor = await vendorLib.cari(last.phone);
+    const lewati = (alasan) => { state[jid] = now; console.log(`[followup] lewati ${jid}: ${alasan}`); };
+    if (pesan.some((p) => p.role === 'user' && RE_TOLAK.test(p.content))) { lewati('klien sudah menolak/pakai vendor lain'); continue; }
+    // Satu follow-up per percakapan: yang lagi hanya kalau klien sempat membalas sesudahnya.
+    if (state[jid] && !pesan.some((p) => p.role === 'user' && (p.t || 0) > state[jid])) continue;
+    if (pesan.at(-1)?.role === 'user') { lewati('pesan terakhir klien belum dijawab — urusan balasan/assist, bukan follow-up'); continue; }
 
-    // Ringkas riwayat klien (maks 8 pesan terakhir, masing-masing dipotong).
-    const historyLines = msgs.slice(-8).map((m) =>
-      `- ${String(m.message || '').replace(/\s+/g, ' ').slice(0, 160)}`
-    );
+    const transkrip = barisTranskrip(pesan.slice(-80)).join('\n');
+    const ringkasan = getRingkasan(jid);
+    if (!vendor) {
+      const n = await nilaiFollowup(transkrip, ringkasan);
+      console.log(`[followup] nilai ${jid}: ${n.kirim ? 'KIRIM' : 'diam'} (${n.status}) ${n.alasan || ''}`);
+      if (!n.kirim) { state[jid] = now; continue; }
+    }
 
     const panggilan = cleanName(last.name) || 'Kak';
-    const leadContext = buildLeadContext(panggilan, details, missing, historyLines);
-    const msg = await generateFollowupMessage(panggilan, leadContext);
+    const leadContext = `Panggilan klien: ${panggilan}\n` +
+      (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
+      `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
+    const msg = await generateFollowupMessage(panggilan, leadContext, vendor);
     if (!msg || typeof msg !== 'string') continue;
     if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
       state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam
       continue;
+    }
+    if (!vendor && RE_SLOP.test(msg)) {
+      console.log(`[followup] DITAHAN ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 200)}`);
+      continue; // siklus berikutnya coba tulis ulang
     }
 
     try {

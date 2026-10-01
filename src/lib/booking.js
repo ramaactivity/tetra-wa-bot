@@ -29,6 +29,8 @@ const FIELD = [
   ['lokasi', 'Lokasi / venue', true],
   ['maps', 'Link Google Maps', false],
   ['paket', 'Paket', true],
+  // Event multi-unit (2–3 booth di satu acara). Kosong = 1 unit; tidak ditanyakan.
+  ['jumlah_unit', 'Jumlah unit', false],
   ['jumlah_tamu', 'Perkiraan jumlah tamu', false],
   ['pic', 'PIC hari H (nama & no. HP)', true],
   ['kontak_wo', 'Kontak WO/EO', false],
@@ -75,6 +77,12 @@ function perbarui(jid, baru) {
   return b;
 }
 
+// Teks jumlah unit untuk rekap: '' kalau kosong/1 unit, supaya rekap biasa tidak berubah.
+function teksUnit(d) {
+  const n = parseInt(String(d.jumlah_unit || '').match(/\d+/)?.[0], 10);
+  if (!d.jumlah_unit || n === 1) return '';
+  return n ? `${n} (${n} spot photobooth)` : d.jumlah_unit;
+}
 const isWedding = (b) => /wedding|nikah|pengantin|resepsi|akad|lamaran|engagement/i.test(`${b.data.nama_acara || ''} ${b.data.catatan || ''} ${b.jenis || ''}`);
 
 // Form untuk klien. Yang sudah diketahui langsung terisi supaya klien tinggal cek.
@@ -93,6 +101,7 @@ function teksForm(b, pembuka) {
     baris('Jam photobooth', d.jam),
     baris('Lokasi + link Google Maps', [d.lokasi, d.maps].filter(Boolean).join(' ')),
     baris('Paket', d.paket),
+    ...(teksUnit(d) ? [baris('Jumlah unit', teksUnit(d))] : []),
     baris('Perkiraan jumlah tamu', d.jumlah_tamu),
     baris('PIC di hari H (nama & no. HP)', d.pic),
     baris('Kontak WO/EO (kalau ada)', d.kontak_wo),
@@ -176,7 +185,8 @@ async function sinkronOps(jid) {
 function teksRekap(jid, judul) {
   const b = semua[jid];
   const num = String(b.phone || jid).split('@')[0];
-  const isi = FIELD.map(([k, label]) => `${label}: ${b.data[k] || '-'}`);
+  const isi = FIELD.filter(([k]) => k !== 'jumlah_unit' || teksUnit(b.data))
+    .map(([k, label]) => `${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k] || '-'}`);
   const k = kurang(b);
   return [
     `📋 *${judul}*`,

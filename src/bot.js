@@ -28,6 +28,7 @@ const followup = require('./lib/followupEngine');
 const supa = require('./lib/supa');
 const live = require('./lib/liveConfig');
 const store = require('./lib/store');
+const prospekWa = require('./lib/prospekWa');
 
 // ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
 // Antarmuka CacheStore Baileys: get/set/del/flushAll. TTL per entri.
@@ -53,7 +54,26 @@ const retryCache = (() => {
   c.del = (k) => { if ((c.get(k) || 0) < RETRY_MAKS) del(k); };
   return c;
 })();
-const placeholderResendCache = buatCache(3600 * 1000);
+// Tiap permintaan "kirim ulang isi pesan" ke HP memunculkan popup "Syncing with
+// WhatsApp on Google Chrome (Ubuntu)" di HP (30 Sep: belasan-puluhan popup beruntun
+// saat pesan gagal dibuka setelah reconnect). Dibatasi 3 permintaan / 10 menit:
+// Baileys menganggap key yang get()-nya truthy sudah pernah diminta, jadi di atas
+// kuota get() mengembalikan true dan tidak ada permintaan baru ke HP.
+const KUOTA_SYNC = 3;
+const JENDELA_SYNC_MS = 10 * 60 * 1000;
+const placeholderResendCache = (() => {
+  const c = buatCache(3600 * 1000);
+  let riwayatMinta = [];
+  const get = c.get, set = c.set;
+  c.get = (k) => {
+    const v = get(k);
+    if (v !== undefined) return v;
+    riwayatMinta = riwayatMinta.filter((t) => Date.now() - t < JENDELA_SYNC_MS);
+    return riwayatMinta.length >= KUOTA_SYNC ? true : undefined;
+  };
+  c.set = (k, v) => { riwayatMinta.push(Date.now()); set(k, v); };
+  return c;
+})();
 
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info');
 
@@ -360,6 +380,41 @@ async function kirimInvoice(raw) {
   console.log(`🧾 Dokumen ${namaFile} + pesan terkirim ke ${nomor}`);
   return { ok: true, pesan: `terkirim ke ${nomor} teks=${sentTeks?.key?.id} pdf=${sentPdf?.key?.id}` };
 }
+// Dari agent Sales (Bruno) lewat Tetra Ops prospek_kirim_wa: sapaan pertama ke
+// prospek. Format: send-text:{"nomor","pesan"}. Rem (kuota 15/hari, jam kerja,
+// jeda acak, sekali per nomor) ada di lib/prospekWa.js. Pesan masuk riwayat
+// supaya AI CS paham konteksnya kalau prospek membalas.
+// Hasil: { ok, pesan } atau { tunda } (biarkan perintah tetap pending).
+async function kirimTeks(raw) {
+  let p;
+  try {
+    p = JSON.parse(raw);
+  } catch (_) {
+    return { ok: false, pesan: 'payload bukan JSON' };
+  }
+  const nomor = String(p.nomor || '').replace(/\D/g, '');
+  const pesan = String(p.pesan || '').trim();
+  if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
+  if (!pesan || pesan.length > 1000) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
+  const rem = prospekWa.cek(nomor);
+  if (rem.tolak) return { ok: false, pesan: rem.tolak };
+  if (rem.tunda) return { tunda: rem.tunda };
+  if (!currentSock || !isConnected) return { tunda: 'socket belum siap' };
+
+  const [cek] = (await currentSock.onWhatsApp(nomor)) || [];
+  if (!cek?.exists) return { ok: false, pesan: `${nomor} tidak terdaftar di WhatsApp` };
+  const jid = cek.jid;
+  await currentSock.sendPresenceUpdate('composing', jid);
+  await delay(Math.min(8000, 2000 + pesan.length * 20));
+  await currentSock.sendPresenceUpdate('paused', jid);
+  const sent = await currentSock.sendMessage(jid, { text: pesan });
+  prospekWa.catat(nomor);
+  rememberBotMsg(sent);
+  deliveryLog.track(sent, 'prospek→wa');
+  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[sapaan pertama dari tim sales Tetra ke calon klien korporat]`);
+  console.log(`📣 Sapaan prospek terkirim ke ${nomor}`);
+  return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
+}
 function startCommandPoller() {
   const POLL_MS = 10000;
   const tick = async () => {
@@ -429,7 +484,7 @@ function startCommandPoller() {
             await supa.markCommand(c.id, 'error', 'socket belum siap');
           } else {
             const jid = `${number}@s.whatsapp.net`;
-            const { idGambar, idPdf } = await kirimPricelist(currentSock, jid, 'send-pdf');
+            const { idGambar, idPdf } = await kirimPricelist(currentSock, jid, 'send-pdf', { pdf: true });
             console.log(`Pricelist terkirim ke ${number} (gambar=${idGambar} pdf=${idPdf})`);
             await supa.markCommand(c.id, 'done', `terkirim ke ${number} gambar=${idGambar} pdf=${idPdf}`);
           }
@@ -439,6 +494,9 @@ function startCommandPoller() {
           // send-<jenis>:{"nomor","pesan","pdf_url","nama_file"}
           const hasil = await kirimInvoice(c.command.slice(c.command.indexOf(':') + 1));
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-text:')) {
+          const hasil = await kirimTeks(c.command.slice(c.command.indexOf(':') + 1));
+          if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else {
           await supa.markCommand(c.id, 'error', `Perintah tak dikenal: ${c.command}`);
         }

@@ -14,10 +14,11 @@ const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin, kirimTelegram } = require('../lib/notify');
-const { getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
+const { eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
+const vendorLib = require('../lib/vendor');
 const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
 const path = require('path');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
@@ -80,7 +81,55 @@ function isSpecialProduct(t) {
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
 // nanya ulang hal yang sudah disebut. Terima teks GABUNGAN (riwayat user + pesan
 // terbaru) supaya detail yang terpencar di beberapa pesan tetap terbaca.
-function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
+// ── Tahap percakapan, persona, eksperimen A/B (keputusan Rama 1 Okt) ─────────
+// Bot harus membaca SELURUH konteks, bukan satu bubble: kontak baru disapa dan digali
+// dulu, klien lama dilanjutkan; tiap tipe klien punya pendekatan sendiri (pola dari
+// skill Hermes cs-mintet-pelajaran) dan CS Mintet bisa menguji dua pendekatan (A/B).
+// Tahan salah ketik klien ("weeding", "weding", "nikahan").
+const RE_WEDDING = /w+e+d+i*n+g|nikah|resepsi|akad|lamaran|engagement|ngunduh|pengantin|manten/i;
+function personaKlien(fullText, det) {
+  const seg = smart.detectSegment(fullText).segment;
+  if (seg && seg !== 'private') return seg;
+  return RE_WEDDING.test(`${det.jenisAcara || ''} ${fullText}`) ? 'wedding' : 'private';
+}
+function tamuDari(teks) {
+  const m = teks.match(/(\d{2,4})\s*(?:an\s*)?(?:orang|org|tamu|pax|undangan|peserta)\b/i) ||
+    teks.match(/(?:tamu|undangan|peserta)\D{0,15}(\d{2,4})/i);
+  return m ? m[1] : null;
+}
+function tahapPercakapan(jid, det, fullText, pesanBaru) {
+  const riw = getRiwayat(jid);
+  const bot = riw.filter((p) => p.role === 'assistant' && !/^[[(]/.test(String(p.content)));
+  if (!bot.length && !getRingkasan(jid)) return { tahap: 'SAPA', belum: [], hari: 0 };
+  const terakhir = riw.at(-1)?.t || 0;
+  const hari = terakhir ? Math.floor((Date.now() - terakhir) / 864e5) : 0;
+  const belum = [!det.jenisAcara && 'jenis acara', !det.tanggal && 'tanggal', !det.lokasi && 'lokasi',
+    !tamuDari(fullText) && 'perkiraan jumlah tamu'].filter(Boolean);
+  const sudahRekomendasi = bot.some((p) => /\d\s*jam/i.test(p.content) && /rp\s?\d|\d\s*(jt|juta)/i.test(p.content));
+  let tahap = belum.length >= 2 ? 'GALI' : !sudahRekomendasi ? 'REKOMENDASI' : 'KERAGUAN/CLOSING';
+  if (/\b(dp|booking|book|transfer|rekening|cara (pesan|booking|bayar)|amankan|lock|fix|deal|jadi ambil)\b/i.test(pesanBaru)) tahap = 'CLOSING';
+  return { tahap, belum, hari };
+}
+// Varian tetap per kontak (hash), dicatat sekali ke data/eksperimen.jsonl untuk dinilai CS Mintet.
+const EKSP_FILE = path.join(__dirname, '..', '..', 'data', 'eksperimen.jsonl');
+let eksTercatat = null;
+function varianEksperimen(jid, persona, tahap) {
+  const e = eksperimen().find((x) => (x.persona === 'semua' || x.persona === persona) &&
+    (x.tahap === 'SEMUA' || tahap.startsWith(x.tahap) || x.tahap.startsWith(tahap)));
+  if (!e) return '';
+  const v = parseInt(crypto.createHash('md5').update(`${jid}|${e.id}`).digest('hex').slice(0, 8), 16) % 2 ? 'B' : 'A';
+  if (!eksTercatat) {
+    eksTercatat = new Set();
+    try { require('fs').readFileSync(EKSP_FILE, 'utf-8').split('\n').filter(Boolean).forEach((l) => { const j = JSON.parse(l); eksTercatat.add(`${j.jid}|${j.id}`); }); } catch { /* belum ada */ }
+  }
+  if (!eksTercatat.has(`${jid}|${e.id}`)) {
+    eksTercatat.add(`${jid}|${e.id}`);
+    require('fs').appendFile(EKSP_FILE, JSON.stringify({ t: Date.now(), jid, id: e.id, varian: v, persona, tahap }) + '\n', () => {});
+  }
+  return `\nEKSPERIMEN ${e.id} (varian ${v}) untuk pesan ini: ${e[v]}. Tetap patuhi aturan dan STRATEGI CS lainnya.`;
+}
+
+function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = null) {
   const det = smart.parseLeadDetails(fullText);
   const seg = smart.detectSegment(fullText);
   const known = [];
@@ -88,7 +137,8 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
   if (det.tanggal) known.push(`tanggal=${det.tanggal}`);
   if (det.lokasi) known.push(`lokasi=${det.lokasi}`);
   const missing = smart.missingFields(det);
-  const lines = [`Persona: ${smart.segmentLabel(seg.segment)}`];
+  const persona = personaKlien(fullText, det);
+  const lines = [`Persona: ${persona} (${smart.segmentLabel(seg.segment)})`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
   if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
@@ -102,7 +152,13 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '') {
   }
   const nama = w.nama || cleanName(namaWA);
   if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
-  if (!getRiwayat(jid).some((p) => p.role === 'assistant')) lines.push('Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+  if (!vendor) {
+    const tp = tahapPercakapan(jid, det, fullText, pesanBaru);
+    if (tp.tahap === 'SAPA') lines.push('TAHAP PERCAKAPAN: SAPA — belum pernah ada percakapan. Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+    else lines.push(`TAHAP PERCAKAPAN: ${tp.tahap}${tp.hari >= 3 ? ` + LANJUTAN (klien kembali setelah ${tp.hari} hari)` : ''}. ` +
+      `Belum diketahui: ${tp.belum.join(', ') || '-'}. Ikuti tujuan tahap ini di STRATEGI CS.`);
+    lines.push(varianEksperimen(jid, persona, tp.tahap).trim());
+  }
   const ringkasan = getRingkasan(jid);
   if (ringkasan) lines.push(`\nCATATAN KLIEN (ringkasan percakapan lama):\n${ringkasan}`);
   return lines.join('\n');
@@ -205,6 +261,13 @@ const gagalBuka = new Map(); // jid -> { sejak, dilapor }
 const PULIH_MS = 10 * 60 * 1000;
 const LAPOR_ULANG_MS = 6 * 3600 * 1000;
 let sockTerakhir = null;
+// JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
+// dibuka itu urusan sesi perangkat sendiri, bukan pesan klien yang terlewat.
+function milikSendiri(jid) {
+  const u = sockTerakhir?.user;
+  const inti = (x) => String(x || '').split('@')[0].split(':')[0];
+  return !!jid && [u?.lid, u?.id].some((x) => x && inti(x) === inti(jid));
+}
 async function periksaGagalBuka() {
   const now = Date.now();
   const telat = [...gagalBuka].filter(([, g]) => now - g.sejak > PULIH_MS && (!g.dilapor || now - g.dilapor > LAPOR_ULANG_MS));
@@ -231,6 +294,30 @@ async function periksaGagalBuka() {
   for (const [jid, g] of gagalBuka) if (now - g.sejak > 24 * 3600 * 1000) gagalBuka.delete(jid);
 }
 setInterval(() => periksaGagalBuka().catch((e) => console.error('[gagal-dekripsi]', e.message)), 60 * 1000).unref();
+
+// ── Mode assist (keputusan Rama 30 Sep 2026) ────────────────────────────────
+// Kontak yang sedang dipegang admin (pause admin/handoff) tapi pesan barunya
+// tidak dibalas admin >= ASSIST_MENIT: bot menilai sendiri. Pertanyaan sederhana
+// yang jawabannya pasti ada di info resmi -> bot jawab; hal krusial -> tetap diam.
+// Pola dari TGO (auto_fallback_to_ai), tanpa mengubah pause admin.
+const ASSIST_MENIT = Number(process.env.ASSIST_MENIT) || 30;
+const ASSIST_MAKS_MS = 12 * 3600 * 1000;   // pesan lebih tua dari ini: jangan tiba-tiba dijawab
+// ponytail: status "sudah dinilai" di memori; restart = dinilai ulang sekali, aman karena AI bisa [DIAM] lagi.
+const assistDinilai = new Map();           // jid -> t pesan klien terakhir yang sudah dinilai
+let jalankanAssist = null;                 // diisi registerMessageHandler (butuh socket aktif)
+setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error('[assist]', e.message)), 5 * 60 * 1000).unref();
+
+const KONTEKS_ASSIST = (menit) =>
+  `\n\nMODE AMBIL ALIH: chat ini sedang dipegang admin, tapi pesan terbaru klien belum dibalas admin selama ${menit} menit. ` +
+  'Kamu BOLEH menjawab HANYA kalau pertanyaannya sederhana, tidak krusial, dan jawabannya pasti ada di info resmi ' +
+  '(harga paket standar, isi paket, cara booking & DP minimal, jam operasional, format cetak, backdrop basic, transport, galeri, cek jadwal). ' +
+  'Pesan berawalan "(admin)" adalah keputusan resmi: jangan diulang, dibantah, atau diralat. ' +
+  'Kalau pertanyaannya SULIT atau krusial, JANGAN dijawab: balas persis "[SULIT: <topik singkat>]" supaya admin dikabari. Sulit = ' +
+  'diskon/promo/harga khusus/negosiasi, pembayaran atau konfirmasi DP/pelunasan, perubahan/batal/reschedule booking, komplain, ' +
+  'hal yang sedang dibahas atau dijanjikan admin, hal yang tadi diteruskan ke admin, atau kamu tidak yakin jawabannya. ' +
+  'Kalau pesannya tidak perlu dijawab (ok, makasih, ucapan, stiker), balas persis [DIAM]. ' +
+  'Jangan pakai [ADMIN_HANDOFF], [QUOTATION], [PERUBAHAN], atau [KIRIM]. ' +
+  'Kalau menjawab: jangan perkenalkan diri, jawab langsung dan singkat; boleh bilang bagian lain tetap admin yang lanjutkan.';
 
 function registerMessageHandler(sock) {
   sockTerakhir = sock;
@@ -350,6 +437,73 @@ function registerMessageHandler(sock) {
     console.log(`[perubahan] ${jid.split('@')[0]}: ${perubahan}`);
   };
 
+  jalankanAssist = async () => {
+    if (!live.isEnabled()) return;
+    const jam = new Date(Date.now() + (live.get().TIMEZONE_OFFSET ?? 7) * 3600e3).getUTCHours();
+    if (jam < 6 || jam >= 23) return; // jam operasional Tetra 06.00–23.00
+    const paused = await supa.fetchPausedContacts();
+    if (!paused) return;
+    const now = Date.now();
+    let hp = null; // jid -> nomor asli (jid sering @lid), diambil sekali per putaran bila perlu
+    const nomor = async (jid) => {
+      if (!hp) {
+        hp = {};
+        for (const l of await supa.fetchRecentLeads(new Date(now - 30 * 864e5).toISOString())) hp[l.wa_jid] ||= l.phone;
+      }
+      return hp[jid] || jid.split('@')[0];
+    };
+    for (const [jid, until] of Object.entries(paused)) {
+      if (until <= now || jid.endsWith('@g.us')) continue;
+      const riw = getRiwayat(jid);
+      let i = riw.length;
+      while (i > 0 && riw[i - 1].role === 'user') i--;
+      const baru = riw.slice(i);
+      if (!baru.length || !baru[0].t) continue;
+      const umur = now - baru[0].t;
+      const tAkhir = baru.at(-1).t;
+      if (umur < ASSIST_MENIT * 60e3 || now - tAkhir > ASSIST_MAKS_MS || assistDinilai.get(jid) === tAkhir) continue;
+      assistDinilai.set(jid, tAkhir);
+      const num = await nomor(jid);
+      await runSerial(jid, () => assistSatu(jid, num, riw.slice(0, i), baru, Math.round(umur / 60e3)));
+    }
+  };
+
+  const assistSatu = async (jid, num, hist, baru, menit) => {
+    const teks = baru.map((p) => p.content).join('\n');
+    const mulai = Date.now();
+    const vendor = await vendorLib.cari(num);
+    let jawab = await getAIResponse(hist, teks,
+      buildLeadContext(fullUserText(jid, ''), jid, teks, '', vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + KONTEKS_ASSIST(menit));
+    const nama = jid.split('@')[0];
+    // Bot tidak menjawab tapi klien menunggu: admin WAJIB tahu (WA admin + Telegram CS Mintet).
+    const kabari = async (topik) => {
+      const kutip = teks.replace(/\s+/g, ' ').slice(0, 200);
+      await notifyAdmin(sock, num, { name: 'INFO' }, getRiwayat(jid),
+        `klien menunggu ${menit} menit, perlu admin: ${topik}`).catch((e) => console.error('[assist] WA:', e.message));
+      await kirimTelegram(`⏳ Klien menunggu ${menit} menit, belum dibalas admin — wa.me/${num}\n` +
+        `Perlu admin: ${topik}\nPesan klien: "${kutip}"`).catch((e) => console.error('[assist] Telegram:', e.message));
+      console.log(`[assist] ${nama}: tidak dijawab bot (${topik}) — admin dikabari`);
+    };
+    const sulit = jawab.match(/\[(SULIT|ADMIN_HANDOFF|QUOTATION|PERUBAHAN)(?::\s*([^\]]*))?\]/i);
+    if (sulit) return kabari(sulit[2] || sulit[1].toLowerCase());
+    if (/\[DIAM\]/i.test(jawab)) { console.log(`[assist] ${nama}: tidak perlu dijawab`); return; }
+    const info = (jawab.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
+    jawab = jawab.replace(/\[(INFO_ADMIN|KIRIM)[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
+    if (!jawab || /\[/.test(jawab) || RE_KLAIM.test(jawab)) {
+      console.log(`[assist] ${nama}: balasan tidak aman, tidak dikirim: ${jawab.slice(0, 120)}`);
+      return kabari('bot tidak yakin menjawab');
+    }
+    // Admin membalas selama bot menilai / pause dicabut: jangan ikut menjawab.
+    if ((adminTerakhir.get(jid) || 0) >= mulai || getRiwayat(jid).at(-1)?.role !== 'user') {
+      console.log(`[assist] ${nama}: admin sudah membalas, batal`);
+      return;
+    }
+    tambahRiwayat(jid, 'assistant', jawab);
+    await sendReply(sock, jid, [], { name: 'assist' }, jawab);
+    if (info) await notifyAdmin(sock, num, { name: 'INFO' }, getRiwayat(jid), info).catch(() => {});
+    console.log(`[assist] ${nama}: dijawab bot setelah admin diam ${menit} menit`);
+  };
+
   // Satu batch = semua bubble klien yang masuk dalam satu jeda menunggu.
   const handleBatch = async (msgs) => {
     const msg = msgs[msgs.length - 1];
@@ -411,6 +565,7 @@ function registerMessageHandler(sock) {
       bolehBalas = true;
 
       const t = originalText.toLowerCase();
+      const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
       const fullText = fullUserText(jid, originalText);
 
       // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
@@ -454,7 +609,7 @@ function registerMessageHandler(sock) {
       }
 
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
-      if (isKemitraan(t)) {
+      if (!vendor && isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
           'Untuk kerja sama atau kemitraan, ini langsung dibahas sama founder kami. Aku teruskan ya Kak, nanti dibalas di chat ini.', originalText);
         return;
@@ -485,11 +640,14 @@ function registerMessageHandler(sock) {
       // klien minta langsung. Kalimatnya tetap dari AI (dulu template gate/B2B
       // yang terasa bot dan salah sasaran), jadi aturan gaya berlaku sama.
       // Lampiran dikirim SETELAH balasan teks: sapaan dulu, baru file.
+      // Gerbang (keputusan Rama 1 Okt): PL hanya setelah kebutuhan tergali (jenis, tanggal,
+      // lokasi), atau klien menolak memberi detail, atau minta PL lagi setelah ditanya.
+      const detPL = smart.parseLeadDetails(fullText);
+      const bolehPL = smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
+        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content)));
+      const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
-      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) {
-        const det = smart.parseLeadDetails(fullText);
-        kirimPL = smart.missingFields(det).length === 0 || smart.wantsDirectPL(originalText);
-      }
+      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
 
       // ── 5. AI dengan konteks lead ──
       if (booking.aktif(jid)) {
@@ -498,7 +656,7 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid));
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -532,7 +690,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName) + booking.konteksAI(jid) +
+          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
@@ -554,12 +712,12 @@ function registerMessageHandler(sock) {
         tambahRiwayat(jid, 'assistant', aiResponse);
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
       }
-      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist');
+      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
       // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
-      if (lampiran.includes('pricelist') && !kirimPL &&
+      if (lampiran.includes('pricelist') && !kirimPL && bolehPL &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
-        await kirimPricelist(sock, jid, 'ai-pricelist');
+        await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf });
       }
       for (const k of lampiran) {
         const l = LAMPIRAN[k];
@@ -658,8 +816,11 @@ function registerMessageHandler(sock) {
       // Stub CIPHERTEXT (2) = pesan gagal didekripsi (Bad MAC). Dicatat per JID
       // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
       if (msg.messageStubType === 2) {
-        console.log(`[gagal-dekripsi] ${jid} (${type})`);
-        if (jid && !msg.key.fromMe && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
+        // Umur pesan: setelah restart/reconnect WA menyodorkan ulang pesan LAMA yang dulu
+        // sudah terbaca; itu bukan pesan klien yang terlewat, jangan jadi peringatan.
+        const umurMenit = Math.round((Date.now() / 1000 - (Number(msg.messageTimestamp) || Date.now() / 1000)) / 60);
+        console.log(`[gagal-dekripsi] ${jid} (${type}, umur ${umurMenit} mnt)`);
+        if (jid && umurMenit <= 60 && !msg.key.fromMe && !milikSendiri(jid) && !jid.endsWith('@g.us') && jid !== 'status@broadcast' && !gagalBuka.has(jid)) {
           gagalBuka.set(jid, { sejak: Date.now(), dilapor: 0 });
         }
       }
@@ -681,7 +842,10 @@ function registerMessageHandler(sock) {
         sudahSubscribe.add(jid);
         sock.presenceSubscribe(jid).catch(() => {});
       }
-      if (!sudahSejarah(jid) && !sudahMinta.has(jid)) {
+      // Penarikan riwayat dari HP dimatikan (30 Sep): tidak pernah dijawab HP di Baileys 6
+      // (0 respons sejak 27 Sep) tapi tiap permintaan memunculkan popup "Syncing..." di HP.
+      // Nyalakan lagi dengan TARIK_SEJARAH=on kalau terbukti jalan (mis. di Baileys 7).
+      if (process.env.TARIK_SEJARAH === 'on' && !sudahSejarah(jid) && !sudahMinta.has(jid)) {
         sudahMinta.add(jid);
         mintaSejarah(sock, msg.key, ts * 1000, 1, ts * 1000);
       }
@@ -693,4 +857,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka };
+module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
