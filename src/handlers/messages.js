@@ -584,11 +584,14 @@ function registerMessageHandler(sock) {
       // klien minta langsung. Kalimatnya tetap dari AI (dulu template gate/B2B
       // yang terasa bot dan salah sasaran), jadi aturan gaya berlaku sama.
       // Lampiran dikirim SETELAH balasan teks: sapaan dulu, baru file.
+      // Gerbang (keputusan Rama 1 Okt): PL hanya setelah kebutuhan tergali (jenis, tanggal,
+      // lokasi), atau klien menolak memberi detail, atau minta PL lagi setelah ditanya.
+      const detPL = smart.parseLeadDetails(fullText);
+      const bolehPL = smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
+        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content)));
+      const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
-      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) {
-        const det = smart.parseLeadDetails(fullText);
-        kirimPL = smart.missingFields(det).length === 0 || smart.wantsDirectPL(originalText);
-      }
+      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
 
       // ── 5. AI dengan konteks lead ──
       if (booking.aktif(jid)) {
@@ -653,12 +656,12 @@ function registerMessageHandler(sock) {
         tambahRiwayat(jid, 'assistant', aiResponse);
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
       }
-      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist');
+      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
       // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
-      if (lampiran.includes('pricelist') && !kirimPL &&
+      if (lampiran.includes('pricelist') && !kirimPL && bolehPL &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
-        await kirimPricelist(sock, jid, 'ai-pricelist');
+        await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf });
       }
       for (const k of lampiran) {
         const l = LAMPIRAN[k];

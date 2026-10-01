@@ -156,10 +156,13 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.ok(r.notif.some((n) => /GAGAL/.test(n)), 'gagal quotation tidak dilaporkan ke admin');
   opsJawab = { ok: true, status: 200, json: { status: 'baru', url: '/operations/booking-masuk/abc', doc_number: 'QUO-TP-01-27092026' } };
 
-  // [KIRIM: pricelist] -> gambar + PDF lewat kirimPricelist, sekali saja
+  // [KIRIM: pricelist] digerbang (keputusan Rama 1 Okt): kebutuhan belum digali -> tidak dikirim
   const jidP = '62855@s.whatsapp.net';
   aiJawab = 'Ini gambaran paketnya Kak.\n[KIRIM: pricelist]';
-  r = await kirim({ conversation: 'minta daftar harga semua paketnya kak' }, jidP);
+  r = await kirim({ conversation: 'saya ada rencana wedding, boleh info pricelist nya kak' }, jidP);
+  assert.deepStrictEqual(r.kirim, ['Ini gambaran paketnya Kak.'], 'PL terkirim sebelum kebutuhan digali');
+  // Klien minta lagi setelah ditanya -> boleh, sekali saja
+  r = await kirim({ conversation: 'pricelist nya dulu aja kak' }, jidP);
   assert.deepStrictEqual(r.kirim, ['Ini gambaran paketnya Kak.', '[PL]']);
   store.tambahRiwayat(jidP, 'assistant', '[kirim PDF pricelist] + gambar ringkas paket unlimited');
   r = await kirim({ conversation: 'yang 360 berapa lagi kak' }, jidP);

@@ -36,7 +36,9 @@ function mintaPricelist(teks) {
 
 // Kirim gambar lalu PDF. `label` hanya untuk log pengiriman.
 // Mengembalikan { idGambar, idPdf }.
-async function kirimPricelist(sock, jid, label = 'pricelist') {
+// Default cukup GAMBAR (keputusan Rama 1 Okt: teks + gambar + PDF = dobel, klien kabur).
+// PDF lengkap hanya kalau `pdf` (klien minta layanan lain/semua paket, atau perintah manual admin).
+async function kirimPricelist(sock, jid, label = 'pricelist', { pdf: denganPdf = false } = {}) {
   let idGambar = '';
 
   const pathGambar = path.join(ASSETS_DIR, GAMBAR_RINGKAS);
@@ -48,12 +50,15 @@ async function kirimPricelist(sock, jid, label = 'pricelist') {
     await delay(2500); // jeda, supaya tidak terasa ditembakkan sekaligus
   }
 
-  const pathPdf = path.join(ASSETS_DIR, PDF_LENGKAP);
-  const pdf = await sendDocument(sock, jid, pathPdf, CAPTION_PDF);
-  rememberBotMsg(pdf);
-  deliveryLog.track(pdf, `${label}-pdf`);
-
-  tambahRiwayat(jid, 'assistant', '[kirim PDF pricelist] + gambar ringkas paket unlimited');
+  let pdf = null;
+  if (denganPdf || !idGambar) {
+    pdf = await sendDocument(sock, jid, path.join(ASSETS_DIR, PDF_LENGKAP), CAPTION_PDF);
+    rememberBotMsg(pdf);
+    deliveryLog.track(pdf, `${label}-pdf`);
+  }
+  // Penanda "[kirim PDF pricelist]" dipakai pencegah kirim-ulang; tetap ditulis walau hanya gambar.
+  tambahRiwayat(jid, 'assistant', pdf ? '[kirim PDF pricelist] + gambar ringkas paket unlimited'
+    : '[kirim PDF pricelist] (hanya gambar harga paket unlimited)');
   return { idGambar, idPdf: pdf?.key?.id || '' };
 }
 

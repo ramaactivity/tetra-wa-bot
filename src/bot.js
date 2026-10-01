@@ -448,7 +448,7 @@ function startCommandPoller() {
             await supa.markCommand(c.id, 'error', 'socket belum siap');
           } else {
             const jid = `${number}@s.whatsapp.net`;
-            const { idGambar, idPdf } = await kirimPricelist(currentSock, jid, 'send-pdf');
+            const { idGambar, idPdf } = await kirimPricelist(currentSock, jid, 'send-pdf', { pdf: true });
             console.log(`Pricelist terkirim ke ${number} (gambar=${idGambar} pdf=${idPdf})`);
             await supa.markCommand(c.id, 'done', `terkirim ke ${number} gambar=${idGambar} pdf=${idPdf}`);
           }
