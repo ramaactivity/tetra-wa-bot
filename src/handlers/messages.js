@@ -845,11 +845,13 @@ function registerMessageHandler(sock) {
       if (nomorProspek) {
         const teks = teksPesan(msg.message);
         const oto = prospekWa.otomatis(teks);
-        tambahRiwayat(jid, 'user', teks);
-        supa.catatBalasanProspek(nomorProspek, teks, msg.pushName, oto)
-          .then((nama) => console.log(`[prospek] ${nomorProspek}${nama ? ` (${nama})` : ''} membalas sapaan sales${oto ? ' (otomatis)' : ''} → dicatat ke Tetra Ops`))
-          .catch((e) => console.error(`[prospek] gagal catat balasan ${nomorProspek}:`, e.message));
-        continue;
+        const hasil = await supa.catatBalasanProspek(nomorProspek, teks, msg.pushName, oto)
+          .catch((e) => { console.error(`[prospek] gagal catat balasan ${nomorProspek}:`, e.message); return null; });
+        console.log(`[prospek] ${nomorProspek}${hasil?.nama ? ` (${hasil.nama})` : ''} membalas sapaan sales${oto ? ' (otomatis)' : ''} → dicatat ke Tetra Ops${hasil?.klienLama ? '; klien lama → dilayani CS' : ''}`);
+        if (!hasil?.klienLama) {
+          tambahRiwayat(jid, 'user', teks);
+          continue;
+        }
       }
 
       if (!sudahSubscribe.has(jid)) {
