@@ -426,7 +426,7 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
     .like('command', `send-text:%"nomor":"${nomor}"%`)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (!cmd) return null;
-  const { data: p } = await supa.from('prospek').select('id, nama, status, catatan, sumber')
+  const { data: p } = await supa.from('prospek').select('id, nama, status, catatan, sumber, alasan, pic')
     .ilike('catatan', `%cmd ${cmd.id}%`).limit(1).maybeSingle();
   if (!p) return null;
   const jam = new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
@@ -435,8 +435,8 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
   if (!otomatis && ['disapa', 'follow_up'].includes(p.status)) patch.status = 'membalas';
   const { error } = await supa.from('prospek').update(patch).eq('id', p.id);
   if (error) throw new Error(error.message);
-  // Klien lama = pelanggan Tetra: balasannya dilayani CS seperti biasa (pricelist, tanggal).
-  return { nama: p.nama, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || '') };
+  // Klien lama = pelanggan Tetra: balasannya dilayani CS (dengan konteks acara lamanya, tanpa pricelist).
+  return { nama: p.nama, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || '') };
 }
 module.exports = {
   catatBalasanProspek,

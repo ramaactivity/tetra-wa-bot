@@ -19,6 +19,18 @@ const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
 const prospekWa = require('../lib/prospekWa');
+// Klien lama yang membalas sapaan reaktivasi sales: CS harus tahu konteksnya.
+// ponytail: hanya di memori proses; hilang saat restart (balasan berikutnya mengisinya lagi).
+const klienLamaCtx = new Map();
+function konteksKlienLama(jid) {
+  const k = klienLamaCtx.get(jid);
+  if (!k) return '';
+  return `\nKLIEN LAMA: ${k.nama}${k.pic ? ` (PIC ${k.pic})` : ''} sudah pernah memakai Tetra${k.alasan ? ` — ${k.alasan}` : ''}. ` +
+    'Dia sudah tahu harga & layanan Tetra: JANGAN mengirim atau menawarkan pricelist kecuali dia sendiri memintanya. ' +
+    'Ini balasan atas sapaan Rama, BUKAN pengunjung website baru: jangan memperkenalkan diri ulang. Balas sesuai isi pesannya, hangat dan singkat (panggil "kak"). ' +
+    'Kalau rencana acaranya masih lama (lebih dari ±2 bulan lagi, mis. "Juni tahun depan") atau belum jelas: cukup ucapkan terima kasih dan bilang nanti kami kabari lagi mendekati waktunya — JANGAN menanyakan detail. ' +
+    'Kalau acaranya dalam ±2 bulan: baru tanyakan tanggal pasti, lokasi, dan detail acaranya supaya bisa dicek ketersediaan unit.';
+}
 const vendorLib = require('../lib/vendor');
 const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
 const path = require('path');
@@ -649,6 +661,8 @@ function registerMessageHandler(sock) {
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
       if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
+      // Klien lama hanya dikirimi pricelist kalau memintanya sendiri (keputusan Rama 6 Okt).
+      const plKlienLama = !klienLamaCtx.has(jid) || mintaPricelist(originalText);
 
       // ── 5. AI dengan konteks lead ──
       if (booking.aktif(jid)) {
@@ -657,7 +671,7 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -691,7 +705,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
+          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
@@ -713,10 +727,10 @@ function registerMessageHandler(sock) {
         tambahRiwayat(jid, 'assistant', aiResponse);
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
       }
-      if (kirimPL) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf });
+      if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
       // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
-      if (lampiran.includes('pricelist') && !kirimPL && bolehPL &&
+      if (lampiran.includes('pricelist') && !kirimPL && bolehPL && plKlienLama &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
         await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf });
       }
@@ -848,10 +862,19 @@ function registerMessageHandler(sock) {
         const hasil = await supa.catatBalasanProspek(nomorProspek, teks, msg.pushName, oto)
           .catch((e) => { console.error(`[prospek] gagal catat balasan ${nomorProspek}:`, e.message); return null; });
         console.log(`[prospek] ${nomorProspek}${hasil?.nama ? ` (${hasil.nama})` : ''} membalas sapaan sales${oto ? ' (otomatis)' : ''} → dicatat ke Tetra Ops${hasil?.klienLama ? '; klien lama → dilayani CS' : ''}`);
+        // Balasan ber-LID tersimpan di kunci lain dari sapaan (kunci nomor HP): salin sapaannya
+        // supaya CS tahu ini balasan atas sapaan sales, bukan pengunjung baru (kasus Riki 6 Okt).
+        const RE_SAPA = /\[sapaan (pertama )?dari tim sales/;
+        const pnJid = `${nomorProspek}@s.whatsapp.net`;
+        if (pnJid !== jid && !getRiwayat(jid).some((p) => RE_SAPA.test(String(p.content)))) {
+          const sapa = getRiwayat(pnJid).filter((p) => p.role === 'assistant' && RE_SAPA.test(String(p.content))).at(-1);
+          if (sapa) tambahRiwayat(jid, 'assistant', sapa.content);
+        }
         if (!hasil?.klienLama) {
           tambahRiwayat(jid, 'user', teks);
           continue;
         }
+        klienLamaCtx.set(jid, hasil);
       }
 
       if (!sudahSubscribe.has(jid)) {

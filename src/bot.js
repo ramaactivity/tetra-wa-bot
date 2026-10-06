@@ -411,7 +411,7 @@ async function kirimTeks(raw) {
   prospekWa.catat(nomor);
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'prospek→wa');
-  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[sapaan pertama dari tim sales Tetra ke calon klien korporat]`);
+  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[sapaan dari tim sales Tetra]`);
   console.log(`📣 Sapaan prospek terkirim ke ${nomor}`);
   return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
 }
