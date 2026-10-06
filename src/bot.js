@@ -29,6 +29,7 @@ const supa = require('./lib/supa');
 const live = require('./lib/liveConfig');
 const store = require('./lib/store');
 const prospekWa = require('./lib/prospekWa');
+const relasiWa = require('./lib/relasiWa');
 
 // ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
 // Antarmuka CacheStore Baileys: get/set/del/flushAll. TTL per entri.
@@ -415,6 +416,34 @@ async function kirimTeks(raw) {
   console.log(`📣 Sapaan prospek terkirim ke ${nomor}`);
   return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
 }
+// Dari agent Hermes (CS Mintet, Bruno) lewat Tetra Ops wa_kirim_kontak: pesan ke kontak yang
+// SUDAH dikenal (klien/vendor/PIC; divalidasi di Tetra Ops). Format: send-relasi:{"nomor","pesan","alasan"}.
+// Rem di lib/relasiWa.js. Pesan masuk riwayat supaya CS paham konteks kalau dibalas.
+async function kirimRelasi(raw) {
+  let p;
+  try { p = JSON.parse(raw); } catch (_) { return { ok: false, pesan: 'payload bukan JSON' }; }
+  const nomor = String(p.nomor || '').replace(/\D/g, '');
+  const pesan = String(p.pesan || '').trim();
+  if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
+  if (!pesan || pesan.length > 1000) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
+  const rem = relasiWa.cek(nomor, pesan);
+  if (rem.tolak) return { ok: false, pesan: rem.tolak };
+  if (rem.tunda) return { tunda: rem.tunda };
+  if (!currentSock || !isConnected) return { tunda: 'socket belum siap' };
+  const [cek] = (await currentSock.onWhatsApp(nomor)) || [];
+  if (!cek?.exists) return { ok: false, pesan: `${nomor} tidak terdaftar di WhatsApp` };
+  const jid = cek.jid;
+  await currentSock.sendPresenceUpdate('composing', jid);
+  await delay(Math.min(8000, 2000 + pesan.length * 20));
+  await currentSock.sendPresenceUpdate('paused', jid);
+  const sent = await currentSock.sendMessage(jid, { text: pesan });
+  relasiWa.catat(nomor, pesan);
+  rememberBotMsg(sent);
+  deliveryLog.track(sent, 'relasi→wa');
+  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[pesan dari tim Tetra: ${String(p.alasan || '').slice(0, 150)}]`);
+  console.log(`💌 Pesan relasi terkirim ke ${nomor} (${String(p.alasan || '').slice(0, 60)})`);
+  return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
+}
 function startCommandPoller() {
   const POLL_MS = 10000;
   const tick = async () => {
@@ -494,6 +523,9 @@ function startCommandPoller() {
           // send-<jenis>:{"nomor","pesan","pdf_url","nama_file"}
           const hasil = await kirimInvoice(c.command.slice(c.command.indexOf(':') + 1));
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-relasi:')) {
+          const hasil = await kirimRelasi(c.command.slice(c.command.indexOf(':') + 1));
+          if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else if (c.command.startsWith('send-text:')) {
           const hasil = await kirimTeks(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
