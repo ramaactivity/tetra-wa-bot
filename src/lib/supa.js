@@ -417,7 +417,28 @@ async function fetchAddonNames() {
   }
 }
 
+// ── Balasan prospek sales → baris prospek Tetra Ops ─────────────────────────
+// Sapaan sales dikirim lewat perintah bot_commands send-text; Tetra Ops menulis
+// "cmd <id>" di catatan prospek. Dari nomor → perintah terakhir → prospek.
+async function catatBalasanProspek(nomor, teks, nama, otomatis) {
+  if (!supa) return null;
+  const { data: cmd } = await supa.from('bot_commands').select('id')
+    .like('command', `send-text:%"nomor":"${nomor}"%`)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (!cmd) return null;
+  const { data: p } = await supa.from('prospek').select('id, nama, status, catatan')
+    .ilike('catatan', `%cmd ${cmd.id}%`).limit(1).maybeSingle();
+  if (!p) return null;
+  const jam = new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+  const baris = `Balasan WA ${otomatis ? 'otomatis ' : ''}${jam} dari ${nomor}${nama ? ` (${nama})` : ''}: "${String(teks).replace(/\s+/g, ' ').slice(0, 600)}"`;
+  const patch = { catatan: [p.catatan, baris].filter(Boolean).join('\n'), updated_at: new Date().toISOString() };
+  if (!otomatis && ['disapa', 'follow_up'].includes(p.status)) patch.status = 'membalas';
+  const { error } = await supa.from('prospek').update(patch).eq('id', p.id);
+  if (error) throw new Error(error.message);
+  return p.nama;
+}
 module.exports = {
+  catatBalasanProspek,
   fetchVendorContacts,
   fetchAddonNames,
   fetchHandoffAI,

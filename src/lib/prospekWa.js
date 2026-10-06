@@ -52,4 +52,24 @@ function catat(nomor, now = new Date()) {
   tulis(s);
 }
 
-module.exports = { cek, catat, MAKS_PER_HARI };
+// Balasan prospek. Baileys 7 sering mengirim balasan dengan JID @lid tanpa nomor HP;
+// pemetaan LID→HP ada di auth (lidMapping). Tanpa ini balasan tidak tersambung ke
+// sapaan sales dan dianggap orang asing oleh CS (kasus Ibis Styles 6 Okt).
+async function nomorPengirim(sock, msg) {
+  const jid = msg.key?.remoteJid || '';
+  let pn = jid;
+  if (jid.endsWith('@lid')) {
+    pn = msg.key?.remoteJidAlt || msg.key?.senderPn ||
+      (await sock?.signalRepository?.lidMapping?.getPNForLID(jid).catch(() => null)) || '';
+  }
+  return String(pn).split('@')[0].split(':')[0].replace(/\D/g, '');
+}
+/** Nomor HP prospek kalau pesan ini balasan atas sapaan sales; selain itu null. */
+async function balasanProspek(sock, msg) {
+  const nomor = await nomorPengirim(sock, msg);
+  return nomor && baca().pernah.includes(nomor) ? nomor : null;
+}
+// Pesan sambutan otomatis akun bisnis (bukan manusia): dicatat, status prospek tidak berubah.
+const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
+const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
+module.exports = { cek, catat, MAKS_PER_HARI, balasanProspek, otomatis };

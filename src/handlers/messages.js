@@ -18,6 +18,7 @@ const { eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuo
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
+const prospekWa = require('../lib/prospekWa');
 const vendorLib = require('../lib/vendor');
 const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
 const path = require('path');
@@ -837,6 +838,19 @@ function registerMessageHandler(sock) {
       const ts = Number(msg.messageTimestamp) || 0;
       if (ts && Date.now() - ts * 1000 > PESAN_TERLAMA_MS) continue;
       if (!teksPesan(msg.message)) continue;
+      // Balasan atas sapaan sales (Bruno): urusan agent Sales & Rama, bukan CS retail.
+      // Dicatat ke prospek Tetra Ops (Hermes melapor ke topic Sales, pengalihan ke PIC
+      // diproses Bruno); CS tidak menjawab.
+      const nomorProspek = await prospekWa.balasanProspek(sock, msg).catch(() => null);
+      if (nomorProspek) {
+        const teks = teksPesan(msg.message);
+        const oto = prospekWa.otomatis(teks);
+        tambahRiwayat(jid, 'user', teks);
+        supa.catatBalasanProspek(nomorProspek, teks, msg.pushName, oto)
+          .then((nama) => console.log(`[prospek] ${nomorProspek}${nama ? ` (${nama})` : ''} membalas sapaan sales${oto ? ' (otomatis)' : ''} → dicatat ke Tetra Ops`))
+          .catch((e) => console.error(`[prospek] gagal catat balasan ${nomorProspek}:`, e.message));
+        continue;
+      }
 
       if (!sudahSubscribe.has(jid)) {
         sudahSubscribe.add(jid);
