@@ -33,6 +33,14 @@ assert.strictEqual(J([sapa, oto, a('Kami vendor photobooth, boleh minta kontak P
 assert.strictEqual(J([sapa, oto, a('Kami vendor photobooth, boleh minta kontak PIC?', now - 4 * D)], { n: 1 }, now), null, 'auto-reply: maks 1x');
 assert.strictEqual(J([sapa, u('Boleh PL', now - 6 * D), a('(admin) siap kak', now - 6 * D)], { n: 0 }, now), null, 'dipegang admin');
 assert.strictEqual(J([sapa, u('maaf kami sudah ada vendor photobooth lain', now - H)], { n: 0 }, now), null, 'menolak');
+const { _teksPesan } = require('./src/handlers/messages');
+assert.strictEqual(_teksPesan({ contactMessage: { displayName: 'Widya Kantor',
+  vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:Widya Kantor\nTEL;type=CELL;waid=6281234567890:+62 812-3456-7890\nEND:VCARD' } }),
+  '[kirim kontak: Widya Kantor 6281234567890]');
+assert.strictEqual(_teksPesan({ contactMessage: { displayName: 'Budi', vcard: 'BEGIN:VCARD\nTEL:0812 3456 789\nEND:VCARD' } }),
+  '[kirim kontak: Budi 628123456789]');
+assert.strictEqual(_teksPesan({ contactsArrayMessage: { contacts: [{ displayName: 'A', vcard: 'TEL;waid=628111:x' }, { displayName: 'B', vcard: '' }] } }),
+  '[kirim kontak: A; B]', 'waid terlalu pendek diabaikan');
 console.log('UJI LEAD (logika) LOLOS');
 
 if (process.env.UJI_AI) {

@@ -281,6 +281,12 @@ async function followupProspek(sock, paused, sudah) {
     const jenis = jenisProspek(riw, s, now);
     if (!jenis) continue;
     const p = getProspek(jid);
+    const nomor = p.nomor || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
+    const pr = await supa.cariProspek(nomor).catch(() => null);
+    if (pr && (['tolak', 'jangan_hubungi'].includes(pr.status) || (jenis !== 'balas' && /dialihkan ke/.test(pr.catatan || '')))) {
+      state[jid] = { ...s, stop: true }; // PIC sudah disapa / lead menolak: jangan dikejar lagi
+      continue;
+    }
     let msg;
     try {
       if (jenis === 'balas') {
@@ -311,6 +317,7 @@ async function followupProspek(sock, paused, sudah) {
       deliveryLog.track(sentMsg, `lead-${jenis}→wa`);
       tambahRiwayat(jid, 'assistant', msg);
       if (pl) await kirimPricelist(sock, jid, 'lead-pricelist', { pdf: true });
+      if (pr) await supa.catatJawabanProspek(nomor, msg + (pl ? ' [+ pricelist]' : '')).catch(() => {});
       if (info) await kirimTelegram(`🤝 Lead ${p.nama || jid.split('@')[0]}: ${info}`).catch(() => {});
       state[jid] = { ...s, n: s.n + (jenis === 'balas' ? 0 : 1) };
       sent++;

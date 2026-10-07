@@ -101,4 +101,4 @@ function tanpaAngka(teks) {
     .filter((l) => l.trim()).join('\n').trim();
   return /harga khusus/i.test(sisa) ? sisa : `${sisa}\nUntuk rekanan vendor ada harga khusus yang bisa kita diskusikan, Kak.`.trim();
 }
-module.exports = { cek, catat, MAKS_PER_HARI, balasanProspek, otomatis, konteksLead, tanpaAngka };
+module.exports = { cek, catat, MAKS_PER_HARI, nomorPengirim, balasanProspek, otomatis, konteksLead, tanpaAngka };

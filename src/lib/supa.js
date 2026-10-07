@@ -420,16 +420,37 @@ async function fetchAddonNames() {
 // ── Balasan prospek sales → baris prospek Tetra Ops ─────────────────────────
 // Sapaan sales dikirim lewat perintah bot_commands send-text; Tetra Ops menulis
 // "cmd <id>" di catatan prospek. Dari nomor → perintah terakhir → prospek.
-async function catatBalasanProspek(nomor, teks, nama, otomatis) {
-  if (!supa) return null;
+async function cariProspek(nomor) {
+  if (!supa || !nomor) return null;
   const { data: cmd } = await supa.from('bot_commands').select('id')
     .like('command', `send-text:%"nomor":"${nomor}"%`)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  if (!cmd) return null;
-  const { data: p } = await supa.from('prospek').select('id, nama, status, catatan, sumber, alasan, pic')
-    .ilike('catatan', `%cmd ${cmd.id}%`).limit(1).maybeSingle();
+  const kolom = 'id, nama, status, catatan, sumber, alasan, pic';
+  if (cmd) {
+    const { data: p } = await supa.from('prospek').select(kolom).ilike('catatan', `%cmd ${cmd.id}%`).limit(1).maybeSingle();
+    if (p) return p;
+  }
+  // Cadangan: catatan bisa tertimpa prospek_ubah (Violetta 7 Okt) → cocokkan nomor telepon.
+  const { data: p } = await supa.from('prospek').select(kolom)
+    .in('telepon', [nomor, `0${nomor.slice(2)}`, `+${nomor}`]).order('updated_at', { ascending: false }).limit(1).maybeSingle();
+  return p || null;
+}
+const jamWib = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+// Jawaban CS ke lead ikut dicatat supaya agent Sales (Bruno) tahu lead sudah dijawab
+// (7 Okt: Bruno melapor "Rama yang kirim PL" padahal CS sudah mengirimnya).
+async function catatJawabanProspek(nomor, teks) {
+  const p = await cariProspek(nomor);
   if (!p) return null;
-  const jam = new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+  const baris = `Dijawab CS Mintet ${jamWib()}: "${String(teks).replace(/\s+/g, ' ').slice(0, 400)}"`;
+  const { error } = await supa.from('prospek')
+    .update({ catatan: [p.catatan, baris].filter(Boolean).join('\n'), updated_at: new Date().toISOString() }).eq('id', p.id);
+  if (error) throw new Error(error.message);
+  return p;
+}
+async function catatBalasanProspek(nomor, teks, nama, otomatis) {
+  const p = await cariProspek(nomor);
+  if (!p) return null;
+  const jam = jamWib();
   const baris = `Balasan WA ${otomatis ? 'otomatis ' : ''}${jam} dari ${nomor}${nama ? ` (${nama})` : ''}: "${String(teks).replace(/\s+/g, ' ').slice(0, 600)}"`;
   const patch = { catatan: [p.catatan, baris].filter(Boolean).join('\n'), updated_at: new Date().toISOString() };
   if (!otomatis && ['disapa', 'follow_up'].includes(p.status)) patch.status = 'membalas';
@@ -439,6 +460,8 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
   return { nama: p.nama, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || '') };
 }
 module.exports = {
+  cariProspek,
+  catatJawabanProspek,
   catatBalasanProspek,
   fetchVendorContacts,
   fetchAddonNames,

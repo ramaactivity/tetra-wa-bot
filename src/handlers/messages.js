@@ -52,9 +52,23 @@ function runSerial(jid, task) {
 
 // Teks pesan, atau penanda untuk media tanpa caption. Tanpa ini bukti transfer
 // (gambar) dan voice note diabaikan diam-diam, sementara klien menunggu.
+// Kartu kontak (vCard) dibaca jadi teks "[kirim kontak: Nama 628…]". Dulu dianggap kosong dan
+// dibuang: House of Liza mengirim kontak PIC (Mbak Widya), bot malah menanyakan nomornya (7 Okt).
+function kartuKontak(message) {
+  const list = message?.contactMessage ? [message.contactMessage] : message?.contactsArrayMessage?.contacts || [];
+  return list.map((c) => {
+    const v = String(c.vcard || '');
+    const tel = (v.match(/waid=(\d{8,15})/) || [])[1] ||
+      String((v.match(/\nTEL[^:\n]*:([+\d\s().-]{8,})/) || [])[1] || '').replace(/\D/g, '').replace(/^0/, '62');
+    return `${c.displayName || 'tanpa nama'}${tel ? ` ${tel}` : ''}`;
+  }).join('; ');
+}
+
 function teksPesan(message) {
   const t = extractText(message);
   if (t) return t;
+  const kartu = kartuKontak(message);
+  if (kartu) return `[kirim kontak: ${kartu}]`;
   if (message?.imageMessage) return '[kirim gambar]';
   const dok = message?.documentMessage || message?.documentWithCaptionMessage?.message?.documentMessage;
   if (dok) return `[kirim dokumen${dok.fileName ? `: ${dok.fileName}` : ''}]`;
@@ -731,6 +745,10 @@ function registerMessageHandler(sock) {
       if (aiResponse) {
         tambahRiwayat(jid, 'assistant', aiResponse);
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+        if (lead?.nomor) {
+          const pl = kirimPL || lampiran.includes('pricelist') ? ' [+ pricelist]' : '';
+          supa.catatJawabanProspek(lead.nomor, aiResponse + pl).catch((e) => console.error('[prospek] gagal catat jawaban:', e.message));
+        }
       }
       if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf || !!lead });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
@@ -883,7 +901,7 @@ function registerMessageHandler(sock) {
         else {
           // Lead (venue/WO/korporat): dilayani CS dalam mode rekanan (keputusan Rama 7 Okt).
           // Auto-reply lagi setelah kita menjelaskan diri: cukup dicatat, tidak dibalas.
-          tandaiProspek(jid, { nama: hasil?.nama || msg.pushName || null });
+          tandaiProspek(jid, { nama: hasil?.nama || msg.pushName || null, nomor: nomorProspek });
           if (oto && getRiwayat(jid).some((p) => p.role === 'assistant' && !RE_SAPA.test(String(p.content)))) {
             tambahRiwayat(jid, 'user', teks);
             continue;
@@ -910,4 +928,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
