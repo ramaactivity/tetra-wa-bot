@@ -19,6 +19,7 @@ const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
 const prospekWa = require('../lib/prospekWa');
+const portal = require('../lib/portal');
 // Klien lama yang membalas sapaan reaktivasi sales: CS harus tahu konteksnya.
 // ponytail: hanya di memori proses; hilang saat restart (balasan berikutnya mengisinya lagi).
 const klienLamaCtx = new Map();
@@ -852,6 +853,11 @@ function registerMessageHandler(sock) {
       const ts = Number(msg.messageTimestamp) || 0;
       if (ts && Date.now() - ts * 1000 > PESAN_TERLAMA_MS) continue;
       if (!teksPesan(msg.message)) continue;
+      // Kode verifikasi portal booking (TP-XXXXXX): dijawab langsung, di luar AI/antrean/pause.
+      if (await portal.verifikasi(sock, msg, teksPesan(msg.message)).catch((e) => {
+        console.error('[portal] verifikasi:', e.message);
+        return false;
+      })) continue;
       // Balasan atas sapaan sales (Bruno): urusan agent Sales & Rama, bukan CS retail.
       // Dicatat ke prospek Tetra Ops (Hermes melapor ke topic Sales, pengalihan ke PIC
       // diproses Bruno); CS tidak menjawab.

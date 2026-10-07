@@ -30,6 +30,7 @@ const live = require('./lib/liveConfig');
 const store = require('./lib/store');
 const prospekWa = require('./lib/prospekWa');
 const relasiWa = require('./lib/relasiWa');
+const portal = require('./lib/portal');
 
 // ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
 // Antarmuka CacheStore Baileys: get/set/del/flushAll. TTL per entri.
@@ -444,6 +445,33 @@ async function kirimRelasi(raw) {
   console.log(`💌 Pesan relasi terkirim ke ${nomor} (${String(p.alasan || '').slice(0, 60)})`);
   return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
 }
+// Dari portal klien Tetra Ops: kabar transaksi (DP diterima / ditolak). Format:
+// send-portal:{"nomor","pesan"}. Jatah harian di lib/portal.js (di luar rem sapaan sales).
+async function kirimPortal(raw) {
+  let p;
+  try { p = JSON.parse(raw); } catch (_) { return { ok: false, pesan: 'payload bukan JSON' }; }
+  const nomor = String(p.nomor || '').replace(/\D/g, '');
+  const pesan = String(p.pesan || '').trim();
+  if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
+  if (!pesan || pesan.length > 1500) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
+  const rem = portal.cek();
+  if (rem.tolak) return { ok: false, pesan: rem.tolak };
+  if (!currentSock || !isConnected) return { tunda: 'socket belum siap' };
+  const [cek] = (await currentSock.onWhatsApp(nomor)) || [];
+  if (!cek?.exists) return { ok: false, pesan: `${nomor} tidak terdaftar di WhatsApp` };
+  const jid = cek.jid;
+  await currentSock.sendPresenceUpdate('composing', jid);
+  await delay(Math.min(6000, 1500 + pesan.length * 15));
+  await currentSock.sendPresenceUpdate('paused', jid);
+  const sent = await currentSock.sendMessage(jid, { text: pesan });
+  portal.catat();
+  rememberBotMsg(sent);
+  deliveryLog.track(sent, 'portal→customer');
+  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[otomatis dari portal booking Tetra Ops]`);
+  console.log(`🎟️  Pesan portal terkirim ke ${nomor}`);
+  return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
+}
+
 function startCommandPoller() {
   const POLL_MS = 10000;
   const tick = async () => {
@@ -525,6 +553,9 @@ function startCommandPoller() {
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else if (c.command.startsWith('send-relasi:')) {
           const hasil = await kirimRelasi(c.command.slice(c.command.indexOf(':') + 1));
+          if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-portal:')) {
+          const hasil = await kirimPortal(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else if (c.command.startsWith('send-text:')) {
           const hasil = await kirimTeks(c.command.slice(c.command.indexOf(':') + 1));
