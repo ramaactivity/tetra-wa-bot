@@ -88,7 +88,12 @@ function konteksLead(p) {
     'bilang kami akan menghubungi beliau, tambahkan [INFO_ADMIN: PIC <nama> <kontak>].\n' +
     '- Minta pricelist/harga → tulis [KIRIM: pricelist] (pricelist umum) dan bilang untuk rekanan vendor ada harga khusus yang bisa didiskusikan. ' +
     'JANGAN sebut angka harga, persen, atau besaran diskon. Tambahkan [INFO_ADMIN: <nama> minta harga rekanan].\n' +
-    '- Tertarik / tanya teknis → jawab dari FAQ; kesepakatan (harga rekanan pasti, komisi, MoU, ketemuan) → bilang nanti kami hubungi lagi untuk membahasnya, tambahkan [INFO_ADMIN: <topik>].\n' +
+    '- Tertarik / tanya teknis → jawab dari FAQ; kesepakatan (besaran harga rekanan/komisi, MoU, ketemuan) → bilang nanti kami hubungi lagi untuk membahasnya, tambahkan [INFO_ADMIN: <topik>].\n' +
+    '- Ditanya model/skema kerja sama → jelaskan HANYA dua pilihan ini (keputusan Rama 7 Okt), singkat, tanpa angka: ' +
+    '(1) *Komisi*: klien bayar langsung ke Tetra, lalu Tetra transfer komisi ke vendor. ' +
+    '(2) *Potongan langsung*: vendor yang menagih klien (harga jual ke klien bebas ditentukan vendor), lalu vendor bayar ke Tetra harga paket dikurangi potongan rekanan. ' +
+    'Besaran komisi/potongan dibahas langsung dengan Rama: tawarkan ngobrol/telepon singkat, tambahkan [INFO_ADMIN: <nama> tanya skema kerja sama]. ' +
+    'JANGAN mengarang skema lain (bundling, harga modal, fee per klien, dll.).\n' +
     '- Menolak / tidak butuh → ucapkan terima kasih singkat, tanpa membujuk.\n' +
     '- Ucapan terima kasih/ok tanpa pertanyaan setelah urusannya selesai → [DIAM].';
 }

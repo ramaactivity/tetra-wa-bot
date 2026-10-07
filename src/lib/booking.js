@@ -121,8 +121,8 @@ function teksForm(b, pembuka) {
 }
 
 const CAPTION_KATALOG =
-  'Katalog desain frame Tetra. Tinggal screenshot desain yang Kakak suka atau sebut halamannya.\n\n' +
-  'Belum ada yang cocok? Desain custom juga bisa dan GRATIS 🎉 Cukup kirim brief atau contoh desain yang Kakak mau.';
+  'Ini katalog desain frame Tetra. Tinggal screenshot yang Kak suka atau sebut halamannya.\n\n' +
+  'Belum ada yang cocok? Desain custom juga bisa, gratis. Kirim aja brief atau contoh desainnya.';
 
 async function kirimTeks(sock, jid, teks, label) {
   const sent = await sock.sendMessage(jid, { text: teks });

@@ -102,7 +102,7 @@ function barisTranskrip(pesan) {
 }
 
 // Kalimat basi & klaim palsu yang pernah lolos. Ketemu = pesan tidak dikirim.
-const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|berkesan|momen spesial|siap (bantu|membantu)|keduluan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|\[/i;
+const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|keseruan|berkesan|momen spesial|siap (bantu|membantu)|keduluan|amankan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|\[/i;
 
 async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
   // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
@@ -110,7 +110,8 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
   if (vendor) {
     const p = `Tulis SATU pesan WhatsApp singkat (maks 3 baris) ke vendor rekanan ${vendor.nama} untuk ` +
       `menindaklanjuti urusan yang terakhir dibahas di riwayat (mis. konfirmasi jadwal, desain frame, data acara). ` +
-      `Gaya akrab sesuai ATURAN VENDOR. JANGAN tanya "masih tertarik", JANGAN tawarkan paket/DP, JANGAN gaya sales. ` +
+      `Gaya akrab sesuai ATURAN VENDOR. JANGAN tanya "masih tertarik", JANGAN tawarkan paket/DP, JANGAN gaya sales ("amankan"). ` +
+      `Jangan tanya hal yang sudah ada di riwayat. Kalau di riwayat sudah ada pesan Tetra dalam 3 hari terakhir, balas persis [DIAM]. ` +
       `Kalau di riwayat tidak ada urusan yang perlu ditindaklanjuti, balas persis [DIAM].`;
     try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
     catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
@@ -209,7 +210,7 @@ async function runFollowupCycle(sock) {
       state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam
       continue;
     }
-    if (!vendor && RE_SLOP.test(msg)) {
+    if (RE_SLOP.test(msg)) {
       console.log(`[followup] DITAHAN ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 200)}`);
       continue; // siklus berikutnya coba tulis ulang
     }
