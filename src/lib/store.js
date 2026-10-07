@@ -93,6 +93,12 @@ function simpanKontak(jid, patch) {
   saveJson(RIWAYAT_FILE, riwayat);
 }
 
+// Lead sales (bukan klien lama) yang membalas sapaan: ditandai di riwayat supaya
+// mode rekanan & follow-up lead tetap berlaku setelah restart.
+const getProspek = (jid) => (aktif(jid) && riwayat[jid].prospek) || null;
+const tandaiProspek = (jid, info) => simpanKontak(jid, { prospek: info });
+const semuaProspek = () => Object.keys(riwayat).filter((j) => getProspek(j));
+
 function tambahRiwayat(jid, role, content) {
   if (!content) return;
   simpanKontak(jid, { pesan: [...getRiwayat(jid), { role, content, t: Date.now() }].slice(-RIWAYAT_MAKS) });
@@ -165,6 +171,9 @@ module.exports = {
   getRiwayat,
   getRingkasan,
   tambahRiwayat,
+  getProspek,
+  tandaiProspek,
+  semuaProspek,
   lupakanRiwayat,
   gabungSejarah,
   sudahSejarah,

@@ -16,11 +16,15 @@ const { getAIResponse, nilaiFollowup } = require('./ai');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
-const { loadJson, saveJson, tambahRiwayat, getRiwayat, getRingkasan } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, getRiwayat, getRingkasan, getProspek, semuaProspek } = require('./store');
+const prospekWa = require('./prospekWa');
+const { kirimPricelist } = require('./pricelist');
+const { kirimTelegram } = require('./notify');
 const booking = require('./booking');
 const vendorLib = require('./vendor');
 
 const STATE_FILE = path.join(__dirname, '..', '..', 'data', 'followup.json');
+const PROSPEK_FILE = path.join(__dirname, '..', '..', 'data', 'followup-prospek.json');
 const MIN_AGE_MS = 24 * 3600 * 1000;        // minimal 1 hari diam
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000;     // maksimal 7 hari (lebih lama = basi)
 const LOOKBACK_MS = 14 * 24 * 3600 * 1000;   // cuma cek lead 2 minggu terakhir
@@ -172,6 +176,7 @@ async function runFollowupCycle(sock) {
 
     if (age < MIN_AGE_MS || age > MAX_AGE_MS) continue;                 // diam 1–7 hari
     if (paused && paused[jid] && paused[jid] > now) continue;           // admin sedang pegang
+    if (getProspek(jid)) continue;                                      // lead sales → followupProspek
     if (!msgs.some((m) => /pricelist|lead/i.test(m.topic || ''))) continue; // cuma yang tanya harga
     if (booking.get(jid)) continue;                                     // sudah DP → followupBooking
 
@@ -227,7 +232,96 @@ async function runFollowupCycle(sock) {
 
   saveJson(STATE_FILE, state);
   console.log(`[followup] selesai, terkirim ${sent} pesan.`);
+  sent += await followupProspek(sock, paused, sent);
   await followupBooking(sock, paused, sent);
+}
+
+// ── Lead sales (venue/WO/korporat) yang membalas sapaan ─────────────────────
+// Keputusan Rama 7 Okt 2026: lead tidak boleh mati. (1) Balasan lead yang belum
+// terjawab (bot restart, dsb.) dijawab di sini. (2) Lead manusia yang diam setelah
+// kita jawab: follow-up hari kerja ke-3 dan ke-7 sejak pesan terakhirnya, maks 2x.
+// (3) Hanya auto-reply (tak ada manusia): satu follow-up minta PIC setelah 2 hari kerja.
+// Percakapan yang dipegang admin (ada balasan admin sesudah pesan terakhir lead) dilewati.
+function hariKerja(dariMs, keMs) {
+  let n = 0;
+  for (let t = dariMs + 864e5; t <= keMs; t += 864e5) {
+    const d = new Date(t + 7 * 3600e3).getUTCDay();
+    if (d !== 0 && d !== 6) n++;
+  }
+  return n;
+}
+
+function jenisProspek(riw, s, now) {
+  const user = riw.filter((p) => p.role === 'user');
+  if (!user.length || s.stop || user.some((p) => RE_TOLAK.test(p.content))) return null;
+  const lastUserT = user.at(-1).t || 0;
+  const sesudah = riw.slice(riw.lastIndexOf(user.at(-1)) + 1);
+  if (sesudah.some((p) => String(p.content).startsWith('(admin)'))) return null;
+  if (!sesudah.length) return now - lastUserT > 20 * 60e3 && now - lastUserT < 3 * 864e5 ? 'balas' : null;
+  const manusia = user.some((p) => !prospekWa.otomatis(p.content));
+  if (manusia) {
+    const hk = hariKerja(lastUserT, now);
+    return (s.n === 0 && hk >= 3) || (s.n === 1 && hk >= 7) ? 'lanjut' : null;
+  }
+  return s.n === 0 && hariKerja(riw.at(-1).t || 0, now) >= 2 ? 'minta-pic' : null;
+}
+
+async function followupProspek(sock, paused, sudah) {
+  const now = Date.now();
+  const w = new Date(now + 7 * 3600e3);
+  if ([0, 6].includes(w.getUTCDay()) || w.getUTCHours() < 9 || w.getUTCHours() >= 17) return 0;
+  const state = loadJson(PROSPEK_FILE); // { jid: { sejak: t pesan lead terakhir, n, stop } }
+  let sent = 0;
+  for (const jid of semuaProspek()) {
+    if (sudah + sent >= MAKS_PER_SIKLUS) break;
+    if (paused && paused[jid] > now) continue;
+    const riw = getRiwayat(jid);
+    const lastUserT = riw.filter((p) => p.role === 'user').at(-1)?.t || 0;
+    const s = state[jid]?.sejak === lastUserT ? state[jid] : { sejak: lastUserT, n: 0 };
+    const jenis = jenisProspek(riw, s, now);
+    if (!jenis) continue;
+    const p = getProspek(jid);
+    let msg;
+    try {
+      if (jenis === 'balas') {
+        const i = riw.findLastIndex((x) => x.role !== 'user');
+        msg = await getAIResponse(riw.slice(0, i + 1), riw.slice(i + 1).map((x) => x.content).join('\n'), prospekWa.konteksLead(p));
+      } else {
+        const tugas = jenis === 'lanjut'
+          ? `${p.nama || 'Lead ini'} belum membalas lagi. Tulis SATU pesan lanjutan singkat (maks 3 kalimat) yang merujuk hal terakhir di riwayat ` +
+            '(mis. pricelist yang sudah dikirim, kontak PIC yang diminta) dan mengajak lanjut ngobrol soal kerja sama vendor rekanan. ' +
+            'Jangan menagih, jangan tanya "masih tertarik?", jangan pakai kata "follow up".'
+          : 'Kontak ini baru membalas otomatis. Tulis SATU pesan lanjutan singkat (maks 2 kalimat) yang meminta nomor WA/email PIC yang mengurus kerja sama vendor/marketing.';
+        msg = await getAIResponse(riw.slice(-30), `${tugas}\nKalau dari riwayat tidak pantas dikirimi pesan, balas persis [DIAM].`, prospekWa.konteksLead(p));
+      }
+    } catch (e) { console.error(`[followup-lead] gagal generate ${jid}:`, e.message); continue; }
+    msg = String(msg || '');
+    if (!msg.trim() || /\[(DIAM|ADMIN_HANDOFF)\]/.test(msg) || /masih tertarik|follow.?up/i.test(msg)) {
+      state[jid] = { ...s, stop: true };
+      console.log(`[followup-lead] ${jid}: ${jenis} tidak dikirim (${msg.replace(/\s+/g, ' ').slice(0, 80)})`);
+      continue;
+    }
+    const info = (msg.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
+    const pl = /\[KIRIM:\s*pricelist\s*\]/i.test(msg) && !riw.some((x) => String(x.content).includes('[kirim PDF pricelist]'));
+    msg = prospekWa.tanpaAngka(msg.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim());
+    try {
+      if (sudah + sent > 0) await new Promise((r) => setTimeout(r, JEDA_MIN_MS + Math.random() * (JEDA_MAKS_MS - JEDA_MIN_MS)));
+      const sentMsg = await sock.sendMessage(jid, { text: msg });
+      rememberBotMsg(sentMsg);
+      deliveryLog.track(sentMsg, `lead-${jenis}→wa`);
+      tambahRiwayat(jid, 'assistant', msg);
+      if (pl) await kirimPricelist(sock, jid, 'lead-pricelist', { pdf: true });
+      if (info) await kirimTelegram(`🤝 Lead ${p.nama || jid.split('@')[0]}: ${info}`).catch(() => {});
+      state[jid] = { ...s, n: s.n + (jenis === 'balas' ? 0 : 1) };
+      sent++;
+      console.log(`[followup-lead] ${jenis} terkirim ke ${jid} (${p.nama || '-'})`);
+    } catch (e) {
+      console.error(`[followup-lead] gagal kirim ke ${jid}:`, e.message);
+    }
+  }
+  saveJson(PROSPEK_FILE, state);
+  if (sent) console.log(`[followup-lead] ${sent} pesan lead terkirim.`);
+  return sent;
 }
 
 // ── Follow-up data booking (klien sudah DP, data acara belum lengkap) ────────
@@ -298,4 +392,4 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { start, runFollowupCycle, followupBooking, generateFollowupMessage, cleanName };
+module.exports = { start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName };

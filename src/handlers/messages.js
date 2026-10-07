@@ -6,7 +6,7 @@
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
 const { proto } = require('@whiskeysockets/baileys');
-const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
+const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
@@ -580,6 +580,7 @@ function registerMessageHandler(sock) {
 
       const t = originalText.toLowerCase();
       const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
+      const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan
       const fullText = fullUserText(jid, originalText);
 
       // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
@@ -623,21 +624,21 @@ function registerMessageHandler(sock) {
       }
 
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
-      if (!vendor && isKemitraan(t)) {
+      if (!vendor && !lead && isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
           'Untuk kerja sama atau kemitraan, ini langsung dibahas sama founder kami. Aku teruskan ya Kak, nanti dibalas di chat ini.', originalText);
         return;
       }
 
       // ── 2. Purna-jual → handoff admin ──
-      if (isPostSale(t)) {
+      if (!lead && isPostSale(t)) {
         await handoff(sock, msg, 'Purna-jual (softfile/invoice/bayar/reschedule)',
           'Untuk urusan ini aku teruskan ke admin ya Kak, datanya mereka yang pegang. Nanti dibalas langsung di chat ini.', originalText);
         return;
       }
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
-      if (isSpecialProduct(t)) {
+      if (!lead && isSpecialProduct(t)) {
         await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)',
           'Itu di luar paket unlimited standar, harga dan ketersediaannya beda. Aku teruskan ke tim ya Kak, nanti diinfokan langsung di sini.', originalText);
         return;
@@ -657,11 +658,12 @@ function registerMessageHandler(sock) {
       // Gerbang (keputusan Rama 1 Okt): PL hanya setelah kebutuhan tergali (jenis, tanggal,
       // lokasi), atau klien menolak memberi detail, atau minta PL lagi setelah ditanya.
       const detPL = smart.parseLeadDetails(fullText);
-      const bolehPL = smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
+      const bolehPL = !!lead || smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
         (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content)));
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
       if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
+      if (lead) kirimPL = mintaPricelist(originalText); // lead minta PL: PL publik lengkap (Rama 7 Okt)
       // Klien lama hanya dikirimi pricelist kalau memintanya sendiri (keputusan Rama 6 Okt).
       const plKlienLama = !klienLamaCtx.has(jid) || mintaPricelist(originalText);
 
@@ -672,7 +674,7 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -706,7 +708,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
+          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
@@ -714,6 +716,8 @@ function registerMessageHandler(sock) {
         perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || `klien: "${originalText.slice(0, 150)}"`;
         aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih : KALIMAT_AMAN;
       }
+
+      if (lead) aiResponse = prospekWa.tanpaAngka(aiResponse);
 
       // Admin sudah membalas selama bot memproses: jangan ikut menjawab.
       if ((adminTerakhir.get(jid) || 0) >= mulaiProses) {
@@ -728,12 +732,12 @@ function registerMessageHandler(sock) {
         tambahRiwayat(jid, 'assistant', aiResponse);
         await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
       }
-      if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf });
+      if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf || !!lead });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
       // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
       if (lampiran.includes('pricelist') && !kirimPL && bolehPL && plKlienLama &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
-        await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf });
+        await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf || !!lead });
       }
       for (const k of lampiran) {
         const l = LAMPIRAN[k];
@@ -858,9 +862,8 @@ function registerMessageHandler(sock) {
         console.error('[portal] verifikasi:', e.message);
         return false;
       })) continue;
-      // Balasan atas sapaan sales (Bruno): urusan agent Sales & Rama, bukan CS retail.
-      // Dicatat ke prospek Tetra Ops (Hermes melapor ke topic Sales, pengalihan ke PIC
-      // diproses Bruno); CS tidak menjawab.
+      // Balasan atas sapaan sales (Bruno): dicatat ke prospek Tetra Ops (Hermes melapor ke
+      // topic Sales, pengalihan ke PIC diproses Bruno) lalu dijawab CS dalam mode rekanan.
       const nomorProspek = await prospekWa.balasanProspek(sock, msg).catch(() => null);
       if (nomorProspek) {
         const teks = teksPesan(msg.message);
@@ -876,11 +879,16 @@ function registerMessageHandler(sock) {
           const sapa = getRiwayat(pnJid).filter((p) => p.role === 'assistant' && RE_SAPA.test(String(p.content))).at(-1);
           if (sapa) tambahRiwayat(jid, 'assistant', sapa.content);
         }
-        if (!hasil?.klienLama) {
-          tambahRiwayat(jid, 'user', teks);
-          continue;
+        if (hasil?.klienLama) klienLamaCtx.set(jid, hasil);
+        else {
+          // Lead (venue/WO/korporat): dilayani CS dalam mode rekanan (keputusan Rama 7 Okt).
+          // Auto-reply lagi setelah kita menjelaskan diri: cukup dicatat, tidak dibalas.
+          tandaiProspek(jid, { nama: hasil?.nama || msg.pushName || null });
+          if (oto && getRiwayat(jid).some((p) => p.role === 'assistant' && !RE_SAPA.test(String(p.content)))) {
+            tambahRiwayat(jid, 'user', teks);
+            continue;
+          }
         }
-        klienLamaCtx.set(jid, hasil);
       }
 
       if (!sudahSubscribe.has(jid)) {

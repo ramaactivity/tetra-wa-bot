@@ -72,4 +72,33 @@ async function balasanProspek(sock, msg) {
 // Pesan sambutan otomatis akun bisnis (bukan manusia): dicatat, status prospek tidak berubah.
 const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
 const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
-module.exports = { cek, catat, MAKS_PER_HARI, balasanProspek, otomatis };
+
+// Lead (venue/WO/korporat) yang membalas sapaan sales dilayani CS dalam mode rekanan
+// (keputusan Rama 7 Okt 2026): auto-reply/form → jelaskan + minta PIC, minta PL → PL
+// publik + "harga khusus rekanan bisa didiskusikan" tanpa angka/persen.
+function konteksLead(p) {
+  if (!p) return '';
+  return `\nLEAD REKANAN: ${p.nama || 'kontak ini'} membalas sapaan Rama (Tetra Photobooth) yang mengajak kerja sama sebagai vendor photobooth rekanan. ` +
+    'Kamu tim Tetra yang melanjutkan obrolan itu (sapaan ditulis atas nama Rama: jangan sebut Rama sebagai orang ketiga). Ini BUKAN calon klien retail dan BUKAN pengunjung website: jangan perkenalkan diri ulang, ' +
+    'jangan tanya tanggal/tamu/lokasi acara, jangan tawarkan paket/DP/booking. Tujuan: sampai ke orang yang mengurus kerja sama vendor, lalu kerja samanya jalan. ' +
+    'Gaya profesional-hangat, singkat, panggil "Kak". Aturan ini MENGALAHKAN aturan [DIAM] untuk auto-reply.\n' +
+    '- Balasan otomatis / menu / form (mis. form data pengantin, "terima kasih telah menghubungi"): jelaskan singkat bahwa kami Tetra Photobooth, vendor photobooth, ' +
+    'bukan calon klien, ingin kerja sama sebagai vendor rekanan, lalu minta kontak (nomor WA/email) PIC yang mengurus kerja sama vendor/marketing. JANGAN mengisi form.\n' +
+    '- Dia bukan PIC / mengarahkan ke orang lain tanpa nomor → minta nomor WA atau email PIC itu dengan sopan. Kalau dia memberi kontak PIC → ucapkan terima kasih, ' +
+    'bilang kami akan menghubungi beliau, tambahkan [INFO_ADMIN: PIC <nama> <kontak>].\n' +
+    '- Minta pricelist/harga → tulis [KIRIM: pricelist] (pricelist umum) dan bilang untuk rekanan vendor ada harga khusus yang bisa didiskusikan. ' +
+    'JANGAN sebut angka harga, persen, atau besaran diskon. Tambahkan [INFO_ADMIN: <nama> minta harga rekanan].\n' +
+    '- Tertarik / tanya teknis → jawab dari FAQ; kesepakatan (harga rekanan pasti, komisi, MoU, ketemuan) → bilang nanti kami hubungi lagi untuk membahasnya, tambahkan [INFO_ADMIN: <topik>].\n' +
+    '- Menolak / tidak butuh → ucapkan terima kasih singkat, tanpa membujuk.\n' +
+    '- Ucapan terima kasih/ok tanpa pertanyaan setelah urusannya selesai → [DIAM].';
+}
+// Harga rekanan = keputusan Rama; di chat lead tidak boleh ada angka harga/persen.
+const RE_ANGKA_LEAD = /\d+\s*(%|persen)|sepuluh persen|\brp\.?\s?\d|\d+([.,]\d+)?\s?(rb|ribu|jt|juta)\b/i;
+function tanpaAngka(teks) {
+  if (!RE_ANGKA_LEAD.test(teks)) return teks;
+  const sisa = teks.split('\n')
+    .map((l) => l.split(/(?<=[.!?])\s+/).filter((k) => !RE_ANGKA_LEAD.test(k)).join(' '))
+    .filter((l) => l.trim()).join('\n').trim();
+  return /harga khusus/i.test(sisa) ? sisa : `${sisa}\nUntuk rekanan vendor ada harga khusus yang bisa kita diskusikan, Kak.`.trim();
+}
+module.exports = { cek, catat, MAKS_PER_HARI, balasanProspek, otomatis, konteksLead, tanpaAngka };
