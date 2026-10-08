@@ -31,6 +31,7 @@ const store = require('./lib/store');
 const prospekWa = require('./lib/prospekWa');
 const relasiWa = require('./lib/relasiWa');
 const { kirimGrupAdmin } = require('./lib/notify');
+const timWa = require('./lib/timWa');
 const portal = require('./lib/portal');
 
 // ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
@@ -559,6 +560,23 @@ function startCommandPoller() {
         } else if (c.command.startsWith('send-relasi:')) {
           const hasil = await kirimRelasi(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-tim:')) {
+          // Pengingat tim internal dari agent CS Mintet (8 Okt). Format: send-tim:{"nomor","pesan"}. Rem di lib/timWa.js.
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek di bawah */ }
+          const nomor = String(p.nomor || '').replace(/\D/g, '');
+          const pesan = String(p.pesan || '').trim();
+          const rem = !pesan || pesan.length > 1500 ? { tolak: 'pesan kosong / terlalu panjang' } : timWa.cek(nomor, pesan);
+          if (rem.tolak) await supa.markCommand(c.id, 'error', rem.tolak);
+          else if (rem.tunda || !currentSock || !isConnected) { /* biarkan pending */ }
+          else {
+            const sent = await currentSock.sendMessage(`${nomor}@s.whatsapp.net`, { text: pesan });
+            timWa.catat(nomor, pesan);
+            rememberBotMsg(sent);
+            deliveryLog.track(sent, 'tim→wa');
+            store.tambahRiwayat(`${nomor}@s.whatsapp.net`, 'assistant', `${pesan}\n[pengingat tim dari bot CS Mintet]`);
+            await supa.markCommand(c.id, 'done', `terkirim ke ${nomor}`);
+          }
         } else if (c.command.startsWith('send-grup-admin:')) {
           // Dari Tetra Ops (8 Okt): kabar booking/DP/pelunasan portal ke grup WA admin. Format: send-grup-admin:{"pesan"}
           let p = {};

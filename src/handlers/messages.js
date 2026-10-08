@@ -19,6 +19,7 @@ const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
 const prospekWa = require('../lib/prospekWa');
+const timWa = require('../lib/timWa');
 const portal = require('../lib/portal');
 // Klien lama yang membalas sapaan reaktivasi sales: CS harus tahu konteksnya.
 // ponytail: hanya di memori proses; hilang saat restart (balasan berikutnya mengisinya lagi).
@@ -923,6 +924,18 @@ function registerMessageHandler(sock) {
         console.error('[portal] verifikasi:', e.message);
         return false;
       })) continue;
+      // Tim internal Tetra (Iqbal/Fahmi/Adit, TIM_WA): bukan klien. Balasannya atas pengingat dicatat dan
+      // diteruskan ke topic Telegram CS Mintet; CS tidak menjawab (8 Okt 2026).
+      const nomorTim = timWa.anggota(phoneDigits(msg)) ? phoneDigits(msg)
+        : await prospekWa.nomorPengirim(sock, msg).then((n) => (timWa.anggota(n) ? n : '')).catch(() => '');
+      if (nomorTim) {
+        const teks = teksPesan(msg.message);
+        tambahRiwayat(jid, 'user', teks);
+        require('../lib/notify').kirimTelegram(`👥 Balasan tim (${nomorTim}) atas pengingat:\n${teks.slice(0, 800)}`)
+          .catch((e) => console.error('[tim] gagal teruskan ke Telegram:', e.message));
+        console.log(`[tim] ${nomorTim} membalas, diteruskan ke Telegram`);
+        continue;
+      }
       // Balasan atas sapaan sales (Bruno): dicatat ke prospek Tetra Ops (Hermes melapor ke
       // topic Sales, pengalihan ke PIC diproses Bruno) lalu dijawab CS dalam mode rekanan.
       const nomorProspek = await prospekWa.balasanProspek(sock, msg).catch(() => null);

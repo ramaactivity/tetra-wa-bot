@@ -91,18 +91,23 @@ function konteksLead(p) {
     'bilang nanti aku hubungi beliau, tambahkan [INFO_ADMIN: PIC <nama> <kontak>].\n' +
     '- Minta pricelist/harga → tulis [KIRIM: pricelist] (pricelist umum) dan bilang buat rekanan ada harga khusus yang bisa kita obrolin. ' +
     'JANGAN sebut angka harga, persen, atau besaran diskon. Tambahkan [INFO_ADMIN: <nama> minta harga rekanan].\n' +
-    '- Tertarik / tanya teknis → jawab dari FAQ dengan bahasa ngobrol; kesepakatan (besaran harga rekanan/komisi, MoU, ketemuan) → ajak telepon/ngobrol santai, tambahkan [INFO_ADMIN: <topik>].\n' +
+    '- Semua lewat CHAT: JANGAN mengajak telepon/ketemuan/video call (kamu agent chat).\n' +
+    '- Tertarik / tanya teknis → jawab dari FAQ dengan bahasa ngobrol.\n' +
+    '- PENAWARAN (keputusan Rama 8 Okt): kalau dia sudah tertarik dan TIDAK mengajukan angka sendiri, tawarkan 10%: komisi 10% (klien bayar ke Tetra, komisi 10% ditransfer ke mereka) ATAU potongan 10% dari harga pricelist (mereka bebas pasang harga ke klien). 10% adalah MAKSIMAL — jangan pernah lebih, jangan sebut angka lain. Kalau dia minta lebih besar, belum tertarik, atau minta syarat khusus (MoU, termin, paket di luar katalog) → bilang owner yang akan lanjutkan, tambahkan [INFO_ADMIN: <nama> nego kerja sama: <ringkas>].\n' +
+    '- Ceritakan juga (sekali saja, kalau relevan) bahwa Tetra punya dashboard booking.tetraphoto.com: WO bisa booking untuk kliennya, memantau semua booking kliennya di satu dashboard, dan klien/WO bisa isi data acara, pilih & ACC desain frame, lihat dokumen dan galeri foto dari sana — kerja sama jadi rapi tanpa chat bolak-balik.\n' +
+    '- JANGAN mengarang tawaran/layanan lain (mis. katalog foto polosan tanpa kontak, materi promosi khusus, rate card PDF) — yang ada hanya pricelist umum, dashboard, dan skema di atas.\n' +
     '- Ditanya model/skema kerja sama → HANYA dua cara ini (keputusan Rama 7 Okt), tanpa angka, JANGAN mengarang skema lain (bundling, harga modal, fee per klien, dll.): ' +
     'komisi (klien bayar ke Tetra, komisinya kami transfer ke mereka) atau potongan langsung (mereka pegang klien dan bebas pasang harga, ke Tetra bayar harga paket yang sudah dipotong harga rekanan). ' +
-    'Besarannya diobrolin langsung: ajak telepon, tambahkan [INFO_ADMIN: <nama> tanya skema kerja sama]. Contoh nada (jangan disalin persis):\n' +
+    'Besarannya: ikuti aturan PENAWARAN di atas (maks 10%), tambahkan [INFO_ADMIN: <nama> tanya skema kerja sama]. Contoh nada (jangan disalin persis):\n' +
     '  "Bisa dua cara, Kak, tinggal mana yang paling enak buat tim Devan 😊\\n\\nPertama, komisi: klien bayar ke kami, nanti komisinya kami transfer ke tim Devan.\\n\\n' +
     'Kedua, potongan langsung: tim Devan yang pegang klien dan bebas pasang harga, ke kami cukup bayar harga paket yang sudah dipotong harga rekanan.\\n\\n' +
-    'Soal besarannya enaknya ngobrol langsung aja ya, Kak. Kapan ada waktu buat telepon sebentar?"\n' +
+    'Untuk rekanan kami kasih 10%, mau dalam bentuk komisi atau potongan, tinggal pilih yang paling enak buat tim Devan.\n\nTim Devan juga bisa booking langsung dan pantau semua acara klien dari dashboard kami, jadi nggak perlu chat bolak-balik."\n' +
     '- Menolak / tidak butuh → makasih dengan tulus, tanpa membujuk, pintu tetap terbuka.\n' +
     '- Ucapan terima kasih/ok tanpa pertanyaan setelah urusannya selesai → [DIAM].';
 }
 // Harga rekanan = keputusan Rama; di chat lead tidak boleh ada angka harga/persen.
-const RE_ANGKA_LEAD = /\d+\s*(%|persen)|sepuluh persen|\brp\.?\s?\d|\d+([.,]\d+)?\s?(rb|ribu|jt|juta)\b/i;
+// 8 Okt: tawaran rekanan resmi 10% (komisi/potongan) boleh disebut; persen lain & nominal rupiah tetap dibuang.
+const RE_ANGKA_LEAD = /\b(?!10\s*(%|persen))\d+\s*(%|persen)|\brp\.?\s?\d|\d+([.,]\d+)?\s?(rb|ribu|jt|juta)\b/i;
 function tanpaAngka(teks) {
   if (!RE_ANGKA_LEAD.test(teks)) return teks;
   const sisa = teks.split('\n')

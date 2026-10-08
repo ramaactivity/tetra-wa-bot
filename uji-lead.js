@@ -10,7 +10,7 @@ const fe = require('./src/lib/followupEngine');
 
 const { tanpaAngka } = prospekWa;
 assert.strictEqual(tanpaAngka('Siap Kak, ini pricelistnya.'), 'Siap Kak, ini pricelistnya.');
-let t = tanpaAngka('Ini pricelistnya Kak. Untuk rekanan diskon 10% ya.');
+let t = tanpaAngka('Ini pricelistnya Kak. Untuk rekanan diskon 15% ya.');
 assert(!/10/.test(t) && /harga khusus/.test(t), t);
 t = tanpaAngka('Paket 2 jam jadi Rp 1.800.000 untuk rekanan. Ada harga khusus rekanan yang bisa didiskusikan.');
 assert(!/1\.800/.test(t) && /harga khusus/.test(t), t);
@@ -58,6 +58,8 @@ assert(!J2('Acaranya tanggal berapa Kak?', 'halo kak mau tanya photobooth', [], 
 assert(!J2('Sudah aku teruskan ke admin ya', 'kak jadwal tgl 5 bisa?', [], sapaR), 'klaim lain bukan pricelist');
 assert(!J2('Gambar backdrop sudah aku kirim ya', 'mau lihat warna backdrop kak', ['backdrop'], sapaR), 'lampiran lain bukan pricelist');
 assert(!J2('Katalognya sudah aku kirim ya Kak', 'ada contoh frame?', [], sapaR), 'katalog bukan pricelist');
+assert.strictEqual(tanpaAngka('Untuk rekanan kami kasih komisi 10% atau potongan 10% ya Kak.'), 'Untuk rekanan kami kasih komisi 10% atau potongan 10% ya Kak.', '10% resmi boleh');
+assert(!/20/.test(tanpaAngka('Bisa komisi 20% kok Kak.')), 'lebih dari 10% dibuang');
 console.log('UJI LEAD (logika) LOLOS');
 
 if (process.env.UJI_AI) {
