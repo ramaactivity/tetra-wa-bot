@@ -50,6 +50,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Photobooth Classic dan Videobooth 360: tambah durasi di hari H Rp 500.000 per jam (wajib diinfokan dulu ke crew).
 - Butuh lebih dari 8 jam sejak awal: hitung paket 8 jam + Rp 500.000 per jam tambahan (mis. 10 jam = Rp 5.000.000 + Rp 1.000.000 = Rp 6.000.000). Untuk durasi sangat panjang, bandingkan dengan paket 13 jam Rp 7.500.000 (2R) dan tawarkan yang lebih hemat.
 
+- Durasi yang tidak ada di tabel (mis. 7 jam, Photobooth Classic): tawarkan paket 6 jam + extend 1 jam = Rp 4.000.000 + Rp 500.000 = Rp 4.500.000, atau paket 8 jam Rp 5.000.000. Jangan sebut "paket 7 jam" (keputusan Rama 7 Okt 2026).
 ### Add-on
 - Voucher Photobooth 100 pcs Rp 25.000
 - Break Time 1 jam Rp 150.000 (jeda di tengah durasi)
