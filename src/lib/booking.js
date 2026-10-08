@@ -205,6 +205,9 @@ async function laporAdmin(sock, jid, judul) {
   const sent = await sock.sendMessage(adminJid, { text: teksRekap(jid, judul) });
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'booking→admin');
+  // DP masuk / dikonfirmasi → juga ke grup admin (Rama 8 Okt). Rekap data biasa tidak.
+  const notify = require('./notify'); // di dalam fungsi: hindari require melingkar
+  if (notify.RE_GRUP?.test(judul) && notify.kirimGrupAdmin) await notify.kirimGrupAdmin(sock, teksRekap(jid, judul));
   semua[jid].dilapor = JSON.stringify(semua[jid].data);
   simpan();
 }

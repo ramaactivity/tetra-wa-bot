@@ -31,12 +31,20 @@ async function notifyAdmin(sock, from, rule, riwayat, extra = '') {
   const sent = await sock.sendMessage(adminJid, { text: notif });
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'notif→admin');
-  // Grup WA admin (keputusan Rama 8 Okt: "biar semua admin tau"). Gagal kirim ke grup tidak menggagalkan notif pribadi.
+  if (rule?.name === 'PERUBAHAN' || RE_GRUP.test(String(extra))) await kirimGrupAdmin(sock, notif);
+}
+
+// Grup WA admin "Tetra Photobooth" (keputusan Rama 8 Okt): HANYA yang penting — acara dadakan, permintaan
+// perubahan booking, booking/DP/pelunasan masuk. Handoff & info biasa tidak ("jangan terlalu bala di grup owner").
+// Selalu diberi tanda bahwa pengirimnya bot, bukan Rama. Gagal kirim ke grup tidak menggagalkan apa pun.
+const RE_GRUP = /\bDADAKAN\b|bukti (dp|bayar|transfer|pelunasan)|\bdp (masuk|dikonfirmasi|diterima)|pelunasan|booking (masuk|baru)/i;
+async function kirimGrupAdmin(sock, teks) {
   const grup = live.get().ADMIN_GROUP_JID;
-  if (grup && grup.endsWith('@g.us')) {
-    const g = await sock.sendMessage(grup, { text: notif }).catch((e) => { console.error('[notif] gagal ke grup admin:', e.message); return null; });
-    if (g) { rememberBotMsg(g); deliveryLog.track(g, 'notif→grup-admin'); }
-  }
+  if (!grup || !grup.endsWith('@g.us')) return null;
+  const g = await sock.sendMessage(grup, { text: `🤖 _Pesan otomatis dari bot CS Mintet, bukan Rama._\n\n${teks}` })
+    .catch((e) => { console.error('[notif] gagal ke grup admin:', e.message); return null; });
+  if (g) { rememberBotMsg(g); deliveryLog.track(g, 'notif→grup-admin'); }
+  return g;
 }
 
 // Kirim teks ke topic Telegram CS Mintet (grup Agent Rama). Melempar error kalau gagal.
@@ -54,4 +62,4 @@ async function kirimTelegram(text) {
   if (!res.ok) throw new Error(`Telegram ${res.status} ${(await res.text()).slice(0, 150)}`);
 }
 
-module.exports = { notifyAdmin, kirimTelegram };
+module.exports = { notifyAdmin, kirimTelegram, kirimGrupAdmin, RE_GRUP };

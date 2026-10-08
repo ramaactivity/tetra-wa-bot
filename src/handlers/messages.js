@@ -653,7 +653,9 @@ function registerMessageHandler(sock) {
             const ack = 'Sudah aku terima Kak, aku teruskan ke tim Tetra ya.';
             tambahRiwayat(jid, 'assistant', ack);
             await sendReply(sock, jid, keys, { name: 'file-booking' }, ack);
-            await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
+            await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), soalBayar
+              ? 'bukti bayar/pelunasan dikirim klien di tahap booking (lihat pesan yang diteruskan) — cek mutasi'
+              : 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
           } else {
             await mulaiBooking(jid, msg, 'bukti-transfer',
               'Makasih Kak, bukti transfernya sudah aku terima. Admin cek dulu ke rekening, setelah terverifikasi invoice-nya dikirim di chat ini.',

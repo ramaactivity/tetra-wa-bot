@@ -30,6 +30,7 @@ const live = require('./lib/liveConfig');
 const store = require('./lib/store');
 const prospekWa = require('./lib/prospekWa');
 const relasiWa = require('./lib/relasiWa');
+const { kirimGrupAdmin } = require('./lib/notify');
 const portal = require('./lib/portal');
 
 // ── Cache retry dekripsi yang hidup lintas reconnect ─────────────────────────
@@ -558,6 +559,17 @@ function startCommandPoller() {
         } else if (c.command.startsWith('send-relasi:')) {
           const hasil = await kirimRelasi(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-grup-admin:')) {
+          // Dari Tetra Ops (8 Okt): kabar booking/DP/pelunasan portal ke grup WA admin. Format: send-grup-admin:{"pesan"}
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek di bawah */ }
+          const teks = String(p.pesan || '').trim();
+          if (!teks || teks.length > 2000) await supa.markCommand(c.id, 'error', 'pesan kosong / terlalu panjang');
+          else if (!currentSock || !isConnected) { /* biarkan pending, dicoba lagi */ }
+          else {
+            const g = await kirimGrupAdmin(currentSock, teks);
+            await supa.markCommand(c.id, g ? 'done' : 'error', g ? 'terkirim ke grup admin' : 'ADMIN_GROUP_JID kosong / gagal kirim');
+          }
         } else if (c.command.startsWith('send-portal:')) {
           const hasil = await kirimPortal(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
