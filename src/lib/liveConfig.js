@@ -15,6 +15,8 @@ const current = {
   PAUSE_HOURS: base.PAUSE_HOURS,
   // Env menang atas config.js; instance uji mengosongkannya (tanpa notif ke admin).
   ADMIN_NOTIFY_JID: process.env.ADMIN_NOTIFY_JID ?? base.ADMIN_NOTIFY_JID,
+  // Grup WA admin (8 Okt): semua notifikasi admin juga dikirim ke sini supaya semua admin tahu. Kosong = tidak dikirim.
+  ADMIN_GROUP_JID: process.env.ADMIN_GROUP_JID || '',
   BUSINESS_START_HOUR: base.BUSINESS_START_HOUR,
   BUSINESS_END_HOUR: base.BUSINESS_END_HOUR,
   TIMEZONE_OFFSET: base.TIMEZONE_OFFSET,

@@ -17,7 +17,7 @@ dibahas.
 
 ## Tahap 1 — SAPA (kontak benar-benar baru)
 Tujuan: kesan pertama yang hangat dan bikin klien mau membalas.
-- Sapa personal (nama kalau ada), perkenalkan diri singkat sebagai admin Tetra.
+- Sapa personal (nama kalau ada), perkenalkan diri singkat sebagai tim Tetra (bukan "admin").
 - Tanggapi apa yang dia bilang dengan tulus (mis. rencana pernikahan → ucapkan selamat singkat).
 - Tunjukkan kamu mau bantu carikan yang pas, bukan menyodorkan daftar.
 - Tutup dengan 1–2 pertanyaan ringan yang membuka cerita tentang acaranya.

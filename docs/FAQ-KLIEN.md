@@ -154,6 +154,10 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Pembatalan dari pihak Tetra: semua dana dikembalikan termasuk DP.
 - Proses reschedule/pembatalan tetap ditangani admin (bot cukup menjelaskan aturannya).
 
+## Di luar layanan Tetra
+- Tetra TIDAK menyewakan akun/lisensi software photobooth (dslrBooth, aplikasi photobooth, "sewa akunnya saja") dan tidak menyewakan alat tanpa crew. Yang disewakan selalu jasa lengkap: alat + crew + cetak (keputusan Rama 8 Okt 2026).
+- Acara dadakan (hari ini / besok): tidak dijanjikan bisa; admin yang mengonfirmasi setelah cek crew & alat.
+
 ## Admin yang konfirmasi (jangan jawab sendiri)
 - Kepastian lokasi outdoor.
 - Masa berlaku harga.

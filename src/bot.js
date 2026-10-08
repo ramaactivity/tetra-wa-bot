@@ -217,6 +217,10 @@ async function startBot() {
       isConnected = true;
       reconnectAttempts = 0; // reset backoff — koneksi sehat
       console.log('✅ Bot tersambung & siap. Menunggu pesan masuk...');
+      // Daftar grup yang diikuti (nama → JID) untuk mengisi ADMIN_GROUP_JID; hanya dicatat di log.
+      sock.groupFetchAllParticipating()
+        .then((gs) => Object.values(gs).forEach((g) => console.log(`[grup] ${g.id} | ${g.subject} | ${g.participants?.length ?? '?'} anggota`)))
+        .catch((e) => console.error('[grup] gagal ambil daftar:', e.message));
       supa.updateStatus({
         connection: 'open',
         qr: null,

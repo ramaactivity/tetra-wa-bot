@@ -132,7 +132,7 @@ function isPostSale(t) {
 // 360, Magazine Box, Photo Stage tidak di sini lagi: sudah ada di katalog FAQ
 // dan boleh dijawab bot sendiri (keputusan Rama 27 Sep 2026).
 function isSpecialProduct(t) {
-  return /mingle|instant photobooth|instant photo|software|aplikasi|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
+  return /mingle|instant photobooth|instant photo|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
 }
 
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
@@ -729,9 +729,13 @@ function registerMessageHandler(sock) {
       }
 
       if (aiResponse.includes('[ADMIN_HANDOFF]')) {
-        // Klien tidak boleh ditinggal diam: satu kalimat, lalu admin yang lanjut.
-        await handoff(sock, msg, 'Handoff diminta oleh AI',
-          'Yang ini aku teruskan ke admin ya Kak, biar dijawab sama yang pegang datanya. Nanti dibalas langsung di chat ini.', originalText);
+        // Klien tidak boleh ditinggal diam: satu kalimat yang menyebut hal yang dicek (8 Okt: kalimat baku
+        // "biar dijawab yang pegang datanya" terasa robot), lalu admin yang lanjut. Kalimat AI dipakai kalau
+        // pendek & aman; selain itu kalimat cadangan.
+        const kalimat = aiResponse.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
+        const aman = kalimat && kalimat.length <= 260 && !RE_KLAIM.test(kalimat) && !/\bRp\.?\s?\d/i.test(kalimat);
+        await handoff(sock, msg, `Handoff diminta oleh AI${aman ? `: ${kalimat.slice(0, 120)}` : ''}`,
+          aman ? kalimat : 'Yang ini aku cek dulu ke admin ya Kak, nanti aku kabari langsung di chat ini.', originalText);
         return;
       }
 

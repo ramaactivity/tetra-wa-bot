@@ -31,6 +31,12 @@ async function notifyAdmin(sock, from, rule, riwayat, extra = '') {
   const sent = await sock.sendMessage(adminJid, { text: notif });
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'notif→admin');
+  // Grup WA admin (keputusan Rama 8 Okt: "biar semua admin tau"). Gagal kirim ke grup tidak menggagalkan notif pribadi.
+  const grup = live.get().ADMIN_GROUP_JID;
+  if (grup && grup.endsWith('@g.us')) {
+    const g = await sock.sendMessage(grup, { text: notif }).catch((e) => { console.error('[notif] gagal ke grup admin:', e.message); return null; });
+    if (g) { rememberBotMsg(g); deliveryLog.track(g, 'notif→grup-admin'); }
+  }
 }
 
 // Kirim teks ke topic Telegram CS Mintet (grup Agent Rama). Melempar error kalau gagal.
