@@ -265,6 +265,9 @@ const RE_KLAIM = new RegExp(
   '\\b(sudah|udah|telah|sdh)(\\s+\\w+){0,2}?\\s+(di)?' +
   '(perbarui|update|ubah|ganti|geser|pindah(kan)?|reschedule|jadwal(kan)?|kunci|amankan|batalkan|refund|konfirmasi)\\b' +
   '|\\b(dp|pembayaran|transfer|pelunasan)(nya)?\\s+(sudah|udah|telah)\\s+(masuk|diterima|terverifikasi|lunas)', 'i');
+// Klaim palsu hanya dicatat sebagai PERUBAHAN kalau klien memang membahas booking (8 Okt: "ohh boleh" Kak Nadia
+// jadi notif perubahan palsu ke grup owner).
+const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|\bubah|ganti|batal|cancel|booking|durasi|paket|extend|tambah (jam|unit)/i;
 const KALIMAT_AMAN = 'Untuk perubahan itu aku teruskan ke admin dulu ya Kak, biar dicek dan diperbarui di jadwal. Nanti admin konfirmasi langsung di chat ini.';
 
 // Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
@@ -765,8 +768,8 @@ function registerMessageHandler(sock) {
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
         const bersih = String(ulang).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
-        perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || `klien: "${originalText.slice(0, 150)}"`;
-        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih : KALIMAT_AMAN;
+        perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || (RE_SOAL_BOOKING.test(originalText) ? `klien: "${originalText.slice(0, 150)}"` : undefined);
+        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih : (RE_SOAL_BOOKING.test(originalText) ? KALIMAT_AMAN : 'Siap Kak, aku bantu cek dulu ya, nanti aku kabari di chat ini.');
       }
 
       if (lead) aiResponse = prospekWa.tanpaAngka(aiResponse);

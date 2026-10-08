@@ -31,11 +31,11 @@ async function notifyAdmin(sock, from, rule, riwayat, extra = '') {
   const sent = await sock.sendMessage(adminJid, { text: notif });
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'notif→admin');
-  if (rule?.name === 'PERUBAHAN' || RE_GRUP.test(String(extra))) await kirimGrupAdmin(sock, notif);
+  if (rule?.name !== 'PERUBAHAN' && RE_GRUP.test(String(extra))) await kirimGrupAdmin(sock, notif);
 }
 
-// Grup WA admin "Tetra Photobooth" (keputusan Rama 8 Okt): HANYA yang penting — acara dadakan, permintaan
-// perubahan booking, booking/DP/pelunasan masuk. Handoff & info biasa tidak ("jangan terlalu bala di grup owner").
+// Grup WA admin "Tetra Photobooth" (keputusan Rama 8 Okt): HANYA yang penting — acara dadakan dan
+// booking/DP/pelunasan masuk. Permintaan perubahan TIDAK (Rama: "ini gausah"). Handoff & info biasa tidak ("jangan terlalu bala di grup owner").
 // Selalu diberi tanda bahwa pengirimnya bot, bukan Rama. Gagal kirim ke grup tidak menggagalkan apa pun.
 const RE_GRUP = /\bDADAKAN\b|bukti (dp|bayar|transfer|pelunasan)|\bdp (masuk|dikonfirmasi|diterima)|pelunasan|booking (masuk|baru)/i;
 async function kirimGrupAdmin(sock, teks) {
