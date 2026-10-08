@@ -457,10 +457,23 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
   const { error } = await supa.from('prospek').update(patch).eq('id', p.id);
   if (error) throw new Error(error.message);
   // Klien lama = pelanggan Tetra: balasannya dilayani CS (dengan konteks acara lamanya, tanpa pricelist).
-  return { nama: p.nama, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || '') };
+  // Tamu Booth = calon klien hangat dari halaman foto tamu (8 Okt): dilayani CS biasa + konteks acara & promo.
+  return { nama: p.nama, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || ''),
+    tamuBooth: p.sumber === 'tamu_booth' ? (String(p.catatan || '').match(/^tamu booth:.*$/m) || [''])[0] : null };
+}
+// Prospek membalas STOP / minta berhenti → jangan_hubungi (izin tamu Booth: "berhenti dengan membalas STOP").
+async function stopProspek(nomor, teks) {
+  const p = await cariProspek(nomor);
+  if (!p) return null;
+  const baris = `STOP ${jamWib()} dari ${nomor}: "${String(teks).slice(0, 100)}" → jangan_hubungi`;
+  const { error } = await supa.from('prospek').update({ status: 'jangan_hubungi', catatan: [p.catatan, baris].filter(Boolean).join('\n'),
+    updated_at: new Date().toISOString() }).eq('id', p.id);
+  if (error) throw new Error(error.message);
+  return p;
 }
 module.exports = {
   cariProspek,
+  stopProspek,
   catatJawabanProspek,
   catatBalasanProspek,
   fetchVendorContacts,

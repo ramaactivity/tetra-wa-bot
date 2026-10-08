@@ -23,6 +23,17 @@ const portal = require('../lib/portal');
 // Klien lama yang membalas sapaan reaktivasi sales: CS harus tahu konteksnya.
 // ponytail: hanya di memori proses; hilang saat restart (balasan berikutnya mengisinya lagi).
 const klienLamaCtx = new Map();
+// Tamu Booth (halaman foto tamu → nomor + izin dihubungi, 8 Okt): jid -> baris catatan "tamu booth: …".
+const tamuCtx = new Map();
+const RE_STOP = /^\s*(stop|unsubscribe|berhenti|jangan (hubungi|chat|wa)( (saya|aku))?( lagi)?)\s*[.!🙏]*\s*$/i;
+function konteksTamu(jid) {
+  const t = tamuCtx.get(jid);
+  if (!t) return '';
+  return `\nTAMU BOOTH: ${t.replace(/^tamu booth:\s*/i, '')}. Dia tamu yang baru foto di photobooth Tetra di acara itu, lalu meninggalkan nomor karena tertarik pakai Tetra. ` +
+    'Ini balasan atas pesan kita: jangan perkenalan ulang, jangan sebut website. Layani sebagai calon klien yang hangat: tanggapi pesannya, gali acaranya (jenis, tanggal, lokasi) seperti biasa. ' +
+    'Kalau ada kode promo di atas, itu milik nomor ini; sebut saat bahas harga/booking, jangan janjikan lebih dari hadiahnya dan sebut batas berlakunya. ' +
+    'Begitu dia siap booking, kirim link booking di atas (kode promonya sudah terisi otomatis). Admin bisa menolak bukti promo belakangan, jadi jangan bilang promonya pasti.';
+}
 function konteksKlienLama(jid) {
   const k = klienLamaCtx.get(jid);
   if (!k) return '';
@@ -688,7 +699,7 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid));
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -722,7 +733,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
+          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
@@ -886,6 +897,15 @@ function registerMessageHandler(sock) {
       if (nomorProspek) {
         const teks = teksPesan(msg.message);
         const oto = prospekWa.otomatis(teks);
+        if (RE_STOP.test(teks)) {
+          await supa.stopProspek(nomorProspek, teks).catch((e) => console.error(`[prospek] gagal STOP ${nomorProspek}:`, e.message));
+          tambahRiwayat(jid, 'user', teks);
+          const ok = 'Siap Kak, nomor ini nggak akan kami hubungi lagi. Makasih ya 🙏';
+          const sent = await sock.sendMessage(jid, { text: ok }).catch(() => null);
+          if (sent) { rememberBotMsg(sent); tambahRiwayat(jid, 'assistant', ok); }
+          console.log(`[prospek] ${nomorProspek} membalas STOP → jangan_hubungi`);
+          continue;
+        }
         const hasil = await supa.catatBalasanProspek(nomorProspek, teks, msg.pushName, oto)
           .catch((e) => { console.error(`[prospek] gagal catat balasan ${nomorProspek}:`, e.message); return null; });
         console.log(`[prospek] ${nomorProspek}${hasil?.nama ? ` (${hasil.nama})` : ''} membalas sapaan sales${oto ? ' (otomatis)' : ''} → dicatat ke Tetra Ops${hasil?.klienLama ? '; klien lama → dilayani CS' : ''}`);
@@ -898,6 +918,7 @@ function registerMessageHandler(sock) {
           if (sapa) tambahRiwayat(jid, 'assistant', sapa.content);
         }
         if (hasil?.klienLama) klienLamaCtx.set(jid, hasil);
+        else if (hasil?.tamuBooth) tamuCtx.set(jid, hasil.tamuBooth);
         else {
           // Lead (venue/WO/korporat): dilayani CS dalam mode rekanan (keputusan Rama 7 Okt).
           // Auto-reply lagi setelah kita menjelaskan diri: cukup dicatat, tidak dibalas.
@@ -928,4 +949,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };

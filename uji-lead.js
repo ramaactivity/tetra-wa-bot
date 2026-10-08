@@ -41,6 +41,9 @@ assert.strictEqual(_teksPesan({ contactMessage: { displayName: 'Budi', vcard: 'B
   '[kirim kontak: Budi 628123456789]');
 assert.strictEqual(_teksPesan({ contactsArrayMessage: { contacts: [{ displayName: 'A', vcard: 'TEL;waid=628111:x' }, { displayName: 'B', vcard: '' }] } }),
   '[kirim kontak: A; B]', 'waid terlalu pendek diabaikan');
+const { _RE_STOP } = require('./src/handlers/messages');
+for (const t of ['STOP', 'stop.', ' Stop 🙏', 'berhenti', 'jangan hubungi saya lagi']) assert(_RE_STOP.test(t), t);
+for (const t of ['stop dulu ya kak, aku tanya suami', 'nggak bisa stop mikirin photoboothnya', 'boleh']) assert(!_RE_STOP.test(t), t);
 console.log('UJI LEAD (logika) LOLOS');
 
 if (process.env.UJI_AI) {
