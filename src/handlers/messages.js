@@ -283,6 +283,9 @@ const LAMPIRAN = {
   // PDF panduan juga memuat halaman layout, jadi layout tidak dikirim kalau panduan sudah.
   layout: { file: 'LAYOUT PHOTOBOOTH.pdf', label: 'layout photobooth', pernah: /LAYOUT (PHOTOBOOTH|&)|layout photobooth|panduan ukuran/i,
     caption: 'Bentuk & pilihan layout cetak Tetra: 2R photostrip, 4R, dan Polaroid.' },
+  // Ilustrasi skema rekanan (komisi 10% vs potongan 10%), disetujui Rama 8 Okt 2026.
+  skema: { file: 'SKEMA REKANAN TETRA.png', label: 'skema rekanan', pernah: /SKEMA REKANAN|skema rekanan/i,
+    caption: 'Biar gampang kebayang, ini gambaran dua skema kerja sama rekanan Tetra 😊' },
   panduan: { file: 'LAYOUT & PANDUAN UKURAN.pdf', label: 'panduan ukuran', pernah: /PANDUAN UKURAN/i,
     caption: 'Panduan ukuran canvas untuk desain frame sendiri (2R 1200×3600 px, 4R 2400×3600 px, Polaroid 1800×2400 px per lembar).' },
 };
