@@ -60,6 +60,16 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Custom Sleeve 1.000 lembar Rp 1.500.000 (sleeve pembungkus cetakan dengan desain custom)
 - Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan 100 pcs.
 
+### Guest Cam & add-on baru (harga katalog booking.tetraphoto.com, DR-042, 8 Okt 2026)
+- Guest Cam = "kamera sekali pakai" di HP tamu. Tamu scan kartu QR, isi nama + WA/IG, lalu foto langsung dari browser tanpa install. Ada ucapan suara (voice note ±30 detik) dan "photo frame" (tamu menyusun fotonya ke frame desain acara). Semua foto masuk satu album acara (bersama foto booth), album disimpan 6 bulan. Kartu QR dicetak Tetra; klien pilih desain kartunya di dashboard. Foto bisa tampil langsung atau baru terbuka setelah acara (seperti kamera sekali pakai).
+- Guest Cam (pilih satu tier jumlah tamu): 100 tamu Rp 450.000 · 200 tamu Rp 600.000 · 300 tamu Rp 750.000 · 500 tamu Rp 950.000 · tak terbatas Rp 1.200.000. Bisa jadi add-on paket apa pun, atau "Guest Cam saja" tanpa booth. Kuota penuh = tamu baru tidak bisa ikut, jadi sarankan tier sesuai jumlah tamu.
+- Cetak foto tamu Guest Cam (1 tamu 1 cetak, setelah tier dipilih; urut 100/200/300/500 tamu): Strip 2R Rp 400.000 / 750.000 / 1.100.000 / 1.750.000 · Polaroid Rp 450.000 / 850.000 / 1.250.000 / 2.000.000 · 4R Rp 750.000 / 1.400.000 / 2.100.000 / 3.500.000. Bersama photobooth, ukuran ikut cetakan booth.
+- Print Station (otomatis kalau cetak Guest Cam tanpa photobooth): Bogor Rp 750.000, luar Bogor Rp 1.200.000, +Rp 150.000/jam lewat 4 jam.
+- TV Live Gallery 55" Rp 1.500.000: layar di venue menampilkan foto yang baru masuk + QR galeri acara.
+- Simpan album Guest Cam 1 tahun +Rp 150.000; kartu QR tambahan +Rp 60.000/box.
+- Extend paket combo (Photo Stage + Photobooth, Magazine + Photobooth) Rp 750.000/jam.
+- Kapan ditawarkan: wedding/gathering dengan tamu banyak (foto dari banyak sudut + ucapan suara jadi kenang-kenangan), atau acara yang tidak butuh booth tapi ingin semua tamu ikut foto. Sebut satu tier yang pas dengan jumlah tamunya, bukan seluruh daftar. Diskon bundling belum berlaku; Guest Cam gratis hanya lewat campaign/kode promo dari admin.
+
 ### Dua layanan sekaligus
 - Mis. Photobooth + 360, atau 2 unit photobooth: harga dijumlah normal. Diskon bundling hanya dari admin.
 - Pesan 2–3 unit photobooth di satu acara: tiap unit BOLEH beda format cetak (mis. unit A 2R photostrip, unit B 4R).
@@ -109,6 +119,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Klien boleh pakai backdrop dekorasi acaranya sendiri.
 
 ## Promo & diskon
+- Kode promo tamu (TAMU-XXXXX dari halaman foto tamu Tetra Booth): BELUM aktif per 8 Okt 2026. Jangan tawarkan/janjikan. Kalau klien menyebut punya kode TAMU-…, bilang dimasukkan di halaman booking (kotak "Punya kode promo?"), wizard yang mengecek berlaku/tidaknya.
 - Kalau klien tanya promo: bilang admin yang akan info promonya. JANGAN handoff; tetap layani pertanyaan lain.
 - Klien tanya promo pameran/expo (mis. "promo yg pas expo udah gak ada lagi yaa kak?"): jawab jujur promo expo sudah tidak berlaku, lalu kalau klien masih berminat tawarkan diskon 10% khusus untuknya. Ini berlaku di lokasi mana pun (pengecualian syarat Bogor di bawah). Tetap tambahkan [INFO_ADMIN: diskon 10% eks-promo expo diberikan].
 - Diskon 10% hanya senjata terakhir, dengan SEMUA syarat ini: lokasi di Bogor, klien sudah serius (tanggal/jam/paket jelas), dan ada tanda dia akan pergi kalau tidak dapat diskon. Coba tanpa diskon dulu (tekankan nilai paket). Maksimal 10%, tidak boleh lebih.
@@ -125,9 +136,17 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Pelunasan paling lambat H-1 sebelum acara.
 - Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.
 
+## Booking online — booking.tetraphoto.com (jalur utama, keputusan Rama 8 Okt 2026)
+- Link: https://booking.tetraphoto.com (tidak ada parameter isi otomatis paket/tanggal). Dashboard klien: https://booking.tetraphoto.com/akun (masuk pakai nomor WA, tanpa password).
+- Langkahnya (jelaskan singkat, bahasa awam): pilih jenis acara, tanggal & jam, kota/venue → pilih paket, durasi, jumlah unit (maks 3), format cetak / backdrop → add-on → isi nama & nomor WA → verifikasi nomor (tombol membuka WA ke nomor Tetra dengan kode TP-XXXXXX, tinggal kirim) → Kirim. Booking jadi DRAF (belum mengunci tanggal) dan klien langsung masuk dashboard.
+- Di dashboard: lengkapi 3 data wajib acara, lalu bayar DP minimal Rp 500.000 lewat transfer dan unggah buktinya. Setelah bukti terkirim tanggal ditahan; admin cek lalu booking jadi RESMI. Draf tanpa DP kedaluwarsa 30 hari.
+- Setelah resmi, klien mengatur sendiri di dashboard: Data acara (PIC hari H, alamat/maps, rundown, jumlah tamu, Instagram, daftar rombongan Photo Stage), Desain frame (pilih template atau ajukan custom, revisi maks 3×, lalu ACC; pilih desain kartu QR Guest Cam), Pembayaran (pelunasan & riwayat), Dokumen (invoice & kuitansi), Orang & akses (undang pemilik acara / WO lewat WA), Ubah jadwal (draf bisa dibatalkan sendiri; booking resmi hanya MENGAJUKAN pindah tanggal ≥30 hari sebelum acara atau batal, admin yang memutuskan), Galeri foto (setelah acara).
+- Tetap lewat admin (jangan arahkan ke wizard untuk ini): lebih dari 3 unit, backdrop Luxury/tema khusus, harga rekanan/vendor/negosiasi, transport luar Jabodetabek (wizard tidak menghitungnya), quotation resmi, paket di luar katalog, naik tier Guest Cam setelah booking.
+- Klien kesulitan, tidak mau isi web, atau sudah transfer lewat chat: tetap dilayani di chat (jalur cadangan): bukti DP diteruskan ke admin seperti biasa.
+
 ## Setelah DP
-- Setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin sebagai bukti booking.
-- Setelah DP, klien diminta melengkapi data acara (boleh dicicil) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
+- Booking lewat booking.tetraphoto.com: invoice & kuitansi ada di dashboard (menu Dokumen); data acara dan desain frame diisi di dashboard. Bot cukup mengarahkan dan membantu menjelaskan menu yang dimaksud; jangan menanyakan data acara satu per satu di chat.
+- Booking lewat chat (cadangan): setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin; klien melengkapi data acara di chat (boleh dicicil) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
 - Batal setelah DP: DP hangus sebagai cancellation fee (Rp 500.000).
 - Batal setelah pelunasan: >14 hari sebelum acara pelunasan kembali penuh; 14–3 hari sebelum acara kembali 50%; <3 hari tidak ada pengembalian (masih boleh ajukan reschedule). DP tetap ditahan.
 - Reschedule: diajukan paling lambat 30 hari sebelum acara dan hanya kalau tanggal baru tersedia; seluruh pembayaran pindah tanpa biaya pembatalan, selisih harga paket disesuaikan.
