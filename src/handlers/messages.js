@@ -75,6 +75,24 @@ function kartuKontak(message) {
   }).join('; ');
 }
 
+// Bot menjanjikan/mengklaim pricelist terkirim, atau klien bilang belum menerima → kirim sekarang (lihat handleBatch).
+const RE_JANJI_FILE = /(sudah|udah|barusan|telah)\s+(aku\s+|kami\s+)?(kirim|terkirim|kukirim|dikirim)|\b(ini|berikut)\s+(aku\s+|kami\s+)?kirim(kan)?|\baku\s+kirim(kan)?\b|terlampir|di (atas|bawah) ya/i;
+const RE_BELUM_TERIMA = /\b(gak|ga|gaada|nggak|enggak|tidak|belum|blm)\b.{0,15}\b(ada|masuk|terkirim|muncul|nyampe|sampai|keliatan|kelihatan|kebuka|ke ?kirim)\b|\bmana\b|\bdimana\b|\bdi ?mana\b|kirim(in|kan)? (lagi|ulang)/i;
+const RE_TOPIK_PL = /harga|pricelist|price ?list|\bpl\b|daftar paket/i;
+function janjiPricelist(jawaban, pesanKlien, lampiran, riwayat) {
+  // Sedang mengirim lampiran lain (backdrop/katalog/layout) → "gambar" yang dimaksud bukan pricelist.
+  if (lampiran.some((k) => k !== 'pricelist')) return false;
+  const sudah = riwayat.some((p) => String(p.content).includes('[kirim PDF pricelist]'));
+  const dekat = riwayat.slice(-2).filter((p) => p.role === 'assistant').map((p) => p.content).join('\n');
+  const topik = RE_TOPIK_PL.test(`${jawaban}\n${pesanKlien}\n${dekat}`);
+  if (!topik) return false;
+  // Klien bilang belum menerima & sebelumnya bot menyinggung pricelist/harga → kirim (juga kirim ulang).
+  const bahasPL = riwayat.slice(-6).some((p) => p.role === 'assistant' && /harga|pricelist|gambar/i.test(String(p.content)));
+  if (RE_BELUM_TERIMA.test(pesanKlien) && bahasPL) return true;
+  if (sudah) return false;
+  return RE_JANJI_FILE.test(jawaban);
+}
+
 function teksPesan(message) {
   const t = extractText(message);
   if (t) return t;
@@ -684,7 +702,9 @@ function registerMessageHandler(sock) {
       // lokasi), atau klien menolak memberi detail, atau minta PL lagi setelah ditanya.
       const detPL = smart.parseLeadDetails(fullText);
       const bolehPL = !!lead || smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
-        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content)));
+        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content))) ||
+        // Aturan 1 Okt: minta PL lagi SETELAH ditanya detail = boleh (Ranti 8 Okt ditahan padahal sudah ditanya).
+        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'assistant' && /\?/.test(String(p.content))));
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
       if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
@@ -767,6 +787,12 @@ function registerMessageHandler(sock) {
       if (lampiran.includes('pricelist') && !kirimPL && bolehPL && plKlienLama &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
         await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf || !!lead });
+      }
+      // Ucapan dan tindakan harus sama (insiden Ranti 8 Okt: bot 3x bilang pricelist "sudah terkirim"
+      // padahal gerbang menahan file; klien kesal). Bot menjanjikan/mengklaim pricelist, atau klien bilang
+      // belum menerimanya → file dikirim sekarang, gerbang "gali dulu" tidak berlaku lagi.
+      if (janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid))) {
+        await kirimPricelist(sock, jid, 'janji-pricelist', { pdf: plDenganPdf || !!lead });
       }
       for (const k of lampiran) {
         const l = LAMPIRAN[k];
@@ -949,4 +975,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };

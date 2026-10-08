@@ -44,6 +44,20 @@ assert.strictEqual(_teksPesan({ contactsArrayMessage: { contacts: [{ displayName
 const { _RE_STOP } = require('./src/handlers/messages');
 for (const t of ['STOP', 'stop.', ' Stop 🙏', 'berhenti', 'jangan hubungi saya lagi']) assert(_RE_STOP.test(t), t);
 for (const t of ['stop dulu ya kak, aku tanya suami', 'nggak bisa stop mikirin photoboothnya', 'boleh']) assert(!_RE_STOP.test(t), t);
+// Insiden Ranti 8 Okt: ucapan "sudah aku kirim" harus diikuti file pricelist.
+const { _janjiPricelist: J2 } = require('./src/handlers/messages');
+const sapaR = [{ role: 'assistant', content: 'Halo Kak Ranti! Rencananya untuk acara apa?' }];
+assert(J2('Detail harganya sudah aku kirim ya, Kak Ranti.', 'info pricelist nya kak', [], sapaR), 'klaim terkirim tanpa file');
+const klaim = [...sapaR, { role: 'assistant', content: 'Detail harganya sudah aku kirim ya' }];
+assert(J2('Gambarnya sudah terkirim di chat ini ya', 'dimana kak detail harganya?', [], klaim), 'klien tanya mana');
+assert(J2('Eh iya maaf ya Kak, ini aku kirimkan gambarnya.', 'mana kak? gaada gambar yang terkirim', [], klaim), 'klien bilang tidak ada');
+const terkirim = [...klaim, { role: 'assistant', content: '[kirim PDF pricelist] (hanya gambar harga paket unlimited)' }];
+assert(!J2('Sudah aku kirim ya Kak di atas.', 'oke makasih kak', [], terkirim), 'sudah terkirim, jangan kirim ulang');
+assert(J2('Siap aku kirim ulang ya', 'kok gak masuk ya kak gambarnya', [], terkirim), 'kirim ulang kalau klien belum terima');
+assert(!J2('Acaranya tanggal berapa Kak?', 'halo kak mau tanya photobooth', [], sapaR), 'tidak ada janji');
+assert(!J2('Sudah aku teruskan ke admin ya', 'kak jadwal tgl 5 bisa?', [], sapaR), 'klaim lain bukan pricelist');
+assert(!J2('Gambar backdrop sudah aku kirim ya', 'mau lihat warna backdrop kak', ['backdrop'], sapaR), 'lampiran lain bukan pricelist');
+assert(!J2('Katalognya sudah aku kirim ya Kak', 'ada contoh frame?', [], sapaR), 'katalog bukan pricelist');
 console.log('UJI LEAD (logika) LOLOS');
 
 if (process.env.UJI_AI) {
