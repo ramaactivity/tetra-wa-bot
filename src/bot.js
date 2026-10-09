@@ -30,7 +30,7 @@ const live = require('./lib/liveConfig');
 const store = require('./lib/store');
 const prospekWa = require('./lib/prospekWa');
 const relasiWa = require('./lib/relasiWa');
-const { kirimGrupAdmin } = require('./lib/notify');
+const { kirimGrupAdmin, kirimGrupCrew } = require('./lib/notify');
 const timWa = require('./lib/timWa');
 const portal = require('./lib/portal');
 
@@ -576,6 +576,17 @@ function startCommandPoller() {
             deliveryLog.track(sent, 'tim→wa');
             store.tambahRiwayat(`${nomor}@s.whatsapp.net`, 'assistant', `${pesan}\n[pengingat tim dari bot CS Mintet]`);
             await supa.markCommand(c.id, 'done', `terkirim ke ${nomor}`);
+          }
+        } else if (c.command.startsWith('send-grup-crew:')) {
+          // Dari Tetra Ops (9 Okt): briefing event ke grup WA "Tetra Crew". Format: send-grup-crew:{"pesan"}
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek di bawah */ }
+          const teks = String(p.pesan || '').trim();
+          if (!teks || teks.length > 4000) await supa.markCommand(c.id, 'error', 'pesan kosong / terlalu panjang');
+          else if (!currentSock || !isConnected) { /* biarkan pending */ }
+          else {
+            const g = await kirimGrupCrew(currentSock, teks);
+            await supa.markCommand(c.id, g ? 'done' : 'error', g ? 'terkirim ke grup crew' : 'CREW_GROUP_JID kosong / gagal kirim');
           }
         } else if (c.command.startsWith('send-grup-admin:')) {
           // Dari Tetra Ops (8 Okt): kabar booking/DP/pelunasan portal ke grup WA admin. Format: send-grup-admin:{"pesan"}
