@@ -62,11 +62,12 @@ async function kirimTelegram(text) {
   if (!res.ok) throw new Error(`Telegram ${res.status} ${(await res.text()).slice(0, 150)}`);
 }
 
-// Grup WA crew "Tetra Crew": briefing event dari Tetra Ops (perintah send-grup-crew). Diberi tanda pesan otomatis.
+// Grup WA crew "Tetra Crew": briefing & pengingat rekap dari Tetra Ops (perintah send-grup-crew). Tanda pesan
+// otomatis dibuat halus di bawah (Rama 9 Okt: "catatan dikirim botnya subtle aja").
 async function kirimGrupCrew(sock, teks) {
   const grup = live.get().CREW_GROUP_JID;
   if (!grup || !grup.endsWith('@g.us')) return null;
-  const g = await sock.sendMessage(grup, { text: `🤖 _Briefing otomatis dari Tetra Ops (bot)._\n\n${teks}` })
+  const g = await sock.sendMessage(grup, { text: `${teks}\n\n_🤖 otomatis_` })
     .catch((e) => { console.error('[notif] gagal ke grup crew:', e.message); return null; });
   if (g) { rememberBotMsg(g); deliveryLog.track(g, 'briefing→grup-crew'); }
   return g;

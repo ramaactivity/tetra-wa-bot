@@ -15,6 +15,6 @@ const assert = require('assert');
   const { kirimGrupCrew } = require('./src/lib/notify');
   const k2 = [];
   await kirimGrupCrew({ sendMessage: async (j, m) => { k2.push([j, m.text]); return { key: { id: 'y' } }; } }, 'BRIEFING BESOK');
-  assert(k2.length === 1 && k2[0][0] === '1205@g.us' && k2[0][1].startsWith('🤖 _Briefing otomatis') && k2[0][1].endsWith('BRIEFING BESOK'));
+  assert(k2.length === 1 && k2[0][0] === '1205@g.us' && k2[0][1].startsWith('BRIEFING BESOK') && k2[0][1].endsWith('_🤖 otomatis_'));
   console.log('UJI NOTIF GRUP LOLOS');
 })();
