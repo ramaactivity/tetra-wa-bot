@@ -619,7 +619,14 @@ function startCommandPoller() {
       }
     }
   };
-  const t = setInterval(() => tick().catch((e) => console.error('[cmd] poller:', e.message)), POLL_MS);
+  // Satu tick saja dalam satu waktu. Mengirim beberapa pesan (jeda mengetik) bisa >10 dtk; tanpa penjaga ini tick
+  // berikutnya mengambil perintah yang masih pending dan mengirimnya lagi (10 Okt: galeri ke Firda & Nisa terkirim 2x).
+  let tickJalan = false;
+  const t = setInterval(() => {
+    if (tickJalan) return;
+    tickJalan = true;
+    tick().catch((e) => console.error('[cmd] poller:', e.message)).finally(() => { tickJalan = false; });
+  }, POLL_MS);
   if (t.unref) t.unref();
 }
 
