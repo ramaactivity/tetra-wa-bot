@@ -447,7 +447,12 @@ async function kirimRelasi(raw) {
   relasiWa.catat(nomor, pesan);
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'relasi→wa');
-  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[pesan dari tim Tetra: ${String(p.alasan || '').slice(0, 150)}]`);
+  // Baileys 7: balasan kontak sering datang dari jid @lid, bukan @s.whatsapp.net. Catat di keduanya supaya CS
+  // tahu konteksnya, dan lepas pause handoff bot (tim sudah menjawab) supaya balasan berikutnya dilayani.
+  const lid = await currentSock.signalRepository?.lidMapping?.getLIDForPN?.(jid).catch(() => null);
+  const jids = [...new Set([jid, lid].filter(Boolean))];
+  for (const j of jids) store.tambahRiwayat(j, 'assistant', `${pesan}\n[pesan dari tim Tetra: ${String(p.alasan || '').slice(0, 150)}]`);
+  await supa.hapusPauseAi(jids);
   console.log(`💌 Pesan relasi terkirim ke ${nomor} (${String(p.alasan || '').slice(0, 60)})`);
   return { ok: true, pesan: `terkirim ke ${nomor} id=${sent?.key?.id}` };
 }

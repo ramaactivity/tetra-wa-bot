@@ -13,13 +13,15 @@ async function cari(q, tanggal) {
   if (!r.ok || !Array.isArray(r.json?.hasil)) return null;
   return r.json.hasil.map((e) => {
     const g = (e.galeri || []).find((x) => x.url_tamu) || {};
-    return { judul: e.judul, tanggal: e.tanggal, url: g.url_tamu || null, jumlah: g.jumlah_foto || 0, sampai: g.aktif_sampai || null };
+    return { judul: e.judul, tanggal: e.tanggal, url: g.url_tamu || null, jumlah: g.jumlah_foto || 0, sampai: g.tamu_aktif_sampai || null };
   });
 }
 
 const tgl = (iso) => {
   if (!iso) return '';
-  const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  // Jam ada (mis. 2026-11-08T17:00Z) → tanggal WIB (9 Nov); tanggal polos apa adanya.
+  const w = String(iso).length > 10 ? new Date(Date.parse(iso) + 7 * 3600e3).toISOString() : String(iso);
+  const [y, m, d] = w.slice(0, 10).split('-').map(Number);
   return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][m - 1]}${y !== new Date().getFullYear() ? ` ${y}` : ''}`;
 };
 

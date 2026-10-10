@@ -371,6 +371,17 @@ async function upsertContactAuto(jid, fields) {
 }
 
 // Hapus pause (Admin Hand-back) — panggil ini via command queue (Selesai/Done)
+// Handoff otomatis bot (source 'ai') selesai begitu tim Tetra membalas lewat send-relasi (10 Okt: tamu bilang
+// makasih setelah dikirimi link galeri, bot diam karena masih pause handoff). Pause dari admin tidak disentuh.
+async function hapusPauseAi(jids) {
+  if (!supa || !jids.length) return;
+  try {
+    const { error } = await supa.from('bot_paused_contacts').delete().in('wa_jid', jids).eq('source', 'ai');
+    if (error) console.error('[supa] hapusPauseAi:', error.message);
+  } catch (e) {
+    console.error('[supa] hapusPauseAi:', e.message);
+  }
+}
 async function hapusPause(waJid) {
   if (!supa) return;
   try {
@@ -472,6 +483,7 @@ async function stopProspek(nomor, teks) {
   return p;
 }
 module.exports = {
+  hapusPauseAi,
   cariProspek,
   stopProspek,
   catatJawabanProspek,

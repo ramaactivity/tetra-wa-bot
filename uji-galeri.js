@@ -1,7 +1,7 @@
 // Uji alur tamu minta foto acara (lib/galeri.js): kapan link dikirim, ditanya, atau diteruskan ke admin.
 const assert = require('assert');
 const { putuskan, RE_MINTA } = require('./src/lib/galeri');
-const dinda = { judul: 'Wedding Rafi & Dinda', tanggal: '2026-10-10', url: 'https://booth.tetraphoto.com/l/wedding-rafi-dinda-2026-10-10', jumlah: 319, sampai: '2026-11-09' };
+const dinda = { judul: 'Wedding Rafi & Dinda', tanggal: '2026-10-10', url: 'https://booth.tetraphoto.com/l/wedding-rafi-dinda-2026-10-10', jumlah: 319, sampai: '2026-11-08T17:00:00+00:00' };
 const adel = { ...dinda, judul: 'Wedding Adel & Alpi', url: 'https://booth.tetraphoto.com/l/wedding-adel-alpi-2026-10-10' };
 
 let k = putuskan({ nama: 'Dinda Rafi', tanggal: '2026-10-10' }, [dinda], false);
