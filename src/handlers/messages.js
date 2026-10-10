@@ -259,7 +259,7 @@ async function layaniGaleri(sock, msg, keys, teks, gambar) {
   if (k.aksi === 'admin') {
     galeri.ditanya.delete(jid);
     await handoff(sock, msg, `Minta foto/softfile acara: ${k.alasan}`,
-      'Sebentar ya Kak, link galerinya aku cek dulu ke admin, nanti dikabari di chat ini 🙏', teks);
+      'Bentar ya Kak, link galerinya aku tanyain ke admin dulu. Nanti aku kabarin di sini 🙏', teks);
     return true;
   }
   if (k.aksi === 'tanya') galeri.ditanya.set(jid, Date.now()); else galeri.ditanya.delete(jid);
@@ -294,7 +294,7 @@ const RE_KLAIM = new RegExp(
 // Klaim palsu hanya dicatat sebagai PERUBAHAN kalau klien memang membahas booking (8 Okt: "ohh boleh" Kak Nadia
 // jadi notif perubahan palsu ke grup owner).
 const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|\bubah|ganti|batal|cancel|booking|durasi|paket|extend|tambah (jam|unit)/i;
-const KALIMAT_AMAN = 'Untuk perubahan itu aku teruskan ke admin dulu ya Kak, biar dicek dan diperbarui di jadwal. Nanti admin konfirmasi langsung di chat ini.';
+const KALIMAT_AMAN = 'Oke Kak, aku sampaikan ke admin dulu ya biar dicek jadwalnya. Nanti admin yang kabarin di sini.';
 
 // Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
 // balasan teks, sekali per percakapan (label dicek di riwayat; format label sama
@@ -663,7 +663,7 @@ function registerMessageHandler(sock) {
       // transfer) hanya admin yang boleh menilai. 24 Sep bot sempat bilang
       // "DP sudah masuk" padahal tidak bisa melihat gambar maupun rekening.
       if (t.trim() === '[kirim voice note]') {
-        const minta = 'Kak, voice note belum bisa aku putar di sini. Boleh diketik singkat?';
+        const minta = 'Maaf Kak, voice note belum bisa aku putar di sini. Boleh diketik aja?';
         tambahRiwayat(jid, 'user', originalText);
         tambahRiwayat(jid, 'assistant', minta);
         await sendReply(sock, jid, keys, { name: 'voice-note' }, minta);
@@ -683,7 +683,7 @@ function registerMessageHandler(sock) {
             const b = booking.get(jid);
             b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
             await perbaruiBooking(jid, null);
-            const ack = 'Sudah aku terima Kak, aku teruskan ke tim Tetra ya.';
+            const ack = 'Oke Kak, udah masuk. Aku terusin ke tim ya.';
             tambahRiwayat(jid, 'assistant', ack);
             await sendReply(sock, jid, keys, { name: 'file-booking' }, ack);
             await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), soalBayar
@@ -691,7 +691,7 @@ function registerMessageHandler(sock) {
               : 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
           } else {
             await mulaiBooking(jid, msg, 'bukti-transfer',
-              'Makasih Kak, bukti transfernya sudah aku terima. Admin cek dulu ke rekening, setelah terverifikasi invoice-nya dikirim di chat ini.',
+              'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
               'Bukti DP masuk — cek mutasi BCA, lalu input booking');
           }
           return;
@@ -703,7 +703,7 @@ function registerMessageHandler(sock) {
           if (buf && await layaniGaleri(sock, msg, keys, originalText, buf.toString('base64'))) return;
         }
         await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
-          'Sudah aku terima Kak. Admin cek dulu, nanti dibalas langsung di chat ini.', originalText);
+          'Udah masuk Kak, aku cek dulu ke admin ya. Nanti dibalas di sini.', originalText);
         return;
       }
 
@@ -713,21 +713,21 @@ function registerMessageHandler(sock) {
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
       if (!vendor && !lead && isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
-          'Untuk kerja sama atau kemitraan, ini langsung dibahas sama founder kami. Aku teruskan ya Kak, nanti dibalas di chat ini.', originalText);
+          'Soal kerja sama ini biasanya langsung dibahas sama owner kami, Kak. Aku sampaikan dulu ya, nanti dibalas di sini.', originalText);
         return;
       }
 
       // ── 2. Purna-jual → handoff admin ──
       if (!lead && isPostSale(t)) {
         await handoff(sock, msg, 'Purna-jual (softfile/invoice/bayar/reschedule)',
-          'Untuk urusan ini aku teruskan ke admin ya Kak, datanya mereka yang pegang. Nanti dibalas langsung di chat ini.', originalText);
+          'Yang ini datanya dipegang admin, Kak. Aku terusin dulu ya, nanti dibalas di sini.', originalText);
         return;
       }
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
       if (!lead && isSpecialProduct(t)) {
         await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)',
-          'Itu di luar paket unlimited standar, harga dan ketersediaannya beda. Aku teruskan ke tim ya Kak, nanti diinfokan langsung di sini.', originalText);
+          'Yang itu di luar paket unlimited biasa Kak, jadi harga sama jadwalnya beda. Aku tanyain ke tim dulu ya, nanti aku kabarin di sini.', originalText);
         return;
       }
 
@@ -779,7 +779,7 @@ function registerMessageHandler(sock) {
         const kalimat = aiResponse.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
         const aman = kalimat && kalimat.length <= 260 && !RE_KLAIM.test(kalimat) && !/\bRp\.?\s?\d/i.test(kalimat);
         await handoff(sock, msg, `Handoff diminta oleh AI${aman ? `: ${kalimat.slice(0, 120)}` : ''}`,
-          aman ? kalimat : 'Yang ini aku cek dulu ke admin ya Kak, nanti aku kabari langsung di chat ini.', originalText);
+          aman ? kalimat : 'Bentar ya Kak, yang ini aku tanyain ke admin dulu. Nanti aku kabarin di sini.', originalText);
         return;
       }
 
@@ -869,7 +869,7 @@ function registerMessageHandler(sock) {
       if (!originalText || !bolehBalas) return;
       try {
         await handoff(sock, msg, `Bot error: ${err.message.slice(0, 120)}`,
-          'Sebentar ya Kak, pesannya aku teruskan ke admin biar dibalas langsung.', originalText);
+          'Bentar ya Kak, aku sampaikan ke admin dulu biar langsung dibalas.', originalText);
       } catch (e2) {
         console.error('Handoff darurat gagal:', e2.message);
       }

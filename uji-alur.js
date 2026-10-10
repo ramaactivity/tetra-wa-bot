@@ -72,7 +72,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   assert.match(r.kirim[0], /voice note/); assert.strictEqual(r.notif.length, 0);
 
   r = await kirim({ imageMessage: {} });
-  assert.match(r.kirim[0], /Admin cek dulu/); assert.strictEqual(r.pause[0].s, 'ai');
+  assert.match(r.kirim[0], /cek dulu ke admin/); assert.strictEqual(r.pause[0].s, 'ai');
   assert.ok(Math.abs(r.pause[0].jam - 2) < 0.01, 'handoff AI harus pause 2 jam');
 
   // Tahap percakapan & eksperimen A/B masuk konteks AI (keputusan Rama 1 Okt)
@@ -97,7 +97,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
 
   aiJawab = new Error('Sumopod & 9Router mati');
   r = await kirim({ conversation: 'halo kak mau tanya' });
-  assert.match(r.kirim[0], /teruskan ke admin/); assert.strictEqual(r.notif.length, 1);
+  assert.match(r.kirim[0], /ke admin/); assert.strictEqual(r.notif.length, 1);
 
   // INFO_ADMIN: penanda dibuang dari balasan, admin dapat notif INFO, bot tidak pause
   aiJawab = 'Untuk promo nanti admin yang info ya Kak.\n[INFO_ADMIN: tanya promo]';
@@ -187,7 +187,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   aiJawab = 'Geser ke 10.00-13.00 aman Kak, sudah aku perbarui ya jadwalnya.';
   r = await kirim({ conversation: 'kak jamnya digeser jam 10-1 bisa?' }, jidK);
   assert.strictEqual(r.kirim.length, 1); assert.ok(!/sudah aku perbarui/.test(r.kirim[0]), 'klaim palsu terkirim');
-  assert.match(r.kirim[0], /teruskan ke admin/);
+  assert.match(r.kirim[0], /ke admin/);
   assert.ok(r.notif.some((n) => n.startsWith('PERUBAHAN:')), 'admin tidak dikabari (WA)');
   assert.ok(r.tg.some((t) => /perubahan/i.test(t)), 'admin tidak dikabari (Telegram)');
   let panggil = 0;
@@ -267,7 +267,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
   await kirim({ conversation: 'aku udah transfer dp ya kak' }, jidB);
   ekstrak = { tanggal: 'Sabtu, 5 Des 2026', tanggal_iso: '2026-12-05', paket: '3 jam', lokasi: 'Sentul' };
   r = await kirim({ imageMessage: {} }, jidB);
-  assert.match(r.kirim[0], /bukti transfernya sudah aku terima/); assert.match(r.kirim[0], /\*1\. Data acara\*/);
+  assert.match(r.kirim[0], /bukti transfernya udah masuk/); assert.match(r.kirim[0], /\*1\. Data acara\*/);
   assert.match(r.kirim[0], /Tanggal: Sabtu, 5 Des 2026/, 'form tidak terisi otomatis');
   assert.ok(r.kirim.includes('[DOK KATALOG DESAIN FRAME TETRA.pdf]'), 'katalog tidak terkirim');
   assert.deepStrictEqual(r.wa[0], '[FORWARD]', 'bukti transfer tidak diteruskan ke admin');
@@ -294,7 +294,7 @@ async function kirim(message, jid = `62800${++n}@s.whatsapp.net`) {
 
   // Gambar di tahap booking → diteruskan, bot tetap melayani, tidak mulai ulang
   r = await kirim({ imageMessage: {} }, jidB);
-  assert.deepStrictEqual(r.kirim, ['Sudah aku terima Kak, aku teruskan ke tim Tetra ya.']);
+  assert.deepStrictEqual(r.kirim, ['Oke Kak, udah masuk. Aku terusin ke tim ya.']);
   assert.ok(r.wa.includes('[FORWARD]'));
 
   // Admin konfirmasi DP manual → form + katalog

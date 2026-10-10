@@ -4,7 +4,7 @@
 // di tanggal yang sama bisa ada dua wedding (Dinda & Rafi + Adel & Alpi), salah kirim = foto orang lain.
 const { postOps } = require('./availability');
 
-const RE_MINTA = /soft ?file|file foto|hasil foto|foto ?-?(2|an)?\s?(nya|photobooth|booth)|fotonya|link (foto|galer[iy]|gallery)|galer[iy]|gallery|barcode|\bqr\b|(download|unduh|ambil) foto/i;
+const RE_MINTA = /soft ?file|file [fp]oto|hasil [fp]oto|[fp]oto ?-?(2|an)?\s?(nya|photobooth|booth)|[fp]otonya|link ([fp]oto|galer[iy]|gallery)|galer[iy]|gallery|barcode|\bqr\b|(download|unduh|ambil) [fp]oto|kirim\w*\s*(kan\s*)?[fp]oto/i;
 const TANYA_MS = 30 * 60 * 1000;
 const ditanya = new Map(); // jid -> waktu bot menanyakan nama/tanggal acara (ponytail: memori proses, hilang saat restart)
 
