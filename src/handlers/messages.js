@@ -5,7 +5,7 @@
 // transfer / konfirmasi DP admin → tahap booking (lib/booking.js).
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
-const { proto } = require('@whiskeysockets/baileys');
+const { proto, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
@@ -14,13 +14,14 @@ const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin, kirimTelegram } = require('../lib/notify');
-const { eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
+const { ekstrakGaleri, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
 const prospekWa = require('../lib/prospekWa');
 const timWa = require('../lib/timWa');
 const portal = require('../lib/portal');
+const galeri = require('../lib/galeri');
 // Klien lama yang membalas sapaan reaktivasi sales: CS harus tahu konteksnya.
 // ponytail: hanya di memori proses; hilang saat restart (balasan berikutnya mengisinya lagi).
 const klienLamaCtx = new Map();
@@ -241,6 +242,31 @@ async function handoff(sock, msg, alasan, jawabanKlien, teksKlien) {
   await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
   await notifyAdmin(sock, phoneDigits(msg), { name: 'HANDOFF' }, getRiwayat(jid), alasan);
   await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
+}
+
+// Tamu/klien minta foto acara (lib/galeri.js). Mengembalikan true kalau sudah ditangani; false = bukan
+// permintaan foto acara (mis. calon klien minta contoh hasil) → alur biasa lanjut.
+async function layaniGaleri(sock, msg, keys, teks, gambar) {
+  const jid = msg.key.remoteJid;
+  // Beberapa pesan terakhir ikut dibaca: nama acara sering di bubble sebelumnya ("wedding dinda rafi" lalu foto cetakan).
+  const konteks = [...getRiwayat(jid).slice(-4).map((x) => `${x.role === 'user' ? 'PENGIRIM' : 'TETRA'}: ${x.content}`), `PENGIRIM: ${teks}`].join('\n');
+  const p = await ekstrakGaleri(konteks, gambar).catch((e) => { console.error('[galeri] ekstrak gagal:', e.message); return null; });
+  const sudahDitanya = Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS;
+  if (!p || !(p.minta_foto_acara || p.cetakan_photobooth || (sudahDitanya && p.nama))) return false;
+  const hasil = await galeri.cariDariPetunjuk(p);
+  const k = galeri.putuskan(p, hasil, sudahDitanya);
+  console.log(`[galeri] ${jid} nama=${p.nama} tgl=${p.tanggal} cetakan=${p.cetakan_photobooth} → ${k.aksi}${k.alasan ? ` (${k.alasan})` : ''}`);
+  if (k.aksi === 'admin') {
+    galeri.ditanya.delete(jid);
+    await handoff(sock, msg, `Minta foto/softfile acara: ${k.alasan}`,
+      'Sebentar ya Kak, link galerinya aku cek dulu ke admin, nanti dikabari di chat ini 🙏', teks);
+    return true;
+  }
+  if (k.aksi === 'tanya') galeri.ditanya.set(jid, Date.now()); else galeri.ditanya.delete(jid);
+  tambahRiwayat(jid, 'user', teks);
+  tambahRiwayat(jid, 'assistant', k.teks);
+  await sendReply(sock, jid, keys, { name: `galeri-${k.aksi}` }, k.teks);
+  return true;
 }
 
 // ── Penundaan balasan (debounce per kontak) ──────────────────────────────────
@@ -670,11 +696,20 @@ function registerMessageHandler(sock) {
           }
           return;
         }
+        // Foto cetakan photobooth (tamu minta softfile): baca nama & tanggal di frame, kirim link galeri tamu.
+        const gbr = media.find((m) => m.message?.imageMessage);
+        if (gbr) {
+          const buf = await downloadMediaMessage(gbr, 'buffer', {}).catch((e) => { console.error('[galeri] unduh gambar gagal:', e.message); return null; });
+          if (buf && await layaniGaleri(sock, msg, keys, originalText, buf.toString('base64'))) return;
+        }
         await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
           'Sudah aku terima Kak. Admin cek dulu, nanti dibalas langsung di chat ini.', originalText);
         return;
       }
 
+      // ── 0b. Minta foto/softfile/link galeri acara → link galeri tamu (bukan handoff purna-jual) ──
+      if (!lead && (galeri.RE_MINTA.test(t) || Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS) &&
+          !/invoice|kwitansi|nota|bayar|pelunasan|reschedule/i.test(t) && await layaniGaleri(sock, msg, keys, originalText)) return;
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
       if (!vendor && !lead && isKemitraan(t)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',

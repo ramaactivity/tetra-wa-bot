@@ -610,4 +610,32 @@ async function nilaiFollowup(transkrip, ringkasan) {
   }
 }
 
-module.exports = { pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+// Tamu minta foto/softfile acara (lib/galeri.js): ambil nama acara + tanggal dari chat dan/atau foto cetakan
+// photobooth (nama & tanggal tercetak di frame). Model yang sama bisa melihat gambar (format image_url OpenAI).
+async function ekstrakGaleri(teks, gambarB64) {
+  const hariIni = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  const isi = [{ type: 'text', text: `PESAN WHATSAPP:\n${teks || '(tanpa teks)'}` }];
+  if (gambarB64) isi.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${gambarB64}` } });
+  const messages = [
+    { role: 'system', content:
+      'Kamu membantu CS Tetra Photobooth. Kembalikan HANYA objek JSON tanpa teks lain:\n' +
+      '{"minta_foto_acara": true|false, "cetakan_photobooth": true|false, "nama": "…"|null, "tanggal": "YYYY-MM-DD"|null}\n' +
+      '- minta_foto_acara: pengirim meminta foto/softfile/link galeri dari acara yang SUDAH/SEDANG berlangsung (tamu atau klien). ' +
+      'Calon klien yang minta CONTOH hasil, pricelist, atau tanya harga = false.\n' +
+      '- cetakan_photobooth: gambar adalah foto hasil cetak photobooth (strip/frame berisi foto dan nama acara). Bukti transfer, screenshot, desain = false.\n' +
+      '- nama: nama orang/acara/perusahaan yang disebut di pesan atau tercetak di frame, HANYA kata namanya (buang "the wedding of", "wedding", "birthday", "&", "dan"). ' +
+      'Contoh: "THE WEDDING OF Dinda & Rafi" → "Dinda Rafi". Tidak ada → null.\n' +
+      `- tanggal: tanggal acara. Hari ini ${hariIni}. "10.10.26" = 2026-10-10 (format tanggal Indonesia: hari.bulan.tahun). ` +
+      '"tadi"/"hari ini" = hari ini, "kemarin" = kemarin. Tidak jelas → null. Jangan menebak.' },
+    { role: 'user', content: isi },
+  ];
+  const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
+  let raw;
+  try { raw = await ambil(PRIMARY); }
+  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) return {};
+  try { return JSON.parse(m[0]); } catch { return {}; }
+}
+
+module.exports = { ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
