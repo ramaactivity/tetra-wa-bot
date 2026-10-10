@@ -138,7 +138,14 @@ const PRIMARY = {
   url: (process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1') + '/chat/completions',
   key: process.env.AI_API_KEY || '',
   model: process.env.AI_MODEL || 'gemini/gemini-3.1-flash-lite',
+  // Audit token 10 Okt 2026: Gemini 3.8 berpikir ~860 token per balasan (dibayar harga output). "low" lewat Sumopod
+  // = tanpa jatah mikir; uji 6 skenario: 5/6 lolos, output -92%, 3x lebih cepat. Kosongkan env untuk default model.
+  effort: process.env.AI_REASONING_EFFORT ?? 'low',
 };
+// Uji bayangan (Rama setuju 10 Okt): model murah ikut menulis jawaban untuk chat yang sama, TIDAK dikirim, hanya dicatat
+// di data/bayangan.jsonl untuk dibandingkan seminggu. Kosongkan AI_SHADOW_MODEL untuk mematikan.
+const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
+const SHADOW_FILE = path.join(__dirname, '..', '..', 'data', 'bayangan.jsonl');
 const FALLBACK = {
   url: (process.env.AI_FALLBACK_BASE_URL || '') + '/chat/completions',
   key: process.env.AI_FALLBACK_API_KEY || '',
@@ -353,8 +360,9 @@ function catatPemakaian(model, data, msg) {
   fs.appendFile(USAGE_FILE, JSON.stringify(baris) + '\n', () => {});
 }
 
-async function kirim({ url, key, model }, messages, pakaiAlat = true) {
+async function kirim({ url, key, model, effort }, messages, pakaiAlat = true) {
   const body = { model, messages, temperature: 0.4, stream: false };
+  if (effort) body.reasoning_effort = effort;
   if (pakaiAlat && availAktif()) body.tools = TOOLS;
   const res = await fetch(url, {
     method: 'POST',
@@ -499,7 +507,15 @@ async function panggil(endpoint, history, message, leadContext) {
 
 async function getAIResponse(history, message, leadContext) {
   try {
-    return await panggil(PRIMARY, history, message, leadContext);
+    const jawab = await panggil(PRIMARY, history, message, leadContext);
+    if (SHADOW) {
+      const t = Date.now();
+      panggil(SHADOW, history, message, leadContext)
+        .then((b) => fs.appendFile(SHADOW_FILE, JSON.stringify({ t, ms: Date.now() - t, model: SHADOW.model,
+          pesan: String(message).slice(0, 1500), utama: jawab, bayangan: b }) + '\n', () => {}))
+        .catch((e) => console.error(`[bayangan] ${SHADOW.model} gagal: ${e.message}`));
+    }
+    return jawab;
   } catch (e) {
     console.error(`[ai] Sumopod gagal: ${e.message}`);
     if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
