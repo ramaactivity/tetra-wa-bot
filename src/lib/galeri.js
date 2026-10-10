@@ -31,17 +31,17 @@ function putuskan(p, hasil, sudahDitanya) {
   if (hasil.length === 1) {
     const e = hasil[0];
     if (!e.url) return { aksi: 'admin', alasan: `galeri tamu ${e.judul} (${e.tanggal}) belum aktif/expired` };
-    const teks = `Halo Kak 👋 ini galeri foto photobooth ${e.judul} (${tgl(e.tanggal)}) ya. Semua fotonya bisa dilihat & diunduh di sini:\n${e.url}\n\n` +
-      (e.jumlah ? 'Tinggal cari fotonya, bisa langsung download 😊' : 'Fotonya masih proses upload, kalau belum muncul coba buka lagi sebentar ya 😊') +
-      (e.sampai ? ` Galerinya aktif sampai ${tgl(e.sampai)}, jangan lupa disimpan ya.` : '');
+    // Gaya (Rama 10 Okt): seperti admin manusia, bukan template bot. Tamu yang nanya biasanya gagal scan QR → minta maaf.
+    const teks = `Ini Kak link galerinya, semua foto di acara ${e.judul} ada di sini ya:\n${e.url}\n\n` +
+      (e.jumlah ? 'Bisa langsung didownload. ' : 'Fotonya masih proses upload, kalau belum muncul coba buka lagi agak nanti ya. ') +
+      (e.sampai ? `Linknya aktif sampai ${tgl(e.sampai)}. ` : '') + 'Mohon maaf ya jadi repot nyari 🙏';
     return { aksi: 'kirim', teks, acara: e };
   }
   if (sudahDitanya || (p.nama && p.tanggal)) {
     return { aksi: 'admin', alasan: hasil.length ? `${hasil.length} acara cocok (${hasil.map((e) => e.judul).join(', ')}), perlu dipilih admin`
       : `acara tidak ketemu (nama: ${p.nama || '-'}, tanggal: ${p.tanggal || '-'})` };
   }
-  return { aksi: 'tanya', teks: 'Boleh tahu nama acaranya Kak (mis. nama pengantin / yang ulang tahun / perusahaannya) dan tanggal acaranya? ' +
-    'Kirim foto cetakannya juga bisa, nanti aku carikan link galerinya 😊' };
+  return { aksi: 'tanya', teks: 'Acaranya siapa ya Kak, sama tanggal berapa? Foto cetakannya dikirim ke sini juga boleh, nanti aku cariin linknya.' };
 }
 
 /** Cari dengan nama+tanggal; nama saja kalau tanggal tidak membantu. Tanggal saja tidak pernah (bisa >1 acara). */

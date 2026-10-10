@@ -5,7 +5,7 @@ const dinda = { judul: 'Wedding Rafi & Dinda', tanggal: '2026-10-10', url: 'http
 const adel = { ...dinda, judul: 'Wedding Adel & Alpi', url: 'https://booth.tetraphoto.com/l/wedding-adel-alpi-2026-10-10' };
 
 let k = putuskan({ nama: 'Dinda Rafi', tanggal: '2026-10-10' }, [dinda], false);
-assert.strictEqual(k.aksi, 'kirim'); assert(k.teks.includes(dinda.url) && k.teks.includes('10 Okt') && k.teks.includes('9 Nov'));
+assert.strictEqual(k.aksi, 'kirim'); assert(k.teks.includes(dinda.url) && k.teks.includes('Rafi & Dinda') && k.teks.includes('9 Nov') && k.teks.includes('maaf'));
 k = putuskan({ nama: 'Dinda', tanggal: null }, [{ ...dinda, jumlah: 0 }], false);
 assert(k.teks.includes('proses upload'), 'foto 0 → bilang masih diupload');
 assert.strictEqual(putuskan({ nama: null, tanggal: '2026-10-10' }, [dinda, adel], false).aksi, 'tanya', 'dua acara sehari tidak boleh ditebak');
