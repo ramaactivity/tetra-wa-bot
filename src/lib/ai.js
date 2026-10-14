@@ -146,6 +146,9 @@ const PRIMARY = {
 // di data/bayangan.jsonl untuk dibandingkan seminggu. Kosongkan AI_SHADOW_MODEL untuk mematikan.
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
 const SHADOW_FILE = path.join(__dirname, '..', '..', 'data', 'bayangan.jsonl');
+// Baca foto cetakan (galeri tamu) butuh model yang bisa melihat gambar. DeepSeek V4 Flash tidak bisa (uji 14 Okt:
+// gambar diabaikan tanpa error), jadi tetap Gemini apa pun model utamanya.
+const VISION = { ...PRIMARY, model: process.env.AI_VISION_MODEL || 'gemini/gemini-3.8-flash', effort: '' };
 const FALLBACK = {
   url: (process.env.AI_FALLBACK_BASE_URL || '') + '/chat/completions',
   key: process.env.AI_FALLBACK_API_KEY || '',
@@ -164,7 +167,7 @@ CARA NGOBROL (ini yang membedakan manusia dari bot):
 - Emoji maksimal 1 per pesan, boleh tidak ada. Jangan 🙌 di tiap pesan.
 - Pendek. 2–5 baris untuk obrolan biasa. Saat rekomendasi, isi paket cukup SATU kalimat dengan maks 3 hal paling relevan untuk acaranya (mis. "sudah termasuk cetak sepuasnya, frame custom, dan crew"). Bullet hanya kalau klien minta rinciannya.
 - Pertanyaan yang sudah kamu ajukan tapi belum dijawab klien: jangan ulang di pesan berikutnya. Jawab dulu yang dia tanya; ulang paling banyak sekali, dengan kalimat lain.
-- Klien cuma menutup (makasih/siap/ok/👍) setelah kamu sudah menutup → balas persis [DIAM]. Klien bilang mau diskusi/info ke orang lain dulu → dukung singkat, tanpa pertanyaan "kapan".
+- Klien cuma menutup (makasih/siap/ok/👍, atau "sama-sama"/"kembali kasih" atas terima kasihmu) setelah kamu sudah menutup → balas persis [DIAM], tanpa teks dan penanda lain. Klien bilang mau diskusi/info ke orang lain dulu → dukung singkat, tanpa pertanyaan "kapan".
 - Angka & kata kunci boleh *bold* dengan SATU asterisk. Jangan bold semua.
 - Jangan ulangi kalimat yang sudah kamu tulis sebelumnya ("slot masih tersedia" cukup disebut sekali).
 - DILARANG kata robot: "semoga", "terima kasih kembali", "senang membantu", "ada yang bisa saya bantu?", "kami informasikan", "demikian kami sampaikan", "form booking", "follow up", "sekadar mengingatkan", "ramaikan", "keseruan", "berkesan", "momen spesial", "siap bantu", "btw", "selamat menikmati", "sehat selalu", "sukses selalu", "salam sehat", "kontak kami selalu terbuka", "lancar-lancar", "bisa banget", "boleh banget", "pas banget", "nggak apa-apa banget".
@@ -236,7 +239,9 @@ ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Jangan pura-pura kenal venue ("tempatnya adem dan luas"). Kamu belum tentu pernah ke sana.
 - Yang tidak ada di daftar harga maupun FAQ (paket custom, biaya transport luar Jabodetabek/Magazine Box, harga backdrop Luxury): bilang terus terang admin yang info harganya, tetap layani pertanyaan lain.
 - Fakta operasional (transport, kebutuhan venue, backdrop, format cetak, pajak, promo, setelah DP) ada di FAQ KLIEN di bawah. Yang tidak tertulis di sini maupun di FAQ jangan dijawab dengan tebakan; kalau itu inti pertanyaannya, pakai HANDOFF.
-- Kamu TIDAK BISA melihat gambar/dokumen/voice note dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
+- Jawab MAKSUD pesan TERAKHIR klien. Topik baru jangan dijawab dengan topik lama: minta unduh/softfile foto acara ≠ pricelist, tanya lowongan kerja ≠ cek tanggal kosong, komplain ≠ jualan.
+- Pertanyaan di luar sewa photobooth yang jawabannya tidak ada di sini (lowongan kerja/magang, dll): jangan mengarang. Bilang nanti tim yang kabari, lalu [INFO_ADMIN: <topiknya>].
+- Kamu TIDAK BISA melihat gambar/dokumen/voice note (jangan menebak isinya; kalau perlu tanya singkat maksudnya) dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
 - Riset harga / benchmark / survei vendor: jawab rate card standar apa adanya (harga + yang termasuk). Jangan tanya skema kerja sama, bagi hasil, atau sponsor.
 
 BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya bukan obrolan dengan Tetra soal jasa photobooth: ucapan selamat/doa/broadcast ke banyak orang, auto-reply bot lain, promosi vendor, pesan salah kirim. Termasuk usaha lain (bakery, catering, dekor, MUA, WO) yang mengirim ucapan selamat untuk pengantin/klien mereka atau portofolio acara: itu broadcast, BUKAN permintaan photobooth, walaupun menyebut pernikahan/tanggal/kota. Jangan tanya tanggal acaranya. Kalau usaha lain terang-terangan mengajak kenalan/kerja sama, ikuti bagian VENDOR / REKANAN (calon rekanan baru). Kalau ragu, balas biasa.
@@ -322,13 +327,42 @@ function angkaRupiah(teks) {
 // (kutip aturan diskon, draf, "Cek aturan:") lalu jawaban di ujung — semuanya terkirim ke klien. Tanda bocor:
 // ≥2 kalimat aturan prompt/strategi tersalin utuh (satu saja bisa template sah, mis. skema kerja sama vendor),
 // atau baris khas catatan internal.
-const RE_PIKIRAN = /^\s*(?:[-*]\s*)?(?:aturan\b|cek aturan|klien (?:bilang|cuma|sudah|minta|mau)\b|mari\b|tunggu[:,]|wait\b|balasan (?:singkat|final|untuk klien)|atau lebih natural|jadi:|draf\b)/im;
+// DeepSeek berpikir dalam bahasa Inggris ("We need...", "The user...") — penandanya ikut dijaga.
+const RE_PIKIRAN = /^\s*(?:[-*]\s*)?(?:aturan\b|cek aturan|klien (?:bilang|cuma|sudah|minta|mau|menanyakan)\b|mari\b|tunggu[:,]|wait\b|balasan (?:singkat|final|untuk klien)|atau lebih natural|jadi:|draf\b|we (?:need|should|must)\b|let me\b|let's\b|the (?:user|client|customer)\b|i (?:need|should|will|must)\b|okay,? (?:so|let)|hmm\b|final (?:answer|reply)\b|draft\b)/im;
 function bocorPikiran(teks) {
   if (RE_PIKIRAN.test(teks)) return true;
   const t = normal(teks);
   return (SYSTEM_PROMPT + '\n' + strategi()).split(/\n|(?<=[.!?])\s+/)
     .map((s) => normal(s.replace(/^[\s\-*\d.)]+/, '')))
     .filter((s) => s.length >= 40 && t.includes(s)).length >= 2;
+}
+// Aturan gaya yang tetap dilanggar walau tertulis di prompt (uji buta 14 Okt, 104 pasang Gemini vs DeepSeek: kata
+// terlarang 7×, "saya", balasan 4 paragraf). Dicek di kode. Daftar kata dibaca dari baris "DILARANG kata robot" di
+// prompt, jadi sumbernya tetap satu.
+const KATA_TERLARANG = [...(SYSTEM_PROMPT.match(/DILARANG kata robot:(.*)/)?.[1] || '').matchAll(/"([^"]+)"/g)]
+  .map((m) => m[1].toLowerCase().replace(/\?$/, ''));
+const isiKlien = (teks) => teks.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\S+/g, '').trim();
+function masalahGaya(teks) {
+  const isi = isiKlien(teks);
+  const t = normal(isi);
+  const out = [];
+  const kata = KATA_TERLARANG.filter((k) => t.includes(k));
+  if (kata.length) out.push(`kata terlarang: ${kata.map((k) => `"${k}"`).join(', ')}`);
+  if (/\bsaya\b/i.test(isi)) out.push('sebut diri "aku", bukan "saya"');
+  if ((isi.match(/\p{Extended_Pictographic}/gu) || []).length > 1) out.push('emoji maksimal 1');
+  if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
+  if (isi.split('\n').filter((l) => l.trim()).length > 7 || isi.length > 700) {
+    out.push('terlalu panjang: persingkat jadi maksimal 5 baris pendek (pesan pertama maksimal 7), kecuali klien memang minta rincian/langkah lengkap');
+  }
+  return out;
+}
+const RE_JANJI_ADMIN = /\b(?:teruskan|terusin|tanyain|tanyakan|sampaikan|pastiin|pastikan|konfirmasi(?:kan)?|cek(?:in)?|kabarin)\b[^.\n?]{0,25}\b(?:ke|sama|dengan|dari) (?:admin|owner|tim)\b/i;
+// Jaring terakhir kalau tulis ulang masih memuat kata terlarang: buang kalimatnya (baris penanda [..] tidak disentuh).
+function buangKataTerlarang(teks) {
+  const sisa = teks.split('\n').map((baris) => (baris.trim().startsWith('[') ? baris : baris.split(/(?<=[.!?])\s+/)
+    .filter((k) => !KATA_TERLARANG.some((w) => normal(k).includes(w))).join(' ')))
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return isiKlien(sisa) ? sisa : teks;
 }
 function hargaAsing(teks, sumber) {
   const dasar = [...new Set(angkaRupiah(sumber))];
@@ -409,6 +443,9 @@ async function panggil(endpoint, history, message, leadContext) {
     if (!panggilanAlat.length) {
       let teks = (msg.content || '').trim();
       if (!teks) throw new Error('balasan kosong dari model');
+      // Sumber harga diambil SEBELUM koreksi: balasan salah yang didorong ke messages tidak boleh ikut jadi "sumber"
+      // (dulu nominal karangan yang diulang di tulis ulang jadi lolos).
+      const sumberHarga = messages.map((m) => m.content || '').join('\n');
       if (bocorPikiran(teks)) {
         console.log(`[bocor] pikiran model ikut di balasan — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
@@ -420,14 +457,24 @@ async function panggil(endpoint, history, message, leadContext) {
           return '[ADMIN_HANDOFF]';
         }
       }
-      let asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
+      const gaya = masalahGaya(teks);
+      if (gaya.length) {
+        console.log(`[gaya] ${gaya.join('; ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
+        messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
+          `KOREKSI SISTEM: perbaiki balasan tadi — ${gaya.join('; ')}. Isi, maksud, dan penanda [..] tetap sama. ` +
+          'Tulis HANYA pesan final untuk klien.' });
+        const ulang = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
+        if (ulang && !bocorPikiran(ulang)) teks = ulang;
+        teks = buangKataTerlarang(teks);
+      }
+      let asing = hargaAsing(teks, sumberHarga);
       if (asing.length) {
         console.log(`[harga] nominal tanpa sumber ${asing.join(', ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
           `KOREKSI SISTEM: nominal ${asing.map((n) => 'Rp ' + n.toLocaleString('id-ID')).join(', ')} tidak ada di daftar harga, FAQ, maupun chat. ` +
           'Tulis ulang balasan untuk klien HANYA dengan harga resmi; kalau harganya memang tidak ada, bilang admin yang info.' });
         teks = ((await kirim(endpoint, messages, false)).content || '').trim();
-        asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
+        asing = hargaAsing(teks, sumberHarga);
         if (!teks || asing.length || bocorPikiran(teks)) {
           console.log(`[harga] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
           // Vendor rekanan jangan merasa dilempar bot (Rama): kalimat santai + info admin, tanpa pause.
@@ -435,6 +482,12 @@ async function panggil(endpoint, history, message, leadContext) {
             ? 'Bentar ya, harganya aku pastiin dulu ke admin hehe.\n[INFO_ADMIN: harga untuk vendor perlu dicek admin]'
             : '[ADMIN_HANDOFF]';
         }
+      }
+      // Janji "aku teruskan ke admin" tanpa penanda = admin tidak pernah tahu, klien menunggu selamanya (uji 14 Okt:
+      // DeepSeek di kasus nego). Penanda ditambahkan di kode.
+      if (RE_JANJI_ADMIN.test(isiKlien(teks)) && !/\[(INFO_ADMIN|ADMIN_HANDOFF|SULIT|QUOTATION|PERUBAHAN)/i.test(teks)) {
+        console.log(`[janji] janji ke admin tanpa penanda — INFO_ADMIN ditambahkan: ${teks.slice(0, 80)}`);
+        teks += `\n[INFO_ADMIN: klien menunggu jawaban admin soal "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 80)}"]`;
       }
       return teks.replace(/^\(admin\)\s*/i, ''); // jangan pernah menyamar jadi pesan admin di riwayat
     }
@@ -678,7 +731,7 @@ async function ekstrakGaleri(teks, gambarB64) {
   ];
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
   let raw;
-  try { raw = await ambil(PRIMARY); }
+  try { raw = await ambil(VISION); }
   catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return {};
