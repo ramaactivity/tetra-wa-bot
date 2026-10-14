@@ -318,6 +318,18 @@ function angkaRupiah(teks) {
   }
   return out;
 }
+// Insiden 14 Okt (klien Rakha): dengan reasoning_effort "low" Gemini kadang menulis pikirannya di content
+// (kutip aturan diskon, draf, "Cek aturan:") lalu jawaban di ujung — semuanya terkirim ke klien. Tanda bocor:
+// ≥2 kalimat aturan prompt/strategi tersalin utuh (satu saja bisa template sah, mis. skema kerja sama vendor),
+// atau baris khas catatan internal.
+const RE_PIKIRAN = /^\s*(?:[-*]\s*)?(?:aturan\b|cek aturan|klien (?:bilang|cuma|sudah|minta|mau)\b|mari\b|tunggu[:,]|wait\b|balasan (?:singkat|final|untuk klien)|atau lebih natural|jadi:|draf\b)/im;
+function bocorPikiran(teks) {
+  if (RE_PIKIRAN.test(teks)) return true;
+  const t = normal(teks);
+  return (SYSTEM_PROMPT + '\n' + strategi()).split(/\n|(?<=[.!?])\s+/)
+    .map((s) => normal(s.replace(/^[\s\-*\d.)]+/, '')))
+    .filter((s) => s.length >= 40 && t.includes(s)).length >= 2;
+}
 function hargaAsing(teks, sumber) {
   const dasar = [...new Set(angkaRupiah(sumber))];
   // Kelipatan 1–10 (unit, jam extend, pcs add-on) + diskon 10%; lalu jumlah dua
@@ -397,6 +409,17 @@ async function panggil(endpoint, history, message, leadContext) {
     if (!panggilanAlat.length) {
       let teks = (msg.content || '').trim();
       if (!teks) throw new Error('balasan kosong dari model');
+      if (bocorPikiran(teks)) {
+        console.log(`[bocor] pikiran model ikut di balasan — minta tulis ulang: ${teks.slice(0, 120)}`);
+        messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
+          'KOREKSI SISTEM: balasan tadi memuat catatan/pikiran internal dan kutipan aturan. Klien TIDAK BOLEH melihat ' +
+          'itu. Tulis ulang HANYA pesan final yang dikirim ke klien, tanpa analisis, tanpa kutipan aturan.' });
+        teks = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
+        if (!teks || bocorPikiran(teks)) {
+          console.log('[bocor] tulis ulang masih bocor — diteruskan ke admin, tidak dikirim ke klien');
+          return '[ADMIN_HANDOFF]';
+        }
+      }
       let asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
       if (asing.length) {
         console.log(`[harga] nominal tanpa sumber ${asing.join(', ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
@@ -405,7 +428,7 @@ async function panggil(endpoint, history, message, leadContext) {
           'Tulis ulang balasan untuk klien HANYA dengan harga resmi; kalau harganya memang tidak ada, bilang admin yang info.' });
         teks = ((await kirim(endpoint, messages, false)).content || '').trim();
         asing = hargaAsing(teks, messages.map((m) => m.content || '').join('\n'));
-        if (!teks || asing.length) {
+        if (!teks || asing.length || bocorPikiran(teks)) {
           console.log(`[harga] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
           // Vendor rekanan jangan merasa dilempar bot (Rama): kalimat santai + info admin, tanpa pause.
           return /VENDOR REKANAN/.test(leadContext || '')
