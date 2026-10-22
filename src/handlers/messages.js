@@ -315,6 +315,11 @@ const LAMPIRAN = {
   // Ilustrasi ukuran asli 2R / 4R / Polaroid berdampingan dengan skala sama + patokan KTP (Rama 22 Okt 2026).
   format: { file: 'FORMAT CETAK TETRA.jpg', label: 'ilustrasi format cetak', pernah: /FORMAT CETAK TETRA|ilustrasi format cetak/i,
     caption: 'Ini perbandingan ukuran asli 2R, 4R, dan Polaroid ya, Kak.' },
+  // Profil 1 halaman: edisi klien & edisi rekanan (Rama 22 Okt 2026; sumber HTML di repo HERMES docs/ilustrasi-tetra).
+  profil: { file: 'PROFIL TETRA PHOTOBOOTH.pdf', label: 'profil tetra', pernah: /PROFIL TETRA|profil tetra/i,
+    caption: 'Profil singkat Tetra Photobooth ya, Kak.' },
+  rekanan: { file: 'REKANAN TETRA PHOTOBOOTH.pdf', label: 'profil rekanan', pernah: /REKANAN TETRA PHOTOBOOTH|profil rekanan/i,
+    caption: 'Ringkasan kerja sama rekanan Tetra ya, Kak.' },
   // Ilustrasi skema rekanan (komisi 10% vs potongan 10%), disetujui Rama 8 Okt 2026.
   skema: { file: 'SKEMA REKANAN TETRA.png', label: 'skema rekanan', pernah: /SKEMA REKANAN|skema rekanan/i,
     caption: 'Biar gampang kebayang, ini gambaran dua skema kerja sama rekanan Tetra 😊' },
