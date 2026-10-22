@@ -4,7 +4,7 @@ Dibaca bot setiap membalas (src/lib/ai.js). Sumber: jawaban Rama 27 Sep 2026.
 Tambah jawaban baru di sini; tidak perlu restart bot.
 
 ## Transport
-- Gratis transport untuk seluruh Jabodetabek (termasuk Jakarta, Depok, Tangerang, Bekasi) untuk Photobooth Classic, Videobooth 360, dan Photo Stage.
+- Gratis transport untuk seluruh Jabodetabek (termasuk Jakarta, Depok, Tangerang, Bekasi, serta Kota & Kabupaten Bogor — basis Tetra: Sentul, Cibinong, Ciawi, Cisarua/Puncak, Cigombong/Lido, Parung, dll.) untuk Photobooth Classic, Videobooth 360, dan Photo Stage.
 - Pengecualian: Magazine Box (Only maupun + Photobooth) ada biaya transport, admin yang info nominalnya.
 - Di luar Jabodetabek: ada biaya transport untuk semua paket, admin yang info nominalnya.
 

@@ -149,6 +149,7 @@ const SHADOW_FILE = path.join(__dirname, '..', '..', 'data', 'bayangan.jsonl');
 // Baca foto cetakan (galeri tamu) butuh model yang bisa melihat gambar. DeepSeek V4 Flash tidak bisa (uji 14 Okt:
 // gambar diabaikan tanpa error), jadi tetap Gemini apa pun model utamanya.
 const VISION = { ...PRIMARY, model: process.env.AI_VISION_MODEL || 'gemini/gemini-3.8-flash', effort: '' };
+const CADANGAN = { ...VISION, model: process.env.AI_CADANGAN_MODEL || VISION.model };
 const FALLBACK = {
   url: (process.env.AI_FALLBACK_BASE_URL || '') + '/chat/completions',
   key: process.env.AI_FALLBACK_API_KEY || '',
@@ -349,6 +350,7 @@ function masalahGaya(teks) {
   const kata = KATA_TERLARANG.filter((k) => t.includes(k));
   if (kata.length) out.push(`kata terlarang: ${kata.map((k) => `"${k}"`).join(', ')}`);
   if (/\bsaya\b/i.test(isi)) out.push('sebut diri "aku", bukan "saya"');
+  if (/\bkamu\b/i.test(isi)) out.push('sapa klien "Kak", bukan "kamu"');
   if ((isi.match(/\p{Extended_Pictographic}/gu) || []).length > 1) out.push('emoji maksimal 1');
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
   if (isi.split('\n').filter((l) => l.trim()).length > 7 || isi.length > 700) {
@@ -379,16 +381,25 @@ function hargaAsing(teks, sumber) {
   const salah = angkaRupiah(teks).filter((n) => !boleh.has(n));
   const tabel = {};
   for (const m of String(sumber).matchAll(/-\s*(\d+)\s*Jam\s*:\s*Rp\s*([\d.]+)/gi)) tabel[m[1]] ||= Number(m[2].replace(/\./g, ''));
+  // Pesan yang menyebut layanan lain: harga per durasi dari SEMUA layanan ("6 jam Rp 4.500.000" sah untuk 360, walau
+  // barisnya tidak menyebut "360"). Pesan Classic saja tetap dicocokkan ketat ke tabel Classic.
+  const layananLain = /360|videobooth|magazine|photo ?stage/i.test(teks);
+  const perDurasi = {};
+  for (const m of String(sumber).matchAll(/(\d+)\s*jam\s*:?\s*Rp\s*([\d.]+)/gi)) {
+    (perDurasi[m[1]] ||= new Set()).add(Number(m[2].replace(/\./g, '')));
+  }
   // Harga khusus = nominal yang tertulis di luar daftar harga & FAQ umum (konteks vendor, chat admin).
   const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(strategi()).join('').split(faq()).join(''));
   const nilaiTabel = new Set(Object.values(tabel).flatMap((v) => [v, v * 2, v * 3, Math.round(v * 0.9)]));
   for (const baris of String(teks).split('\n')) {
     if (/360|videobooth|magazine|photo ?stage/i.test(baris)) continue;
-    for (const m of baris.matchAll(/(\d+)\s*jam\b([^\n]{0,40})/gi)) {
-      const resmi = tabel[m[1]];
-      const n = angkaRupiah(m[2])[0];
-      if (!resmi || !n) continue;
-      const cocok = [resmi, resmi * 2, resmi * 3, Math.round(resmi * 0.9)].includes(n);
+    // "5,5 jam" bukan "5 jam", dan harga sesudah durasi lain di baris yang sama ("5,5 jam → ambil 6 Jam Rp 4.000.000")
+    // milik durasi itu (salah tangkap 21 Okt: klien Elqi dioper ke admin padahal 6 jam Rp 4.000.000 benar).
+    for (const m of baris.matchAll(/(?<![\d.,])(\d+)\s*jam\b([^\n]{0,40})/gi)) {
+      const resmi = layananLain ? [...(perDurasi[m[1]] || [])] : [tabel[m[1]]];
+      const n = angkaRupiah(m[2].split(/\d+(?:[.,]\d+)?\s*jam/i)[0])[0];
+      if (!tabel[m[1]] || !n) continue;
+      const cocok = resmi.some((r) => [r, r * 2, r * 3, Math.round(r * 0.9)].includes(n));
       const hargaKhusus = !nilaiTabel.has(n) && khusus.includes(n); // harga vendor / dari admin di chat
       if (!cocok && !hargaKhusus && !salah.includes(n)) salah.push(n);
     }
@@ -447,19 +458,19 @@ async function panggil(endpoint, history, message, leadContext) {
       // (dulu nominal karangan yang diulang di tulis ulang jadi lolos).
       const sumberHarga = messages.map((m) => m.content || '').join('\n');
       if (bocorPikiran(teks)) {
-        console.log(`[bocor] pikiran model ikut di balasan — minta tulis ulang: ${teks.slice(0, 120)}`);
+        console.log(`[bocor ${endpoint.model}] pikiran model ikut di balasan — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
           'KOREKSI SISTEM: balasan tadi memuat catatan/pikiran internal dan kutipan aturan. Klien TIDAK BOLEH melihat ' +
           'itu. Tulis ulang HANYA pesan final yang dikirim ke klien, tanpa analisis, tanpa kutipan aturan.' });
         teks = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
         if (!teks || bocorPikiran(teks)) {
-          console.log('[bocor] tulis ulang masih bocor — diteruskan ke admin, tidak dikirim ke klien');
+          console.log(`[bocor ${endpoint.model}] tulis ulang masih bocor — diteruskan ke admin, tidak dikirim ke klien`);
           return '[ADMIN_HANDOFF]';
         }
       }
       const gaya = masalahGaya(teks);
       if (gaya.length) {
-        console.log(`[gaya] ${gaya.join('; ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
+        console.log(`[gaya ${endpoint.model}] ${gaya.join('; ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
           `KOREKSI SISTEM: perbaiki balasan tadi — ${gaya.join('; ')}. Isi, maksud, dan penanda [..] tetap sama. ` +
           'Tulis HANYA pesan final untuk klien.' });
@@ -469,14 +480,14 @@ async function panggil(endpoint, history, message, leadContext) {
       }
       let asing = hargaAsing(teks, sumberHarga);
       if (asing.length) {
-        console.log(`[harga] nominal tanpa sumber ${asing.join(', ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
+        console.log(`[harga ${endpoint.model}] nominal tanpa sumber ${asing.join(', ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
           `KOREKSI SISTEM: nominal ${asing.map((n) => 'Rp ' + n.toLocaleString('id-ID')).join(', ')} tidak ada di daftar harga, FAQ, maupun chat. ` +
           'Tulis ulang balasan untuk klien HANYA dengan harga resmi; kalau harganya memang tidak ada, bilang admin yang info.' });
         teks = ((await kirim(endpoint, messages, false)).content || '').trim();
         asing = hargaAsing(teks, sumberHarga);
         if (!teks || asing.length || bocorPikiran(teks)) {
-          console.log(`[harga] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
+          console.log(`[harga ${endpoint.model}] masih ada nominal tanpa sumber ${asing.join(', ')} — diteruskan ke admin`);
           // Vendor rekanan jangan merasa dilempar bot (Rama): kalimat santai + info admin, tanpa pause.
           return /VENDOR REKANAN/.test(leadContext || '')
             ? 'Bentar ya, harganya aku pastiin dulu ke admin hehe.\n[INFO_ADMIN: harga untuk vendor perlu dicek admin]'
@@ -486,7 +497,7 @@ async function panggil(endpoint, history, message, leadContext) {
       // Janji "aku teruskan ke admin" tanpa penanda = admin tidak pernah tahu, klien menunggu selamanya (uji 14 Okt:
       // DeepSeek di kasus nego). Penanda ditambahkan di kode.
       if (RE_JANJI_ADMIN.test(isiKlien(teks)) && !/\[(INFO_ADMIN|ADMIN_HANDOFF|SULIT|QUOTATION|PERUBAHAN)/i.test(teks)) {
-        console.log(`[janji] janji ke admin tanpa penanda — INFO_ADMIN ditambahkan: ${teks.slice(0, 80)}`);
+        console.log(`[janji ${endpoint.model}] janji ke admin tanpa penanda — INFO_ADMIN ditambahkan: ${teks.slice(0, 80)}`);
         teks += `\n[INFO_ADMIN: klien menunggu jawaban admin soal "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 80)}"]`;
       }
       return teks.replace(/^\(admin\)\s*/i, ''); // jangan pernah menyamar jadi pesan admin di riwayat
@@ -581,7 +592,19 @@ async function panggil(endpoint, history, message, leadContext) {
   throw new Error('model terus meminta alat tanpa menulis balasan');
 }
 
+// Klien cuma menutup ("ok", "noted", "makasih kak 🙏") setelah pesan terakhir kita yang bukan pertanyaan → diam, tanpa
+// memanggil model. Uji buta 22 Okt: DeepSeek tetap membalas panjang (#110, #164: mengklaim "sudah masuk skema rekanan").
+const RE_PENUTUP = /^(?:(?:ok(?:e|ay|eh)?|sip|siap|noted|baik|makasih|makasi|terima ?kasih|thanks?|thank you|thx|tq|sama[- ]sama|kembali kasih|mantap|oke deh|ya|iya|yaa|kak|ka|kk|mas|mba|mbak|min|banyak|deh|ya kak|👍|🙏|😊|🙂|👌)[\s,.!]*)+$/i;
+function cumaMenutup(history, message) {
+  const akhir = history.at(-1);
+  return akhir?.role === 'assistant' && !String(akhir.content).includes('?') &&
+    RE_PENUTUP.test(String(message).trim());
+}
 async function getAIResponse(history, message, leadContext) {
+  if (cumaMenutup(history, message)) {
+    console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 40)}`);
+    return '[DIAM]';
+  }
   try {
     const jawab = await panggil(PRIMARY, history, message, leadContext);
     if (SHADOW) {
@@ -593,7 +616,13 @@ async function getAIResponse(history, message, leadContext) {
     }
     return jawab;
   } catch (e) {
-    console.error(`[ai] Sumopod gagal: ${e.message}`);
+    console.error(`[ai] ${PRIMARY.model} gagal: ${e.message}`);
+    // Cadangan pertama Gemini di Sumopod: 15 Okt DeepSeek kena 403 dari hulunya 3× dan balasan klien langsung jatuh
+    // ke flash-lite 9Router (model paling lemah). Hulu beda = biasanya tetap hidup.
+    if (CADANGAN.model !== PRIMARY.model) {
+      try { return await panggil(CADANGAN, history, message, leadContext); }
+      catch (e2) { console.error(`[ai] cadangan ${CADANGAN.model} gagal: ${e2.message}`); }
+    }
     if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
     console.log('[ai] mencoba lewat 9Router...');
     return panggil(FALLBACK, history, message, leadContext);
