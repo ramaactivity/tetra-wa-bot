@@ -14,6 +14,7 @@ const { sendReply, sendDocument } = require('../lib/sender');
 const { rememberBotMsg } = require('../lib/botMessages');
 const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin, kirimTelegram } = require('../lib/notify');
+const undangVendor = require('../lib/undangVendor');
 const { ekstrakGaleri, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
@@ -822,6 +823,13 @@ function registerMessageHandler(sock) {
       }
 
       if (lead) aiResponse = prospekWa.tanpaAngka(aiResponse);
+      // Calon rekanan tertarik → akun rekanan + link dasbor dari Tetra Ops (DR-050), ditempel oleh kode (Rama 22 Okt).
+      if (undangVendor.RE_TAG.test(aiResponse)) {
+        const hp = lead?.nomor || await prospekWa.nomorPengirim(sock, msg).catch(() => '') || phoneDigits(msg);
+        const u = await undangVendor.proses(aiResponse, { phone: hp, jid });
+        aiResponse = u.teks;
+        if (u.info) await kirimTelegram(`🤝 ${u.info} — wa.me/${hp}`).catch((e) => console.error('[undang-vendor] Telegram:', e.message));
+      }
 
       // Admin sudah membalas selama bot memproses: jangan ikut menjawab.
       if ((adminTerakhir.get(jid) || 0) >= mulaiProses) {
