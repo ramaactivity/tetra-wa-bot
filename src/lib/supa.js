@@ -436,7 +436,7 @@ async function cariProspek(nomor) {
   const { data: cmd } = await supa.from('bot_commands').select('id')
     .like('command', `send-text:%"nomor":"${nomor}"%`)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  const kolom = 'id, nama, status, catatan, sumber, alasan, pic';
+  const kolom = 'id, nama, segmen, status, catatan, sumber, alasan, pic';
   if (cmd) {
     const { data: p } = await supa.from('prospek').select(kolom).ilike('catatan', `%cmd ${cmd.id}%`).limit(1).maybeSingle();
     if (p) return p;
@@ -469,7 +469,7 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
   if (error) throw new Error(error.message);
   // Klien lama = pelanggan Tetra: balasannya dilayani CS (dengan konteks acara lamanya, tanpa pricelist).
   // Tamu Booth = calon klien hangat dari halaman foto tamu (8 Okt): dilayani CS biasa + konteks acara & promo.
-  return { nama: p.nama, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || ''),
+  return { nama: p.nama, segmen: p.segmen, alasan: p.alasan, pic: p.pic, klienLama: p.sumber === 'klien_lama' || /kueri:\s*klien lama/i.test(p.catatan || ''),
     tamuBooth: p.sumber === 'tamu_booth' ? (String(p.catatan || '').match(/^tamu booth:.*$/m) || [''])[0] : null };
 }
 // Prospek membalas STOP / minta berhenti → jangan_hubungi (izin tamu Booth: "berhenti dengan membalas STOP").

@@ -669,7 +669,7 @@ function registerMessageHandler(sock) {
 
       const t = originalText.toLowerCase();
       const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
-      const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan
+      const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan / klien menurut segmen
       const fullText = fullUserText(jid, originalText);
 
       // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
@@ -1033,7 +1033,7 @@ function registerMessageHandler(sock) {
         else {
           // Lead (venue/WO/korporat): dilayani CS dalam mode rekanan (keputusan Rama 7 Okt).
           // Auto-reply lagi setelah kita menjelaskan diri: cukup dicatat, tidak dibalas.
-          tandaiProspek(jid, { nama: hasil?.nama || msg.pushName || null, nomor: nomorProspek });
+          tandaiProspek(jid, { nama: hasil?.nama || msg.pushName || null, nomor: nomorProspek, segmen: hasil?.segmen || null });
           if (oto && getRiwayat(jid).some((p) => p.role === 'assistant' && !RE_SAPA.test(String(p.content)))) {
             tambahRiwayat(jid, 'user', teks);
             continue;

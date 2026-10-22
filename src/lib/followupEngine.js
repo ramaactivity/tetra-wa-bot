@@ -297,7 +297,8 @@ async function runFollowupCycle(sock) {
 // ── Lead sales (venue/WO/korporat) yang membalas sapaan ─────────────────────
 // Keputusan Rama 7 Okt 2026: lead tidak boleh mati. (1) Balasan lead yang belum
 // terjawab (bot restart, dsb.) dijawab di sini. (2) Lead manusia yang diam setelah
-// kita jawab: follow-up hari kerja ke-3 dan ke-7 sejak pesan terakhirnya, maks 2x.
+// kita jawab: SATU follow-up di hari kerja ke-3 sejak pesan terakhirnya (aturan follow-up lintas agent, Rama 22 Okt:
+// maks 1 susulan per kanal, tanpa pindah kanal).
 // (3) Hanya auto-reply (tak ada manusia): satu follow-up minta PIC setelah 2 hari kerja.
 // Percakapan yang dipegang admin (ada balasan admin sesudah pesan terakhir lead) dilewati.
 function hariKerja(dariMs, keMs) {
@@ -319,7 +320,7 @@ function jenisProspek(riw, s, now) {
   const manusia = user.some((p) => !prospekWa.otomatis(p.content));
   if (manusia) {
     const hk = hariKerja(lastUserT, now);
-    return (s.n === 0 && hk >= 3) || (s.n === 1 && hk >= 7) ? 'lanjut' : null;
+    return s.n === 0 && hk >= 3 ? 'lanjut' : null;
   }
   // Balasan kita ke auto-reply biasanya sudah minta PIC: jangan minta lagi (audit 22 Okt: dua kali minta PIC).
   const sudahMinta = riw.some((p) => p.role === 'assistant' && /\bPIC\b|nomor WA|e-?mail|kontak (yang|orang)/i.test(String(p.content)) &&
@@ -341,10 +342,12 @@ async function followupProspek(sock, paused, sudah) {
     const s = state[jid]?.sejak === lastUserT ? state[jid] : { sejak: lastUserT, n: 0 };
     const jenis = jenisProspek(riw, s, now);
     if (!jenis) continue;
-    const p = getProspek(jid);
-    const nomor = p.nomor || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
+    const p0 = getProspek(jid);
+    const nomor = p0.nomor || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
     const pr = await supa.cariProspek(nomor).catch(() => null);
-    if (pr && (['tolak', 'jangan_hubungi'].includes(pr.status) || (jenis !== 'balas' && /dialihkan ke/.test(pr.catatan || '')))) {
+    const p = { ...p0, segmen: p0.segmen || pr?.segmen };
+    if (pr && (['tolak', 'jangan_hubungi'].includes(pr.status) || /DIPEGANG RAMA/.test(pr.catatan || '') ||
+      (jenis !== 'balas' && /dialihkan ke/.test(pr.catatan || '')))) {
       state[jid] = { ...s, stop: true }; // PIC sudah disapa / lead menolak: jangan dikejar lagi
       continue;
     }
@@ -356,9 +359,9 @@ async function followupProspek(sock, paused, sudah) {
       } else {
         const tugas = jenis === 'lanjut'
           ? `${p.nama || 'Lead ini'} belum membalas lagi. Tulis SATU pesan lanjutan singkat (maks 3 kalimat) yang merujuk hal terakhir di riwayat ` +
-            '(mis. pricelist yang sudah dikirim, kontak PIC yang diminta) dan mengajak lanjut ngobrol soal kerja sama vendor rekanan. ' +
+            `(mis. pricelist yang sudah dikirim, kontak PIC yang diminta) dan mengajak lanjut ngobrol soal ${prospekWa.rekanan(p) ? 'kerja sama vendor rekanan' : 'kebutuhan photobooth untuk acara mereka'}. ` +
             'Jangan menagih, jangan tanya "masih tertarik?", jangan pakai kata "follow up".'
-          : 'Kontak ini baru membalas otomatis. Tulis SATU pesan lanjutan singkat (maks 2 kalimat) yang meminta nomor WA/email PIC yang mengurus kerja sama vendor/marketing.';
+          : `Kontak ini baru membalas otomatis. Tulis SATU pesan lanjutan singkat (maks 2 kalimat) yang meminta nomor WA/email PIC yang mengurus ${prospekWa.rekanan(p) ? 'kerja sama vendor/marketing' : 'acara kantor/sekolah (HR/GA/humas/panitia)'}.`;
         // Audit 22 Okt: follow-up lead menulis "kemarin" untuk pesan 5–12 hari lalu, menyapa nama dari data prospek
         // ("Kak Talia" untuk Aydi), dan minta PIC padahal lead masih menunggu harga rekanan.
         const hari = Math.max(0, Math.round((now - (riw.filter((x) => x.role !== 'user').at(-1)?.t || now)) / 864e5));

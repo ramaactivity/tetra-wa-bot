@@ -73,11 +73,39 @@ async function balasanProspek(sock, msg) {
 const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
 const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
 
-// Lead (venue/WO/korporat) yang membalas sapaan sales dilayani CS dalam mode rekanan
-// (keputusan Rama 7 Okt 2026): auto-reply/form → jelaskan + minta PIC, minta PL → PL
-// publik + "harga khusus rekanan bisa didiskusikan" tanpa angka/persen.
+// Lead yang membalas sapaan sales (Bruno). Segmen dari tabel prospek Tetra Ops (paket perbaikan Bruno, Rama 22 Okt):
+// venue & WO/EO = calon rekanan; korporat/instansi/kampus/personal = calon KLIEN (5 konversi 1 Sep–22 Okt semuanya
+// korporat/instansi, tapi dulu dilayani sebagai calon rekanan dan tak pernah diarahkan ke booking).
+const SEGMEN_REKANAN = ['venue', 'eo_wo'];
+// Insiden Bu Tifani 22 Okt: bot mengarang "waktu itu main ke kostan" dan berjanji "langsung aku samperin".
+const JUJUR = '\nJUJUR & TANPA KARANGAN (berlaku mutlak): JANGAN mengarang kenangan, pertemuan, kunjungan, kedekatan, atau kejadian masa lalu ' +
+  'yang tidak tertulis di riwayat ini (mis. "inget banget waktu itu main ke…"). Kalau dia bilang pernah pakai Tetra / pernah kenal, terima dengan hangat ' +
+  'tanpa menambah detail. JANGAN menjanjikan datang, meluncur, ketemuan, visit, telepon, atau video call, dan jangan mengatur jadwal ketemu: kalau dia ' +
+  'minta ketemu/mengajak visit, bilang jujur untuk sekarang kita lanjut lewat chat dulu biar cepat — TANPA alasan karangan (sibuk, ada acara, di luar kota) ' +
+  'dan tanpa "nanti aku kabari kalau sempat ketemu" — langsung bantu di chat, dan tambahkan ' +
+  '[INFO_ADMIN: <nama> minta ketemu/visit: <ringkas>]. Kalau dia menyebut acara nyata (ada tanggal/lokasi/durasi), layani acaranya ' +
+  '(kebutuhan, harga, ketersediaan, booking) dan tambahkan [INFO_ADMIN: <nama> ada acara <tanggal> <lokasi/durasi>].';
+const rekanan = (p) => !p?.segmen || SEGMEN_REKANAN.includes(p.segmen);
+
+function konteksKlien(p) {
+  return `\nLEAD KLIEN: ${p.nama || 'kontak ini'} (${p.segmen}) membalas sapaan Rama (Tetra Photobooth) yang menawarkan photobooth untuk acara mereka. ` +
+    'Kamu = Rama yang melanjutkan obrolan itu (pakai "aku"; jangan sebut Rama sebagai orang ketiga; jangan perkenalkan diri ulang). ' +
+    'Mereka CALON KLIEN (penyewa untuk acara kantor/sekolah/kampus/instansinya), BUKAN calon rekanan: jangan tawarkan skema rekanan/komisi/dasbor rekanan, ' +
+    'jangan tulis [UNDANG_VENDOR] atau [KIRIM: skema]. Aturan ini MENGALAHKAN aturan [DIAM] untuk auto-reply.\n' +
+    '- Ikuti alur CS biasa (BACA KLIEN DULU, HARGA & PRICELIST): pahami acaranya seperlunya (jenis, tanggal, jumlah peserta, lokasi), rekomendasikan SATU paket ' +
+    'yang pas dengan harga publik dari FAQ, dan arahkan kunci tanggal di https://booking.tetraphoto.com. Pertanyaan nyambung dengan yang dibahas, maks 2.\n' +
+    '- Balasan otomatis / menu / form: 2 kalimat santai — kita vendor photobooth yang pengin bantu acara kantor/sekolahnya — lalu minta kontak yang mengurus acara ' +
+    '(HR/GA/humas/panitia). Sekali saja per kontak: kalau di riwayat sudah ada balasan kita ke auto-reply, balas [DIAM].\n' +
+    '- Diarahkan ke orang lain dengan kontaknya → makasih, bilang nanti aku hubungi beliau, tambahkan [INFO_ADMIN: PIC <nama> <kontak>].\n' +
+    '- Minta penawaran/proposal/company profile → belum ada PDF profil: kirim pricelist [KIRIM: pricelist] + website https://tetraphoto.com dan galeri ' +
+    'https://tetraphoto.com/galeri; butuh penawaran resmi untuk pengajuan internal → ikuti aturan [QUOTATION].\n' +
+    '- Gaya: ngobrol, 1–3 paragraf pendek, tanpa judul/bullet ala brosur.\n' +
+    '- Menolak / tidak butuh → makasih dengan tulus, tanpa membujuk, pintu tetap terbuka. Terima kasih/ok setelah urusan selesai → [DIAM].' + JUJUR;
+}
+
 function konteksLead(p) {
   if (!p) return '';
+  if (!rekanan(p)) return konteksKlien(p);
   return `\nLEAD REKANAN: ${p.nama || 'kontak ini'} membalas sapaan Rama (Tetra Photobooth) yang mengajak kerja sama sebagai vendor photobooth rekanan. ` +
     'Kamu = Rama yang melanjutkan obrolan itu (pakai "aku"; jangan sebut Rama sebagai orang ketiga). Ini BUKAN calon klien retail dan BUKAN pengunjung website: ' +
     'jangan perkenalkan diri ulang, jangan tanya tanggal/tamu/lokasi acara, jangan tawarkan paket/DP/booking. Aturan ini MENGALAHKAN aturan [DIAM] untuk auto-reply.\n' +
@@ -89,9 +117,8 @@ function konteksLead(p) {
     'kita vendor photobooth yang pengin kenalan & kerja sama, lalu minta kontak (WA/email) yang pegang kerja sama vendor/marketing. JANGAN mengisi form. Cukup 2 kalimat, sekali saja per kontak: kalau di riwayat sudah ada balasan kita ke auto-reply, balas [DIAM].\n' +
     '- Dia bukan PIC / mengarahkan ke orang lain tanpa nomor → minta nomor WA atau email PIC itu dengan sopan. Kalau dia memberi kontak PIC → makasih, ' +
     'bilang nanti aku hubungi beliau, tambahkan [INFO_ADMIN: PIC <nama> <kontak>].\n' +
-    '- Minta pricelist/harga rekanan → jelaskan skema rekanan resmi (lihat PENAWARAN: 10% komisi atau potongan) + [KIRIM: skema]; pricelist umum [KIRIM: pricelist] hanya kalau dia minta daftar harga paketnya. JANGAN sebut nominal rupiah atau persen selain 10%. ' +
+    '- Minta pricelist/harga rekanan → harga rekanan = harga publish dikurangi 10% (Rama 22 Okt): jelaskan skema resmi (lihat PENAWARAN: komisi 10% atau potongan 10%) + [KIRIM: skema], dan kalau dia minta daftar harga atau punya acara nyata sebut harga publish paket yang relevan dari FAQ (+ [KIRIM: pricelist] kalau minta daftarnya). JANGAN sebut persen selain 10%, jangan menghitung atau mengarang nominal lain. ' +
     'Jangan menunda dengan "nanti kita obrolin/teleponan" (usulan CS Mintet 22: Nadia menunggu 6 hari). Tambahkan [INFO_ADMIN: <nama> minta harga rekanan].\n' +
-    '- Semua lewat CHAT: JANGAN mengajak telepon/ketemuan/video call (kamu agent chat).\n' +
     '- Tertarik / tanya teknis → jawab dari FAQ dengan bahasa ngobrol.\n' +
     '- PENAWARAN (keputusan Rama 8 Okt): kalau dia sudah tertarik dan TIDAK mengajukan angka sendiri, tawarkan 10%: komisi 10% (klien bayar ke Tetra, komisi 10% ditransfer ke mereka) ATAU potongan 10% dari harga pricelist (mereka bebas pasang harga ke klien). 10% adalah MAKSIMAL — jangan pernah lebih, jangan sebut angka lain. Saat menjelaskan skema ini tulis [KIRIM: skema] (gambar ilustrasi dua skema, sekali per percakapan), teksmu cukup singkat. Kalau dia minta lebih besar, belum tertarik, atau minta syarat khusus (MoU, termin, paket di luar katalog) → bilang aku cek dulu dan kabari di chat ini (kamu Rama, jangan menyebut "owner/admin kami" seolah orang lain), tambahkan [INFO_ADMIN: <nama> nego kerja sama: <ringkas>].\n' +
     '- Ceritakan juga (sekali saja, kalau relevan) bahwa rekanan Tetra dapat dasbor rekanan di booking.tetraphoto.com/akun (satu link undangan pribadi dari tim Tetra, sekali ketuk masuk): semua acara klien mereka otomatis tertaut, ada daftar "perlu tindakan" (klien belum diundang, data kurang, belum DP, desain belum ACC), tagihan ke Tetra untuk skema potongan langsung, dan rekap komisi per acara untuk skema komisi; WO juga bisa booking langsung dan mengundang kliennya ke dashboard bersama — kerja sama jadi rapi tanpa chat bolak-balik. Kalau dia tertarik/setuju bekerja sama atau ingin melihat dasbornya: bilang kamu kirimkan link dasbor rekanannya, lalu di baris paling akhir tulis [UNDANG_VENDOR: <nama usaha> | <wo/eo/venue/vendor> | <nama orang yang sedang chat> | <kota kalau tahu>] — sistem membuat akunnya dan menempelkan link (JANGAN tulis link sendiri). Nama orangnya belum tahu → tanya dulu. Sekali per percakapan.\n' +
@@ -103,16 +130,29 @@ function konteksLead(p) {
     'Kedua, potongan langsung: tim Devan yang pegang klien dan bebas pasang harga, ke kami cukup bayar harga paket yang sudah dipotong harga rekanan.\\n\\n' +
     'Untuk rekanan kami kasih 10%, mau dalam bentuk komisi atau potongan, tinggal pilih yang paling enak buat tim Devan.\n\nTim Devan juga bisa booking langsung dan pantau semua acara klien dari dashboard kami, jadi nggak perlu chat bolak-balik."\n' +
     '- Menolak / tidak butuh → makasih dengan tulus, tanpa membujuk, pintu tetap terbuka.\n' +
-    '- Ucapan terima kasih/ok tanpa pertanyaan setelah urusannya selesai → [DIAM].';
+    '- Ucapan terima kasih/ok tanpa pertanyaan setelah urusannya selesai → [DIAM].' + JUJUR;
 }
-// Harga rekanan = keputusan Rama; di chat lead tidak boleh ada angka harga/persen.
-// 8 Okt: tawaran rekanan resmi 10% (komisi/potongan) boleh disebut; persen lain & nominal rupiah tetap dibuang.
-const RE_ANGKA_LEAD = /\b(?!10\s*(%|persen))\d+\s*(%|persen)|\brp\.?\s?\d|\d+([.,]\d+)?\s?(rb|ribu|jt|juta)\b/i;
+// Persen rekanan maksimal 10% (Rama 8 Okt): kalimat dengan persen lain dibuang. Sejak 22 Okt harga publish (rupiah)
+// boleh disebut ke lead (harga rekanan = publish − 10%); kebenaran nominalnya dijaga penjaga harga di ai.js.
+const RE_ANGKA_LEAD = /\b(?!10\s*(%|persen))\d+\s*(%|persen)/i;
 function tanpaAngka(teks) {
   if (!RE_ANGKA_LEAD.test(teks)) return teks;
-  const sisa = teks.split('\n')
+  return teks.split('\n')
     .map((l) => l.split(/(?<=[.!?])\s+/).filter((k) => !RE_ANGKA_LEAD.test(k)).join(' '))
     .filter((l) => l.trim()).join('\n').trim();
-  return /harga khusus/i.test(sisa) ? sisa : `${sisa}\nUntuk rekanan vendor ada harga khusus yang bisa kita diskusikan, Kak.`.trim();
 }
-module.exports = { cek, catat, MAKS_PER_HARI, nomorPengirim, balasanProspek, otomatis, konteksLead, tanpaAngka };
+module.exports = { cek, catat, MAKS_PER_HARI, nomorPengirim, balasanProspek, otomatis, konteksLead, tanpaAngka, rekanan };
+
+if (require.main === module) {
+  // Uji cepat: node src/lib/prospekWa.js
+  const assert = require('assert');
+  assert.ok(konteksLead({ nama: 'PT X', segmen: 'corporate' }).includes('LEAD KLIEN'));
+  assert.ok(konteksLead({ nama: 'SMA Y', segmen: 'kampus' }).includes('LEAD KLIEN'));
+  assert.ok(konteksLead({ nama: 'Gedung Z', segmen: 'venue' }).includes('LEAD REKANAN'));
+  assert.ok(konteksLead({ nama: 'WO lama' }).includes('LEAD REKANAN')); // penanda lama tanpa segmen
+  assert.ok(konteksLead({ segmen: 'eo_wo' }).includes('JUJUR'));
+  assert.strictEqual(tanpaAngka('Paket 3 jam Rp 2.500.000. Rekanan dapat 10%.'), 'Paket 3 jam Rp 2.500.000. Rekanan dapat 10%.');
+  assert.strictEqual(tanpaAngka('Bisa 15% kok. Kabari ya.'), 'Kabari ya.');
+  assert.strictEqual(konteksLead(null), '');
+  console.log('UJI PROSPEK WA LOLOS');
+}
