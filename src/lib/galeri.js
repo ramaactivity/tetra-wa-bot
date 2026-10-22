@@ -6,6 +6,7 @@ const { postOps } = require('./availability');
 
 const RE_MINTA = /soft ?file|file [fp]oto|hasil [fp]oto|[fp]oto ?-?(2|an)?\s?(nya|photobooth|booth)|[fp]otonya|link ([fp]oto|galer[iy]|gallery)|galer[iy]|gallery|barcode|\bqr\b|(download|unduh|ambil) [fp]oto|kirim\w*\s*(kan\s*)?[fp]oto/i;
 const TANYA_MS = 30 * 60 * 1000;
+const tanyaTanggal = new Map(); // jid -> waktu bot menanyakan tanggal acara (sekali sebelum oper ke admin)
 const ditanya = new Map(); // jid -> waktu bot menanyakan nama/tanggal acara (ponytail: memori proses, hilang saat restart)
 
 async function cari(q, tanggal) {
@@ -26,7 +27,7 @@ const tgl = (iso) => {
 };
 
 /** Pilih tindakan dari petunjuk {nama, tanggal} + hasil pencarian. Pure, diuji di uji-galeri.js. */
-function putuskan(p, hasil, sudahDitanya) {
+function putuskan(p, hasil, sudahDitanya, sudahTanyaTanggal = false) {
   if (hasil === null) return { aksi: 'admin', alasan: 'pencarian galeri gagal (Tetra Ops/Booth tidak terjangkau)' };
   if (hasil.length === 1) {
     const e = hasil[0];
@@ -36,6 +37,11 @@ function putuskan(p, hasil, sudahDitanya) {
       (e.jumlah ? 'Bisa langsung didownload. ' : 'Fotonya masih proses upload, kalau belum muncul coba buka lagi agak nanti ya. ') +
       (e.sampai ? `Linknya aktif sampai ${tgl(e.sampai)}. ` : '') + 'Mohon maaf ya jadi repot nyari 🙏';
     return { aksi: 'kirim', teks, acara: e };
+  }
+  // Nama saja tidak ketemu/ambigu → tanya tanggal SEKALI sebelum oper ke admin (usulan CS Mintet 14, disetujui Rama
+  // 22 Okt: "rizka iknal / rizka iqbal" langsung dioper padahal nama di sistem bisa beda ejaan).
+  if (p.nama && !p.tanggal && !sudahTanyaTanggal) {
+    return { aksi: 'tanya', tanggal: true, teks: 'Acaranya tanggal berapa ya Kak? Biar galerinya ketemu pas, soalnya nama di sistem kami kadang beda ejaan.' };
   }
   if (sudahDitanya || (p.nama && p.tanggal)) {
     return { aksi: 'admin', alasan: hasil.length ? `${hasil.length} acara cocok (${hasil.map((e) => e.judul).join(', ')}), perlu dipilih admin`
@@ -52,4 +58,4 @@ async function cariDariPetunjuk(p) {
   return cari(p.nama, null);
 }
 
-module.exports = { RE_MINTA, TANYA_MS, ditanya, cari, cariDariPetunjuk, putuskan };
+module.exports = { RE_MINTA, TANYA_MS, ditanya, tanyaTanggal, cari, cariDariPetunjuk, putuskan };

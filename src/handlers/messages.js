@@ -254,15 +254,17 @@ async function layaniGaleri(sock, msg, keys, teks, gambar) {
   const sudahDitanya = Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS;
   if (!p || !(p.minta_foto_acara || p.cetakan_photobooth || (sudahDitanya && p.nama))) return false;
   const hasil = await galeri.cariDariPetunjuk(p);
-  const k = galeri.putuskan(p, hasil, sudahDitanya);
+  const k = galeri.putuskan(p, hasil, sudahDitanya, Date.now() - (galeri.tanyaTanggal.get(jid) || 0) < galeri.TANYA_MS);
   console.log(`[galeri] ${jid} nama=${p.nama} tgl=${p.tanggal} cetakan=${p.cetakan_photobooth} → ${k.aksi}${k.alasan ? ` (${k.alasan})` : ''}`);
   if (k.aksi === 'admin') {
     galeri.ditanya.delete(jid);
+    galeri.tanyaTanggal.delete(jid);
     await handoff(sock, msg, `Minta foto/softfile acara: ${k.alasan}`,
       'Bentar ya Kak, link galerinya aku tanyain ke admin dulu. Nanti aku kabarin di sini 🙏', teks);
     return true;
   }
   if (k.aksi === 'tanya') galeri.ditanya.set(jid, Date.now()); else galeri.ditanya.delete(jid);
+  if (k.tanggal) galeri.tanyaTanggal.set(jid, Date.now()); else if (k.aksi !== 'tanya') galeri.tanyaTanggal.delete(jid);
   tambahRiwayat(jid, 'user', teks);
   tambahRiwayat(jid, 'assistant', k.teks);
   await sendReply(sock, jid, keys, { name: `galeri-${k.aksi}` }, k.teks);
