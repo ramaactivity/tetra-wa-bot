@@ -116,29 +116,11 @@ function teksForm(b, pembuka) {
     '*3. Backdrop*',
     baris('Pilihan', d.backdrop || 'basic Tetra (White/Red/Silver/Gold/Emerald Green/Blue) atau dekorasi acara'),
     '',
-    'Kalau masih bingung atau mau tanya-tanya dulu, langsung chat aja ya Kak. Aku bantu sampai beres.',
+    'Kalau lebih enak ngobrol daripada ngisi, santai aja Kak, nanti aku tanyain pelan-pelan.',
   ].join('\n');
 }
 
-// Pertanyaan data setelah DP (keputusan Rama 22 Okt): klien jawab sendiri, tapi bot cuma menanyakan yang BELUM
-// terjawab, maks 2 per pesan, dengan kalimat biasa — bukan form 15 isian (21 Okt klien bingung). Data yang sudah
-// muncul di chat diambil ekstraksi, jadi tidak ditanya ulang. Setelah lengkap: rekap dikirim ke klien untuk dicek.
-const TANYA = {
-  nama_acara: (w) => (w ? 'nama kedua pengantinnya' : 'nama acara / instansinya'),
-  tanggal: () => 'tanggal acaranya',
-  jam: () => 'jam photobooth-nya (mulai sampai jam berapa)',
-  lokasi: () => 'lokasi/venue-nya (sekalian link Google Maps kalau ada)',
-  paket: () => 'paket yang diambil (berapa jam)',
-  pic: () => 'nama & nomor HP PIC di hari H',
-  ukuran_frame: () => 'ukuran cetaknya (2R photostrip, 4R, atau Polaroid)',
-  desain_frame: () => 'desain frame-nya (pilih dari katalog atau custom)',
-  backdrop: () => 'warna backdrop-nya (White/Red/Silver/Gold/Emerald Green/Blue) atau ikut dekorasi acara',
-};
-function teksTanya(b, pembuka) {
-  const k = kurang(b).slice(0, 2).map((x) => (TANYA[x.k] ? TANYA[x.k](isWedding(b)) : x.label.toLowerCase()));
-  if (!k.length) return pembuka;
-  return `${pembuka}\n\nBiar tim Tetra bisa siapin semuanya, boleh info ${k.join(' sama ')}, Kak?`;
-}
+// Setelah data wajib lengkap (dari form atau digali bertahap), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
 function teksKonfirmasi(b) {
   const isi = FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
     .map(([k, label]) => `• ${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]}`);
@@ -260,7 +242,7 @@ function konteksAI(jid) {
   if (!b || !aktif(jid)) return '';
   const k = kurang(b);
   const terisi = FIELD.filter(([key]) => b.data[key]).map(([key, label]) => `${label}=${b.data[key]}`).join('; ');
-  return `\n\nTAHAP BOOKING (klien sudah DP; verifikasi & invoice tetap dari admin). Data ditanyakan bertahap (bukan form).\n` +
+  return `\n\nTAHAP BOOKING (klien sudah DP; verifikasi & invoice tetap dari admin). Form data sudah dikirim; kalau klien tidak mengisi, gali bertahap lewat obrolan.\n` +
     `Sudah terisi: ${terisi || '-'}\n` +
     (b.dikonfirmasi && Date.now() - b.dikonfirmasi < 5 * 60e3
       ? 'Rekap data barusan dikirim ke klien untuk dicek: JANGAN kirim rekap/daftar lagi; tanggapi pesannya singkat saja.\n' : '') +
@@ -273,7 +255,7 @@ function konteksAI(jid) {
 const riwayatUntukEkstrak = (jid) => getRiwayat(jid).slice(-16);
 
 module.exports = {
-  FIELD, get, aktif, kurang, mulai, perbarui, teksForm, teksTanya, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
+  FIELD, get, aktif, kurang, mulai, perbarui, teksForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
   teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap, sinkronOps,
   semua: () => semua, simpan,
 };

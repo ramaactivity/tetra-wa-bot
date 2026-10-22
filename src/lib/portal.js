@@ -37,11 +37,22 @@ async function verifikasi(sock, msg, teks) {
     return false; // Tetra Ops tak terjangkau → biarkan alur CS biasa yang menjawab
   }
   await sock.readMessages([msg.key]).catch(() => {});
-  const sent = await sock.sendMessage(jid, { text: r.json.reply });
+  // Ditolak lagi setelah penolakan sebelumnya → jangan ulang pesan yang sama (audit 22 Okt: dua klien macet di sini,
+  // dapat jawaban identik 2×). Jelaskan lebih manusiawi dan kabari CS Mintet supaya admin membantu.
+  let balas = r.json.reply;
+  const sebelumnya = store.getRiwayat(jid).filter((p) => p.role === 'assistant').at(-1);
+  if (!r.json.ok && String(sebelumnya?.content || '').includes('[otomatis: verifikasi portal booking]')) {
+    balas = 'Kodenya masih belum cocok, Kak. Biasanya karena nomor WhatsApp yang diisi di halaman booking beda dengan nomor ini. ' +
+      'Aku kabari admin biar dibantu cek ya, nanti dikabari di sini.';
+    const nomor = await nomorAsli(sock, msg);
+    require('./notify').kirimTelegram(`⚠️ Verifikasi portal booking ditolak 2× — wa.me/${nomor || jid.split('@')[0]} (${teks.trim().slice(0, 40)}). ` +
+      'Kemungkinan nomor WA di form booking beda. Mohon dibantu.').catch((e) => console.error('[portal] Telegram:', e.message));
+  }
+  const sent = await sock.sendMessage(jid, { text: balas });
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'portal-verifikasi→customer');
   store.tambahRiwayat(jid, 'user', teks);
-  store.tambahRiwayat(jid, 'assistant', `${r.json.reply}\n[otomatis: verifikasi portal booking]`);
+  store.tambahRiwayat(jid, 'assistant', `${balas}\n[otomatis: verifikasi portal booking]`);
   console.log(`[portal] verifikasi ${jid.split('@')[0]}: ${r.json.ok ? 'berhasil' : 'ditolak'}`);
   return true;
 }

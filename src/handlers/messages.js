@@ -215,7 +215,7 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
     const tp = tahapPercakapan(jid, det, fullText, pesanBaru);
     if (tp.tahap === 'SAPA') lines.push('TAHAP PERCAKAPAN: SAPA — belum pernah ada percakapan. Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
     else lines.push(`TAHAP PERCAKAPAN: ${tp.tahap}${tp.hari >= 3 ? ` + LANJUTAN (klien kembali setelah ${tp.hari} hari)` : ''}. ` +
-      `Belum diketahui: ${tp.belum.join(', ') || '-'}. Ikuti tujuan tahap ini di STRATEGI CS.`);
+      `Belum diketahui (info saja, BUKAN daftar pertanyaan — tanya hanya yang memajukan topik yang sedang dibahas): ${tp.belum.join(', ') || '-'}. Baca kliennya dulu (STRATEGI CS).`);
     lines.push(varianEksperimen(jid, persona, tp.tahap).trim());
   }
   const ringkasan = getRingkasan(jid);
@@ -477,8 +477,9 @@ function registerMessageHandler(sock) {
     const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
     await perbaruiBooking(jid, null, false);
-    // Tanya hanya yang belum ada, maks 2 (Rama 22 Okt); katalog hanya kalau desain belum dipilih; sudah lengkap → rekap.
-    await booking.kirimTeks(sock, jid, booking.teksTanya(b, pembuka), 'tanya-booking→customer');
+    // Rama 22 Okt: di awal boleh kirim form (terisi sebagian); kalau klien malas mengisi, bot menggali bertahap
+    // (konteksAI + pengingat, maks 2 per pesan); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
+    await booking.kirimTeks(sock, jid, b.lengkap ? pembuka : booking.teksForm(b, pembuka), 'form-booking→customer');
     if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid);
     await booking.kirimKonfirmasi(sock, jid);
     await booking.laporAdmin(sock, jid, judulAdmin);
@@ -758,7 +759,10 @@ function registerMessageHandler(sock) {
       let kirimPL = false;
       // Form website TIDAK lagi memicu lampiran otomatis (22 Okt, usulan CS Mintet 13 + hasil E3: rekomendasi teks
       // saja lebih baik; teks + gambar = dobel). Lampiran lewat permintaan klien atau penanda [KIRIM: pricelist] dari AI.
-      if (mintaPricelist(originalText.replace(/\(halaman[^)]*\)/gi, ''))) kirimPL = bolehPL; // "(halaman Pricelist)" bukan permintaan
+      // Rama 22 Okt: klien yang MEMINTA pricelist diberi (audit: 8 klien yang PL-nya ditahan semuanya hilang;
+      // Bryant minta 3x). Gerbang kualifikasi lama (bolehPL) tetap dipakai untuk penanda [KIRIM] tanpa permintaan.
+      const mintaPL = mintaPricelist(originalText.replace(/\(halaman[^)]*\)/gi, '')); // "(halaman Pricelist)" bukan permintaan
+      if (mintaPL) kirimPL = true;
       if (lead) kirimPL = mintaPricelist(originalText); // lead minta PL: PL publik lengkap (Rama 7 Okt)
       // Klien lama hanya dikirimi pricelist kalau memintanya sendiri (keputusan Rama 6 Okt).
       const plKlienLama = !klienLamaCtx.has(jid) || mintaPricelist(originalText);
@@ -839,7 +843,7 @@ function registerMessageHandler(sock) {
       if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf || !!lead });
       // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
       // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
-      if (lampiran.includes('pricelist') && !kirimPL && bolehPL && plKlienLama &&
+      if (lampiran.includes('pricelist') && !kirimPL && (bolehPL || mintaPL) && plKlienLama &&
           !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
         await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf || !!lead });
       }

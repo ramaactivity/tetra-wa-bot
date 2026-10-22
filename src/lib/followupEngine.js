@@ -40,7 +40,8 @@ const JEDA_MAKS_MS = 45000;
 function dalamJamKerja() {
   const cfg = live.get();
   const jam = new Date(Date.now() + (cfg.TIMEZONE_OFFSET || 7) * 3600 * 1000).getUTCHours();
-  return jam >= (cfg.BUSINESS_START_HOUR ?? 8) && jam < Math.min(cfg.BUSINESS_END_HOUR ?? 20, 21);
+  // Follow-up hanya 09–20 walau jam kerja bot 06–23 (audit 22 Okt: 3 follow-up jam 06.18, 0 dibalas).
+  return jam >= Math.max(cfg.BUSINESS_START_HOUR ?? 8, 9) && jam < Math.min(cfg.BUSINESS_END_HOUR ?? 20, 20);
 }
 
 // Nama kontak WA sering ngawur ("F", "rama", "Teman Rama", "test-pdf").
@@ -107,6 +108,18 @@ function barisTranskrip(pesan) {
 // Kalimat basi & klaim palsu yang pernah lolos. Ketemu = pesan tidak dikirim.
 const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|keseruan|berkesan|momen spesial|siap (bantu|membantu)|keduluan|amankan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|\[/i;
 
+// Penanda follow-up (audit 22 Okt). RE_TUNDA: klien minta waktu. RE_DESAK: dorongan booking. ulangTanya: pertanyaan follow-up
+// membahas topik yang sama dengan pertanyaan terakhir kita yang tidak dijawab.
+const RE_TUNDA = /diskusi|dirundingkan|dibicarakan|tanya(in)?\s+(dulu|ke|sama)|info(in)?\s+ke|nanti\s+(aku|saya|ku|kami)?\s*(kabari|kabarin|hubungi|info)|kabar(i|in)\s+(lagi|nanti)|pikir(-pikir)?\s+dulu|dulu\s+ya\b/i;
+const RE_SOAL_BOOKING = /\bdp\b|booking|\bbook\b|transfer|rekening|cara\s+(pesan|bayar|booking)|bayar(nya)?\s+(ke|gimana)/i;
+const RE_DESAK = /\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil/i;
+const TOPIK_TANYA = { tanggal: /tanggal|tgl|kapan/i, jam: /jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)/i,
+  lokasi: /lokasi|venue|di\s?mana|daerah|kota/i, tamu: /tamu|undangan|berapa\s+orang/i, format: /2R|4R|polaroid|format/i };
+function ulangTanya(lama, baru) {
+  const qBaru = (String(baru || '').match(/[^.!?\n]*\?/g) || []).join(' ');
+  if (!lama || !qBaru) return false;
+  return Object.values(TOPIK_TANYA).some((re) => re.test(lama) && re.test(qBaru));
+}
 async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
   // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
   // gaya akrab, tanpa "masih tertarik?" (keputusan Rama 30 Sep 2026).
@@ -119,20 +132,38 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
     catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
   }
+  // Ditulis ulang 22 Okt dari audit 28 follow-up (19% dibalas): 24/28 cuma mengulang pertanyaan yang dicuekin, ajakan
+  // DP 0/5 dibalas. Yang berhasil memberi sesuatu dulu. Prinsip Rama: tiap klien unik, jangan salesy.
   const prompt =
-    `Tulis SATU pesan WhatsApp lanjutan dari admin Tetra ke ${panggilan} yang belum membalas. Tujuannya satu: dia mau membalas.\n` +
-    `- Buka langsung dengan hal spesifik miliknya dari TRANSKRIP (acaranya, tanggal, venue, atau pertanyaan terakhirnya). Jangan buka dengan basa-basi.\n` +
-    `- Beri SATU alasan nyata untuk membalas sekarang, dan hanya dari fakta di transkrip/system prompt: jawab keraguan yang pernah ia sebut, ` +
-    `rekomendasi durasi sesuai jumlah tamu, tawaran cek slot kalau tanggalnya belum dicek, atau contoh hasil di https://tetraphoto.com/galeri ` +
-    `(link galeri hanya kalau belum pernah dikirim di transkrip).\n` +
-    `- Tutup dengan SATU pertanyaan yang gampang dijawab dan MEMAJUKAN booking (tanggal, jam, durasi, atau mau diamankan slotnya), bukan "gimana Kak?" atau basa-basi (weekend/weekday).\n` +
-    `- Maks 3 kalimat pendek, gaya chat orang asli, tanpa bullet, emoji maks 1.\n` +
-    `- Keputusan/ucapan ADMIN di transkrip adalah keputusan resmi: jangan diulang, dibantah, atau dijanjikan ulang.\n` +
-    `- DILARANG: mengaku sudah melakukan sesuatu (sudah koordinasi/cek/catat), bilang slot masih aman/tersedia, menjanjikan promo/diskon, ` +
-    `harga yang tidak ada di transkrip, dan kata/frasa "follow up", "sekadar mengingatkan", "ramaikan", "berkesan", "momen spesial", "keduluan", "siap bantu".\n` +
-    `Contoh BURUK: "Halo Kak! Mau follow up rencana photobooth-nya. Tim Tetra siap ramaikan acaranya biar makin berkesan. Slotnya bisa diamankan dengan DP Rp 500.000."\n` +
-    `Contoh BAGUS: "Kak Diela, tanggal wedding di Balitro-nya sudah ketemu? Kalau sudah, kabari aja, aku cek slotnya hari itu juga. Untuk wedding biasanya 4 jam paling aman, tamu nggak numpuk antre."\n` +
-    `Kalau dari transkrip ternyata tidak pantas dikirimi pesan, balas persis [DIAM].`;
+    `Kamu tim Tetra (bukan admin). Tulis SATU pesan WhatsApp lanjutan untuk ${panggilan}, calon klien yang belum membalas. ` +
+    `Tujuannya: dia merasa dipahami dan terbantu sehingga mudah membalas; deal itu hasil, bukan isi pesan.\n` +
+    `Sebelum menulis, baca TRANSKRIP dan FAKTA, tentukan dalam hati: dia sedang memutuskan apa, menunggu apa/siapa, seberapa hangat ` +
+    `dan bagaimana nadanya. Pilih SATU langkah yang paling cocok untuk DIA — setiap klien beda, jangan pola yang sama:\n` +
+    `- info praktis yang khas acaranya (tip yang berguna, bukan brosur);\n` +
+    `- jawab keraguan yang tersirat (diam setelah dapat harga = mungkin soal harga: tegaskan sudah all-in tanpa biaya tambahan, ` +
+    `buka pintu untuk patokan budget; paket/opsi yang lebih murah HANYA kalau dia pernah menyinggung budget atau mahal);\n` +
+    `- beri harga kalau dia pernah minta dan belum dapat angkanya;\n` +
+    `- keputusannya di orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan, tanpa pertanyaan;\n` +
+    `- kantor/instansi/sekolah: tawarkan penawaran resmi untuk diajukan;\n` +
+    `- berhenti di tahap booking: ringankan prosesnya (lewat chat juga bisa, aku bantu);\n` +
+    `- beri jalan keluar yang sopan ("kalau belum butuh sekarang, santai aja");\n` +
+    `- atau balas persis [DIAM] kalau tidak ada hal baru yang berguna untuknya.\n` +
+    `Aturan:\n` +
+    `- Isi harus BARU dibanding pesan Tetra sebelumnya. JANGAN ulang pertanyaan yang sudah dia lewati (lihat FAKTA); kalau info itu ` +
+    `memang perlu, beri alasan yang menguntungkan dia atau bilang boleh menyusul.\n` +
+    `- Pertanyaan opsional. Kalau ada, satu saja dan bisa dijawab satu kata/angka atau pilihan A/B atas hal yang memang sedang dia timbang.\n` +
+    `- JANGAN ajak DP/kunci/amankan tanggal, kirim link booking atau rekening, atau urgensi ("biar nggak bentrok", "keburu") ` +
+    `kecuali dia sendiri sudah bertanya soal booking.\n` +
+    `- JANGAN mengarang detail yang tidak ada di transkrip atau system prompt: jenis acara, kategori, siapa pengambil keputusan, ` +
+    `kapasitas/angka per jam, jumlah orang per foto. Hitungan harus benar. Minta maaf hanya kalau memang Tetra yang telat atau salah.\n` +
+    `- Jangan mengaku sudah melakukan sesuatu, jangan bilang slot masih aman/tersedia, jangan janji promo/diskon. Harga dan fakta hanya ` +
+    `dari transkrip dan system prompt; kalau ada info Tetra yang keliru dan relevan di transkrip, luruskan dengan jujur.\n` +
+    `- Panggil "${panggilan}"${panggilan === 'Kak' ? '' : ' atau "Kak" saja'}; jangan pakai nama lain.\n` +
+    `- Link galeri hanya kalau dia ragu soal hasil atau minta contoh dan belum pernah dikirim, dengan arahan apa yang dilihat.\n` +
+    `- Gaya chat orang asli, tanpa bullet, emoji maks 1; panjang sesuai isinya. Kata terlarang di system prompt tetap berlaku ` +
+    `(termasuk "follow up", "sekadar mengingatkan"). Keputusan/ucapan ADMIN di transkrip = keputusan resmi.\n` +
+    `Balas persis [DIAM] kalau dia sudah batal/bukan calon klien, bilang belum ada rencana, admin sedang menangani, ` +
+    `acaranya sudah lewat, atau kamu tidak punya hal baru yang berguna.`;
   try {
     return await getAIResponse([], prompt, leadContext);
   } catch (e) {
@@ -203,8 +234,17 @@ async function runFollowupCycle(sock) {
       if (!n.kirim) { state[jid] = now; continue; }
     }
 
+    // Klien bilang diskusi dulu / nanti mengabari: beri ruang minimal 5 hari (audit 22 Okt: ditagih besoknya).
+    const klienAkhir = pesan.filter((p) => p.role === 'user').at(-1);
+    if (klienAkhir && RE_TUNDA.test(klienAkhir.content) && now - (klienAkhir.t || 0) < 5 * 864e5) continue;
+    const botAkhir = pesan.filter((p) => p.role === 'assistant').at(-1);
+    const tanyaAkhir = (String(botAkhir?.content || '').match(/[^.!?\n]*\?/g) || []).at(-1)?.trim() || '';
+    const hariDiam = Math.round((now - (botAkhir?.t || now)) / 864e5);
+    const tanyaBooking = pesan.some((p) => p.role === 'user' && RE_SOAL_BOOKING.test(p.content));
     const panggilan = cleanName(last.name) || 'Kak';
     const leadContext = `Panggilan klien: ${panggilan}\n` +
+      `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
+      `dia ${tanyaBooking ? 'SUDAH' : 'BELUM'} pernah bertanya soal booking/DP.\n` +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
       `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
     let msg = await generateFollowupMessage(panggilan, leadContext, vendor);
@@ -213,6 +253,14 @@ async function runFollowupCycle(sock) {
     if (typeof msg === 'string' && RE_SLOP.test(msg)) {
       console.log(`[followup] tulis ulang ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
       msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+    }
+    // Desakan booking tanpa diminta, atau mengulang pertanyaan yang dicuekin → tulis ulang sekali; masih → tidak dikirim.
+    const salah = (m) => typeof m === 'string' && !/\[(DIAM|ADMIN_HANDOFF)\]/.test(m) &&
+      ((!tanyaBooking && RE_DESAK.test(m)) || ulangTanya(tanyaAkhir, m));
+    if (salah(msg)) {
+      console.log(`[followup] tulis ulang ${jid} (desak/ulang tanya): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
+      msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+      if (salah(msg)) { lewati('masih mendesak/mengulang pertanyaan setelah tulis ulang'); continue; }
     }
     if (!msg || typeof msg !== 'string') continue;
     if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
