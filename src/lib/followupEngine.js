@@ -58,6 +58,9 @@ function cleanName(raw) {
     'customer', 'client', 'user', 'guest', 'unknown', 'tanpa nama', 'none', 'null',
     'pak', 'bu', 'ibu', 'bapak', 'kak', 'kakak', 'min', 'admin tetra',
     'halo', 'hai', 'hi', 'ping', 'p',
+    // Panggilan sayang/keluarga yang sering jadi nama WA ("Kak say", 22 Okt) — bukan nama orang.
+    'say', 'sayang', 'syg', 'beb', 'bebeb', 'baby', 'babe', 'honey', 'cinta', 'bunda', 'bun', 'mama', 'mamah', 'mami',
+    'papa', 'papah', 'papi', 'ayah', 'umi', 'abi', 'ummi', 'abah', 'emak', 'dek', 'adek', 'bestie', 'aku', 'saya', 'me',
   ]);
   if (BLOCK.has(low) || low.startsWith('test') || low.startsWith('teman ')) return null;
   return s;
@@ -204,7 +207,13 @@ async function runFollowupCycle(sock) {
     const leadContext = `Panggilan klien: ${panggilan}\n` +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
       `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
-    const msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+    let msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+    // Tertahan kalimat terlarang → tulis ulang sekali sekarang, bukan menunggu siklus berikutnya (usulan CS Mintet 12:
+    // follow-up Alfa tertunda ±6 jam berulang 3 hari).
+    if (typeof msg === 'string' && RE_SLOP.test(msg)) {
+      console.log(`[followup] tulis ulang ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
+      msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+    }
     if (!msg || typeof msg !== 'string') continue;
     if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
       state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam
@@ -264,7 +273,10 @@ function jenisProspek(riw, s, now) {
     const hk = hariKerja(lastUserT, now);
     return (s.n === 0 && hk >= 3) || (s.n === 1 && hk >= 7) ? 'lanjut' : null;
   }
-  return s.n === 0 && hariKerja(riw.at(-1).t || 0, now) >= 2 ? 'minta-pic' : null;
+  // Balasan kita ke auto-reply biasanya sudah minta PIC: jangan minta lagi (audit 22 Okt: dua kali minta PIC).
+  const sudahMinta = riw.some((p) => p.role === 'assistant' && /\bPIC\b|nomor WA|e-?mail|kontak (yang|orang)/i.test(String(p.content)) &&
+    !/sapaan dari tim sales/.test(String(p.content)));
+  return !sudahMinta && s.n === 0 && hariKerja(riw.at(-1).t || 0, now) >= 2 ? 'minta-pic' : null;
 }
 
 async function followupProspek(sock, paused, sudah) {
@@ -299,7 +311,14 @@ async function followupProspek(sock, paused, sudah) {
             '(mis. pricelist yang sudah dikirim, kontak PIC yang diminta) dan mengajak lanjut ngobrol soal kerja sama vendor rekanan. ' +
             'Jangan menagih, jangan tanya "masih tertarik?", jangan pakai kata "follow up".'
           : 'Kontak ini baru membalas otomatis. Tulis SATU pesan lanjutan singkat (maks 2 kalimat) yang meminta nomor WA/email PIC yang mengurus kerja sama vendor/marketing.';
-        msg = await getAIResponse(riw.slice(-30), `${tugas}\nKalau dari riwayat tidak pantas dikirimi pesan, balas persis [DIAM].`, prospekWa.konteksLead(p));
+        // Audit 22 Okt: follow-up lead menulis "kemarin" untuk pesan 5–12 hari lalu, menyapa nama dari data prospek
+        // ("Kak Talia" untuk Aydi), dan minta PIC padahal lead masih menunggu harga rekanan.
+        const hari = Math.max(0, Math.round((now - (riw.filter((x) => x.role !== 'user').at(-1)?.t || now)) / 864e5));
+        const fakta = `\nFAKTA: pesan terakhir kita ${hari} hari lalu — jangan tulis "kemarin/tadi" kalau tidak benar. Sapa "Kak" saja; ` +
+          'nama orang hanya kalau orang itu sendiri menyebut namanya di riwayat. Kalau lead masih menunggu sesuatu dari kita ' +
+          '(harga/skema rekanan, contoh hasil, materi), pesan ini harus memenuhi itu — jangan minta PIC atau mengulang pertanyaan lama. ' +
+          'Jangan menganggap tawaran kita sudah disetujui kalau lead belum bilang setuju.';
+        msg = await getAIResponse(riw.slice(-30), `${tugas}${fakta}\nKalau dari riwayat tidak pantas dikirimi pesan, balas persis [DIAM].`, prospekWa.konteksLead(p));
       }
     } catch (e) { console.error(`[followup-lead] gagal generate ${jid}:`, e.message); continue; }
     msg = String(msg || '');

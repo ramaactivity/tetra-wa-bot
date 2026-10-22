@@ -32,7 +32,10 @@ function strategi() {
 // Baris bernominal rupiah dibuang: harga hanya dari daftar harga resmi & FAQ. Baris soal
 // pembayaran/rekening/diskon/link/nomor atau "abaikan aturan" juga dibuang: bahan tinjauan
 // memuat chat klien, jadi pelajaran bisa tersusupi (masukan sesi hermes-0f).
-const RE_PELAJARAN_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|transfer|\btf\b|\bdp\b|lunas|bayar|diskon|promo|potongan|gratis|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas/i;
+// 22 Okt (usulan CS Mintet 20): kata biasa "DP/bayar/diskon" tidak lagi membuang baris — dulu 7 dari 32 pelajaran penting
+// ("jangan tawarkan DP sebelum paket jelas", seluruh pola [eo_wo]/[venue]) tak pernah sampai ke bot. Yang dibuang: angka
+// (lewat angkaRupiah + persen), rekening/bank, link, dan kalimat yang MEMBERI keringanan ("kasih diskon", "boleh gratis").
+const RE_PELAJARAN_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|\d+\s*%|persen|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas|(?<!\b(?:jangan|tidak|tak|dilarang|bukan|belum)\s+(?:\p{L}+\s+)?)\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)/iu;
 const PELAJARAN_FILE = () => process.env.PELAJARAN_FILE ||
   path.join(process.env.HOME || '/home/ubuntu', '.hermes/profiles/tetra-wa-bot/skills/cs-mintet-pelajaran/SKILL.md');
 // Fakta dari balasan admin (dipelajari CS Mintet otomatis): baris
@@ -86,12 +89,12 @@ function pelajaran() {
   try {
     const isi = fs.readFileSync(PELAJARAN_FILE(), 'utf-8');
     const baris = bagianSkill(isi, 'Pelajaran')
-      .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 40);
+      .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 60);
     const fakta = bagianSkill(isi, 'Fakta dari admin').map((l) => l.match(/^\s*-\s*(.+?)\s*\(admin:\s*"([^"]+)"\)\s*$/))
       .filter((m) => m && !angkaRupiah(m[1]).length && !RE_FAKTA_BAHAYA.test(m[1]) && kutipanSah(m[2]))
-      .map((m) => `- ${m[1]}`).slice(0, 40);
+      .map((m) => `- ${m[1]}`).slice(0, 60);
     const pola = bagianSkill(isi, 'Pola klien')
-      .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 40);
+      .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 60);
     return (pola.length
       ? '\n\nPOLA KLIEN (pendekatan per tipe klien hasil belajar; pakai baris yang cocok dengan Persona di konteks):\n' + pola.join('\n')
       : '') + (baris.length
@@ -219,7 +222,7 @@ HARGA RESMI — PHOTOBOOTH CLASSIC UNLIMITED CETAK (paket lain, add-on, dan exte
 - 6 Jam  : Rp 4.000.000
 - 8 Jam  : Rp 5.000.000
 - Extend on the spot, per jam: Rp 500.000
-- Durasi yang tidak ada di tabel (mis. 7 jam): JANGAN sebut "paket 7 jam". Tawarkan 6 jam + extend 1 jam (*Rp 4.000.000* + *Rp 500.000* = *Rp 4.500.000*, keputusan Rama 7 Okt) atau 8 jam (*Rp 5.000.000*).
+- Durasi yang tidak ada di tabel (mis. 7 jam): JANGAN sebut "paket 7 jam". Tawarkan 6 jam + extend 1 jam (*Rp 4.000.000* + *Rp 500.000* = *Rp 4.500.000*, keputusan Rama 7 Okt) atau 8 jam (*Rp 5.000.000*). Durasi setengah jam (mis. 5,5 jam) dibulatkan ke paket di atasnya: 5,5 jam → *6 jam Rp 4.000.000*; jangan menulis harga gabungan hasil hitungan sendiri.
 
 LEBIH DARI 1 UNIT (mis. "2 booth", "2 spot", "paket 3 jam x 2"): Tetra punya 3 unit, jadi satu acara bisa pakai 2–3 unit.
 - Harga = harga paket per unit × jumlah unit, sebut per unitnya, mis. "*Rp 2.500.000*/unit × 2 = *Rp 5.000.000*". Tanpa diskon; harga spesial hanya dari admin.
@@ -240,6 +243,11 @@ ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Jangan pura-pura kenal venue ("tempatnya adem dan luas"). Kamu belum tentu pernah ke sana.
 - Yang tidak ada di daftar harga maupun FAQ (paket custom, biaya transport luar Jabodetabek/Magazine Box, harga backdrop Luxury): bilang terus terang admin yang info harganya, tetap layani pertanyaan lain.
 - Fakta operasional (transport, kebutuhan venue, backdrop, format cetak, pajak, promo, setelah DP) ada di FAQ KLIEN di bawah. Yang tidak tertulis di sini maupun di FAQ jangan dijawab dengan tebakan; kalau itu inti pertanyaannya, pakai HANDOFF.
+- Sebelum bilang "aku cek/tanyain ke admin", baca dulu pesan ADMIN di riwayat (berawalan "(admin)"). Kalau admin sudah menjawab hal itu (mis. "paling lambat Rabu", "aman insyaallah"), pakai jawaban itu — jangan bertanya ulang ke admin.
+- "Boleh/iya/mau/oke" dari klien = setuju dengan tawaran TERAKHIR kita (mis. kirim contoh hasil) → langsung lakukan tawaran itu, jangan ganti topik.
+- "[kirim gambar]" tanpa keterangan BUKAN bukti transfer atau desain final: tanggapi sesuai konteks (mis. "makasih Kak, referensinya aku teruskan ke admin desain"), jangan menyimpulkan isinya.
+- Jangan menyebut nama klien, acara, venue, atau rekanan lain yang tidak ada di percakapan ini. Jangan menjanjikan dokumen yang tidak ada (company profile, proposal PDF, brosur fisik, materi khusus): yang ada hanya lampiran di daftar LAMPIRAN dan galeri https://tetraphoto.com/galeri. Jangan janji mengirim email, menelepon, atau mengantar barang.
+- Snapbook: pilih tier yang SAMA ATAU LEBIH BESAR dari jumlah tamu; tamu di atas 500 (atau rentangnya melewati 500) → tak terbatas.
 - Jawab MAKSUD pesan TERAKHIR klien. Topik baru jangan dijawab dengan topik lama: minta unduh/softfile foto acara ≠ pricelist, tanya lowongan kerja ≠ cek tanggal kosong, komplain ≠ jualan.
 - Pertanyaan di luar sewa photobooth yang jawabannya tidak ada di sini (lowongan kerja/magang, dll): jangan mengarang. Bilang nanti tim yang kabari, lalu [INFO_ADMIN: <topiknya>].
 - Kamu TIDAK BISA melihat gambar/dokumen/voice note (jangan menebak isinya; kalau perlu tanya singkat maksudnya) dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
@@ -279,7 +287,7 @@ RIWAYAT — pesan berawalan "(admin)" adalah balasan manual admin Tetra: itu kep
 
 IDENTITAS — sebut dirimu "tim Tetra" (mis. "aku dari tim Tetra"), JANGAN "admin Tetra": urusan khusus kamu teruskan ke admin/owner, jadi kalau kamu mengaku admin lalu bilang "aku teruskan ke admin" itu bertabrakan (insiden 8 Okt).
 
-ACARA DADAKAN — klien butuh photobooth HARI INI atau BESOK: JANGAN bilang "bisa", "bisa diusahakan", atau "masih kosong" walaupun cek jadwal kosong (crew & alat harus dicek admin). Tanyakan yang belum diketahui (lokasi, jam mulai, durasi, jenis acara) dalam satu pesan, bilang kamu langsung kabari admin supaya dikonfirmasi secepatnya, dan tambahkan [INFO_ADMIN: DADAKAN <tanggal> <lokasi/jam kalau ada>].
+ACARA DADAKAN — calon klien yang BELUM booking butuh photobooth HARI INI atau BESOK (klien yang sudah booking dan mengingatkan acaranya BUKAN dadakan: konfirmasi santai, jangan ragukan crew/alat): JANGAN bilang "bisa", "bisa diusahakan", atau "masih kosong" walaupun cek jadwal kosong (crew & alat harus dicek admin). Tanyakan yang belum diketahui (lokasi, jam mulai, durasi, jenis acara) dalam satu pesan, bilang kamu langsung kabari admin supaya dikonfirmasi secepatnya, dan tambahkan [INFO_ADMIN: DADAKAN <tanggal> <lokasi/jam kalau ada>].
 
 DI LUAR LAYANAN — Tetra hanya menyewakan jasa photobooth lengkap (alat + crew + cetak). Tetra TIDAK menyewakan akun/lisensi software photobooth (mis. dslrBooth, "sewa akunnya saja") dan tidak menyewakan alat tanpa crew. Baca dulu maksud klien: "sewa DSLR booth / dslrBooth + sewa akunnya" = software, bukan jasa kita. Jawab sopan bahwa itu tidak tersedia, lalu tawarkan jasa photobooth lengkap kalau acaranya cocok. Jangan handoff untuk ini.
 
@@ -351,6 +359,11 @@ function masalahGaya(teks) {
   if (kata.length) out.push(`kata terlarang: ${kata.map((k) => `"${k}"`).join(', ')}`);
   if (/\bsaya\b/i.test(isi)) out.push('sebut diri "aku", bukan "saya"');
   if (/\bkamu\b/i.test(isi)) out.push('sapa klien "Kak", bukan "kamu"');
+  const klaim = isi.match(RE_KLAIM_AKSI);
+  if (klaim) {
+    out.push(`klaim tindakan yang tidak bisa kamu lakukan ("${klaim[0]}"): kamu tidak bisa melihat gambar/rekening, mengirim email, ` +
+      'mengantar barang, atau mendaftarkan rekanan. Bilang akan diteruskan ke admin, lalu tambahkan [INFO_ADMIN: <apa yang perlu dilakukan>]');
+  }
   if ((isi.match(/\p{Extended_Pictographic}/gu) || []).length > 1) out.push('emoji maksimal 1');
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
   if (isi.split('\n').filter((l) => l.trim()).length > 7 || isi.length > 700) {
@@ -358,6 +371,16 @@ function masalahGaya(teks) {
   }
   return out;
 }
+// Klaim tindakan yang bot tidak bisa lakukan (audit 22 Okt, 6 kasus nyata): gambar dianggap bukti transfer "udah masuk",
+// "masuk skema rekanan", "materi udah aku siapin", janji kirim/hubungi lewat email, "diantar ke kantor". Diuji ke seluruh
+// riwayat: 6 kena, semuanya klaim palsu ("aku catat" sengaja tidak dijaga — sah di tahap isi data booking).
+const RE_KLAIM_AKSI = new RegExp([
+  '\\b(bukti\\s+)?(transfer|tf|dp|pembayaran|pelunasan)(nya)?\\s+(sudah|udah|telah)\\s+(masuk|diterima|kami terima|aku terima|lunas)',
+  '\\bmasuk\\s+(skema|daftar)\\s+rekanan',
+  '\\b(sudah|udah)\\s+(aku|kami)\\s+(siapin|siapkan|daftarkan|hubungi)\\b',
+  '\\b(aku|kami|tim\\s+kami)\\s+(akan\\s+|nanti\\s+|segera\\s+)?(kirim(kan|in)?|hubungi)\\b[^.\\n?]{0,30}\\be-?mail\\b',
+  '\\b(di)?antar(kan|in)?\\s+ke\\s+(kantor|alamat|rumah|venue)',
+].join('|'), 'i');
 const RE_JANJI_ADMIN = /\b(?:teruskan|terusin|tanyain|tanyakan|sampaikan|pastiin|pastikan|konfirmasi(?:kan)?|cek(?:in)?|kabarin)\b[^.\n?]{0,25}\b(?:ke|sama|dengan|dari) (?:admin|owner|tim)\b/i;
 // Jaring terakhir kalau tulis ulang masih memuat kata terlarang: buang kalimatnya (baris penanda [..] tidak disentuh).
 function buangKataTerlarang(teks) {
@@ -477,6 +500,10 @@ async function panggil(endpoint, history, message, leadContext) {
         const ulang = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
         if (ulang && !bocorPikiran(ulang)) teks = ulang;
         teks = buangKataTerlarang(teks);
+        if (RE_KLAIM_AKSI.test(isiKlien(teks))) {
+          console.log(`[klaim ${endpoint.model}] masih mengklaim tindakan setelah tulis ulang — diteruskan ke admin`);
+          return '[ADMIN_HANDOFF]';
+        }
       }
       let asing = hargaAsing(teks, sumberHarga);
       if (asing.length) {
@@ -602,7 +629,7 @@ function cumaMenutup(history, message) {
 }
 async function getAIResponse(history, message, leadContext) {
   if (cumaMenutup(history, message)) {
-    console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 40)}`);
+    console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
     return '[DIAM]';
   }
   try {

@@ -50,8 +50,10 @@ Tujuan: satu paket yang terasa dibuat untuk acaranya.
 - Sebut yang sudah termasuk secukupnya (all-in, unlimited, frame custom, crew, transport
   Jabodetabek), bukan daftar panjang. Bukti: tawarkan galeri https://tetraphoto.com/galeri.
 - Wedding/gathering/acara kantor dengan tamu ≥200: setelah rekomendasi utama, tambahkan SATU kalimat
-  Snapbook dengan tier sesuai jumlah tamu (harga dari FAQ), mis. "Kalau mau semua tamu ikut foto dari
-  HP-nya plus ninggalin ucapan suara, ada Snapbook 500 tamu *Rp 950.000*, semua masuk satu album."
+  Snapbook dengan tier yang SAMA ATAU LEBIH BESAR dari jumlah tamu (harga dari FAQ; di atas 500 tamu = tak
+  terbatas). Mis. untuk 350 tamu: "Kalau mau semua tamu ikut foto dari HP-nya plus ninggalin ucapan suara,
+  ada Snapbook 500 tamu *Rp 950.000*, semua masuk satu album." (22 Okt: contoh ini pernah disalin mentah
+  untuk 600 tamu — salah, harusnya tak terbatas.)
 - Tutup dengan pertanyaan yang mendorong langkah berikutnya (jam acara, mau lanjut amankan
   tanggal?).
 

@@ -11,6 +11,8 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
 ## Katalog paket lengkap (harga resmi, sumber Tetra Ops & pricelist 2026)
 Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua paket ini sendiri (keputusan Rama 27 Sep 2026).
 
+- Semua paket unlimited cetak: tidak ada paket per jumlah cetak (mis. "cukup 100 cetak"). Jawab begitu lalu sebut durasi yang pas (Rama 21 Okt: "hanya ada paket unlimited cetak saja").
+
 ### Photobooth Classic (Unlimited Photobooth)
 - 2 jam Rp 2.000.000 · 3 jam Rp 2.500.000 · 4 jam Rp 3.000.000 · 5 jam Rp 3.500.000 · 6 jam Rp 4.000.000 · 8 jam Rp 5.000.000.
 - Durasi sangat panjang (>8 jam): ada paket 13 jam Rp 7.500.000 (format 2R). Tawarkan hanya kalau klien butuh durasi lebih dari 8 jam.
@@ -87,6 +89,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Kapasitas foto
 - Sekali foto bisa sampai 10 orang lebih, tergantung luas area photobooth. Bisa disesuaikan lewat lensa.
+- Foto rombongan (mis. 20 orang): semua yang ikut foto dapat cetakan, dan bebas foto lalu cetak lagi selama durasi (Rama 21 Okt: "real unlimited… foto ber 20 orang, semuanya dapet").
 
 ## Format cetak (jelaskan dengan bahasa awam; klien sering benar-benar belum tahu)
 - Pilihan cetak di paket unlimited (harga sama): 2R photostrip, 4R, dan Polaroid. Klien pilih SATU format untuk acaranya.
@@ -108,10 +111,12 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Crew datang paling lambat 1 jam sebelum acara mulai. Setup alat sekitar 30 menit.
 - Layanan berakhir tepat sesuai durasi yang dipesan. Setelah terpasang, alat tidak dapat dipindahkan; kalau terpaksa dipindah, durasi tetap berjalan.
 - Khusus pernikahan: ada sesi khusus pengantin 15 menit.
+- Alat: printer DNP RX1HS (cetak cepat), flash Godox SK400II, kamera profesional (Rama 21 Okt). Spesifikasi lain (tipe kamera, laptop): admin yang info.
 
 ## Hasil foto
 - Tamu unduh langsung lewat QR code di lokasi; halaman unduh aktif 30 hari sejak acara.
 - Galeri lengkap untuk klien bisa diakses 90 hari; paket dengan flashdisk menerima semua file di flashdisk. Sarankan klien menyimpan salinan.
+- Klien minta cetak ulang foto acaranya yang terlewat/belum tercetak: boleh, admin bantu cetakkan (Rama: "Boleh kaka, mau yang mana aja fotonya yang dicetak?"). Tanyakan foto yang mana, lalu [INFO_ADMIN: cetak ulang <acara>]; waktu jadi dan cara kirim (ambil/ojek online) dikonfirmasi admin.
 
 ## Backdrop
 - Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold, Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
@@ -134,7 +139,8 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Pembayaran
 - DP minimal Rp 500.000 untuk mengunci tanggal. Tanggal baru terkunci setelah DP diterima, bukan saat tanya-jawab.
-- Pelunasan paling lambat H-1 sebelum acara.
+- Pelunasan paling lambat H-1 sebelum acara. Kalau klien belum bisa di H-1, jangan kaku: minta berkabar dulu, admin yang konfirmasi (Rama: "biasanya kita di H-1… kalau H-1 belum bisa gapapa berkabar aja yaa") + [INFO_ADMIN].
+- Nota/kwitansi DP dan pelunasan (PDF) dikirim admin di chat setelah pembayaran dicek.
 - Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.
 
 ## Booking online — booking.tetraphoto.com (jalur utama, keputusan Rama 8 Okt 2026)

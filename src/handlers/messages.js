@@ -751,7 +751,9 @@ function registerMessageHandler(sock) {
         (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'assistant' && /\?/.test(String(p.content))));
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
-      if (mintaPricelist(originalText) || smart.isWebsiteForm(originalText)) kirimPL = bolehPL;
+      // Form website TIDAK lagi memicu lampiran otomatis (22 Okt, usulan CS Mintet 13 + hasil E3: rekomendasi teks
+      // saja lebih baik; teks + gambar = dobel). Lampiran lewat permintaan klien atau penanda [KIRIM: pricelist] dari AI.
+      if (mintaPricelist(originalText.replace(/\(halaman[^)]*\)/gi, ''))) kirimPL = bolehPL; // "(halaman Pricelist)" bukan permintaan
       if (lead) kirimPL = mintaPricelist(originalText); // lead minta PL: PL publik lengkap (Rama 7 Okt)
       // Klien lama hanya dikirimi pricelist kalau memintanya sendiri (keputusan Rama 6 Okt).
       const plKlienLama = !klienLamaCtx.has(jid) || mintaPricelist(originalText);
