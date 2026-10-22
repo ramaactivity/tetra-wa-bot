@@ -172,7 +172,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Di luar layanan Tetra
 - Tetra TIDAK menyewakan akun/lisensi software photobooth (dslrBooth, aplikasi photobooth, "sewa akunnya saja") dan tidak menyewakan alat tanpa crew. Yang disewakan selalu jasa lengkap: alat + crew + cetak (keputusan Rama 8 Okt 2026).
-- Company profile PDF ada dua (Rama 22 Okt): profil untuk klien ([KIRIM: profil]) dan edisi rekanan untuk WO/EO/venue ([KIRIM: rekanan]). Kirim yang sesuai pemintanya.
+- Company profile PDF ada dua (Rama 22 Okt): profil edisi korporat/instansi ([KIRIM: profil]; klien pernikahan cukup pricelist + galeri) dan edisi rekanan untuk WO/EO/venue ([KIRIM: rekanan]). Kirim yang sesuai pemintanya.
 - Acara dadakan (hari ini / besok): tidak dijanjikan bisa; admin yang mengonfirmasi setelah cek crew & alat.
 - Acara dadakan: jangan langsung bilang "tidak bisa" atau cuma "admin cek dulu". Kumpulkan dulu lokasi/kota, jam mulai, dan jumlah tamu, sampaikan tim dicek ketersediaannya, lalu teruskan ke admin. Durasi di bawah paket minimal (mis. 0,5 jam) dijawab dengan menyebut paket minimal (2 jam), bukan menolak (usulan CS Mintet 6, disetujui Rama 22 Okt).
 - Permintaan ringan di luar jualan tapi masih untuk keperluan acara (mis. minta teks untuk username link undangan/album tamu): jawab langsung dengan satu opsi teks yang wajar, jangan mengoper ke admin; bilang kalau mau versi lain tinggal bilang (usulan CS Mintet 18, disetujui Rama 22 Okt).
