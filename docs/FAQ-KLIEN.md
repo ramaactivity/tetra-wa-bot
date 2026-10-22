@@ -50,6 +50,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ### Extend & durasi di atas 8 jam
 - Photobooth Classic dan Videobooth 360: tambah durasi di hari H Rp 500.000 per jam (wajib diinfokan dulu ke crew).
+- Acara lewat tengah malam (mis. malam tahun baru): tidak ada biaya tambahan, harga sesuai paket/durasi (Rama 22 Okt).
 - Butuh lebih dari 8 jam sejak awal: hitung paket 8 jam + Rp 500.000 per jam tambahan (mis. 10 jam = Rp 5.000.000 + Rp 1.000.000 = Rp 6.000.000). Untuk durasi sangat panjang, bandingkan dengan paket 13 jam Rp 7.500.000 (2R) dan tawarkan yang lebih hemat.
 
 - Durasi yang tidak ada di tabel (mis. 7 jam, Photobooth Classic): tawarkan paket 6 jam + extend 1 jam = Rp 4.000.000 + Rp 500.000 = Rp 4.500.000, atau paket 8 jam Rp 5.000.000. Jangan sebut "paket 7 jam" (keputusan Rama 7 Okt 2026).
@@ -59,8 +60,10 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Album Photostripe 20 halaman Rp 100.000
 - Guest Book Photo 25 lembar Rp 200.000
 - Photomagnet 50 cetak Rp 650.000
-- Custom Sleeve 1.000 lembar Rp 1.500.000 (sleeve pembungkus cetakan dengan desain custom)
+- Sleeve = bingkai/pembungkus fisik terpisah dari cetakan. Sleeve desain basic (hitam & putih) sudah termasuk paket. (Rama 22 Okt)
+- Custom Sleeve 1.000 lembar Rp 1.500.000 (sleeve dengan desain/branding klien sendiri)
 - Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan 100 pcs.
+- Keychain minimal 100 pcs. Klien butuh kurang dari 100: minta maaf, hanya bisa minimal 100 pcs (Rama 22 Okt).
 
 ### Snapbook & add-on baru (harga katalog booking.tetraphoto.com, DR-042, 8 Okt 2026)
 - Nama ke klien: **Snapbook — buku tamu versi kekinian** (sejak 9 Okt 2026; dulu disebut Guest Cam — kalau klien menyebut "Guest Cam", itu Snapbook). Selalu sebut "Snapbook" ke klien.
@@ -75,6 +78,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ### Dua layanan sekaligus
 - Mis. Photobooth + 360, atau 2 unit photobooth: harga dijumlah normal. Diskon bundling hanya dari admin.
+- Photobooth + Videobooth 360 bisa jalan bareng di satu venue (sudah beberapa kali). Total listrik ±650–700 watt; area tiap layanan sesuai ketentuannya masing-masing (Rama 22 Okt).
 - Pesan 2–3 unit photobooth di satu acara: tiap unit BOLEH beda format cetak (mis. unit A 2R photostrip, unit B 4R).
 
 ### Transport di luar Jabodetabek
@@ -120,7 +124,8 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Klien minta cetak ulang foto acaranya yang terlewat/belum tercetak: boleh, admin bantu cetakkan (Rama: "Boleh kaka, mau yang mana aja fotonya yang dicetak?"). Tanyakan foto yang mana, lalu [INFO_ADMIN: cetak ulang <acara>]; waktu jadi dan cara kirim (ambil/ojek online) dikonfirmasi admin.
 
 ## Backdrop
-- Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold, Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
+- Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold (gold glitter), Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
+- Gold glitter = backdrop basic, gratis (Rama 22 Okt).
 - Ada PDF contoh foto tiap warna backdrop basic; kirim saat klien bertanya (lihat LAMPIRAN).
 - Backdrop di luar basic (tema khusus, warna lain, Luxury #01/#02): bisa diadakan, harga tentatif/custom sesuai kebutuhan. Jangan sebut angka; bilang admin yang info harganya, tapi tetap layani pertanyaan lain.
 - Klien boleh pakai backdrop dekorasi acaranya sendiri.
@@ -166,6 +171,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Di luar layanan Tetra
 - Tetra TIDAK menyewakan akun/lisensi software photobooth (dslrBooth, aplikasi photobooth, "sewa akunnya saja") dan tidak menyewakan alat tanpa crew. Yang disewakan selalu jasa lengkap: alat + crew + cetak (keputusan Rama 8 Okt 2026).
+- Company profile PDF belum ada. Kalau diminta (klien/vendor), kirim website https://tetraphoto.com dan galeri https://tetraphoto.com/galeri (Rama 22 Okt).
 - Acara dadakan (hari ini / besok): tidak dijanjikan bisa; admin yang mengonfirmasi setelah cek crew & alat.
 - Acara dadakan: jangan langsung bilang "tidak bisa" atau cuma "admin cek dulu". Kumpulkan dulu lokasi/kota, jam mulai, dan jumlah tamu, sampaikan tim dicek ketersediaannya, lalu teruskan ke admin. Durasi di bawah paket minimal (mis. 0,5 jam) dijawab dengan menyebut paket minimal (2 jam), bukan menolak (usulan CS Mintet 6, disetujui Rama 22 Okt).
 - Permintaan ringan di luar jualan tapi masih untuk keperluan acara (mis. minta teks untuk username link undangan/album tamu): jawab langsung dengan satu opsi teks yang wajar, jangan mengoper ke admin; bilang kalau mau versi lain tinggal bilang (usulan CS Mintet 18, disetujui Rama 22 Okt).

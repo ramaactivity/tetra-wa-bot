@@ -376,7 +376,7 @@ async function followupBooking(sock, paused, sudahTerkirim) {
     const k = booking.kurang(b).map((x) => x.label);
     const prompt =
       `Tulis SATU pesan WhatsApp singkat (maks 4 baris) untuk klien yang SUDAH DP, mengingatkan dengan ramah ` +
-      `data acara yang masih kurang: ${k.join(', ')}. Sebut maks 3 yang paling penting, bilang boleh dicicil. ` +
+      `data acara yang masih kurang: ${k.join(', ')}. Tanyakan maks 2 yang paling penting dengan kalimat biasa (bukan daftar), bilang boleh dicicil. ` +
       (sisaHari !== null ? `Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi. ` : '') +
       `Jangan tawarkan DP atau paket lagi, jangan kirim ulang form lengkap.`;
     let msg;

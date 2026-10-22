@@ -453,7 +453,7 @@ function registerMessageHandler(sock) {
 
   // Ekstrak data acara dari chat terbaru (+ catatan klien) ke rekap booking,
   // lalu lapor admin kalau baru lengkap / berubah setelah lengkap.
-  const perbaruiBooking = async (jid, teksBaru) => {
+  const perbaruiBooking = async (jid, teksBaru, konfirmasi = true) => {
     // Gagal ekstrak tidak boleh menggagalkan balasan ke klien; pesan tetap di riwayat
     // dan ikut terbaca pada ekstraksi berikutnya.
     try {
@@ -466,6 +466,7 @@ function registerMessageHandler(sock) {
       booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD));
       await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
+      if (konfirmasi) await booking.kirimKonfirmasi(sock, jid);
     } catch (e) {
       console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
     }
@@ -475,9 +476,11 @@ function registerMessageHandler(sock) {
   const mulaiBooking = async (jid, msg, sumber, pembuka, judulAdmin) => {
     const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
-    await perbaruiBooking(jid, null);
-    await booking.kirimTeks(sock, jid, booking.teksForm(b, pembuka), 'form-booking→customer');
-    await booking.kirimKatalog(sock, jid);
+    await perbaruiBooking(jid, null, false);
+    // Tanya hanya yang belum ada, maks 2 (Rama 22 Okt); katalog hanya kalau desain belum dipilih; sudah lengkap → rekap.
+    await booking.kirimTeks(sock, jid, booking.teksTanya(b, pembuka), 'tanya-booking→customer');
+    if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid);
+    await booking.kirimKonfirmasi(sock, jid);
     await booking.laporAdmin(sock, jid, judulAdmin);
   };
 

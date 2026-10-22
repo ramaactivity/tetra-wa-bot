@@ -393,8 +393,8 @@ async function kirimInvoice(raw) {
 // jeda acak, sekali per nomor) ada di lib/prospekWa.js. Pesan masuk riwayat
 // supaya AI CS paham konteksnya kalau prospek membalas.
 // Hasil: { ok, pesan } atau { tunda } (biarkan perintah tetap pending).
-// Nomor tim tidak boleh menerima pesan klien/prospek (17 Okt: ucapan & galeri Iqbal & Ceca terkirim ke Bal karena
-// nomor booking di Tetra Ops berisi nomor staf; Fahmi pernah disapa sales). Ditolak, jadi kelihatan di Tetra Ops.
+// Sapaan sales (prospek dingin) tidak boleh ke nomor tim (Fahmi pernah disapa sebagai prospek). Hanya di jalur
+// prospek: tim yang juga klien (wedding Iqbal & Ceca 17 Okt) sah menerima pesan portal/relasi.
 const tolakNomorTim = (nomor) => ({ ok: false, pesan: `${nomor} nomor tim Tetra, bukan klien/prospek — cek data kontak di Tetra Ops` });
 async function kirimTeks(raw) {
   let p;
@@ -437,7 +437,6 @@ async function kirimRelasi(raw) {
   const pesan = String(p.pesan || '').trim();
   if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
   if (!pesan || pesan.length > 1000) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
-  if (timWa.anggota(nomor)) return tolakNomorTim(nomor);
   const rem = relasiWa.cek(nomor, pesan);
   if (rem.tolak) return { ok: false, pesan: rem.tolak };
   if (rem.tunda) return { tunda: rem.tunda };
@@ -470,7 +469,6 @@ async function kirimPortal(raw) {
   const pesan = String(p.pesan || '').trim();
   if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
   if (!pesan || pesan.length > 1500) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
-  if (timWa.anggota(nomor)) return tolakNomorTim(nomor);
   const rem = portal.cek();
   if (rem.tolak) return { ok: false, pesan: rem.tolak };
   if (!currentSock || !isConnected) return { tunda: 'socket belum siap' };
