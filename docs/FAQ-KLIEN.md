@@ -60,7 +60,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Album Photostripe 20 halaman Rp 100.000
 - Guest Book Photo 25 lembar Rp 200.000
 - Photomagnet 50 cetak Rp 650.000
-- Sleeve = bingkai/pembungkus fisik terpisah dari cetakan. Sleeve desain basic (hitam & putih) sudah termasuk paket. (Rama 22 Okt)
+- Sleeve = bingkai foto dari kertas yang membalut cetakan (seperti bingkai kayu, tapi kertas), terpisah dari cetakannya. Sleeve desain basic (hitam & putih) sudah termasuk paket. (Rama 22 Okt)
 - Custom Sleeve 1.000 lembar Rp 1.500.000 (sleeve dengan desain/branding klien sendiri)
 - Keychain Photobooth Station Rp 10.000 per pcs: booth khusus bikin gantungan kunci akrilik dengan crew tambahan. Minimal pesanan 100 pcs.
 - Keychain minimal 100 pcs. Klien butuh kurang dari 100: minta maaf, hanya bisa minimal 100 pcs (Rama 22 Okt).
@@ -96,7 +96,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Foto rombongan (mis. 20 orang): semua yang ikut foto dapat cetakan, dan bebas foto lalu cetak lagi selama durasi (Rama 21 Okt: "real unlimited… foto ber 20 orang, semuanya dapet").
 
 ## Format cetak (jelaskan dengan bahasa awam; klien sering benar-benar belum tahu)
-- Yang tamu bawa pulang ada DUA barang (Rama 22 Okt): (1) **cetakan foto** — foto tamu sudah menyatu dengan desain frame sesuai tema acara (nama acara, tanggal, logo) dalam satu lembar; (2) **sleeve** — kertas terpisah tempat cetakan diselipkan, dengan desainnya sendiri: sleeve desain basic (hitam & putih) sudah termasuk paket, sleeve custom pakai branding klien = add-on Custom Sleeve. Klien bertanya "printed foto sendiri, frame fotonya sendiri, masing-masing ada desainnya?" → jawab YA, itu cetakan + sleeve. JANGAN bilang "bukan dua barang terpisah" (salah, 19 Okt Meteora).
+- Yang tamu bawa pulang ada DUA barang (Rama 22 Okt): (1) **cetakan foto** — foto tamu sudah menyatu dengan desain frame sesuai tema acara (nama acara, tanggal, logo) dalam satu lembar; (2) **sleeve** — bingkai foto dari kertas yang membalut cetakannya (seperti bingkai foto kayu pada umumnya, bedanya dari kertas), dengan desainnya sendiri: sleeve desain basic (hitam & putih) sudah termasuk paket, sleeve custom pakai branding klien = add-on Custom Sleeve. Klien bertanya "printed foto sendiri, frame fotonya sendiri, masing-masing ada desainnya?" → jawab YA, itu cetakan + sleeve. JANGAN bilang "bukan dua barang terpisah" (salah, 19 Okt Meteora).
 - Pilihan cetak di paket unlimited (harga sama): 2R photostrip, 4R, dan Polaroid. Klien pilih SATU format untuk acaranya.
 - **2R / Photostrip**: strip panjang memanjang ke bawah, ukuran ±5×15 cm (2×6 inch), 2–4 pose/foto tersusun vertikal, ada area teks (nama acara/tanggal) di bawah. Sekali cetak tamu dapat **2 strip** (bisa dibagi berdua). Cocok untuk tamu yang suka foto beberapa gaya sekaligus, ramai-ramai, suasana fun.
 - **4R**: lembaran foto seukuran kartu pos ±10×15 cm (4×6 inch), 2–4 pose atau 1 foto besar, bisa portrait maupun landscape. Sekali cetak **1 lembar**. Paling fleksibel dan paling sering dipilih untuk wedding/corporate; area foto besar, muat rombongan.
