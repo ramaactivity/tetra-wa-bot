@@ -312,6 +312,9 @@ const LAMPIRAN = {
   // PDF panduan juga memuat halaman layout, jadi layout tidak dikirim kalau panduan sudah.
   layout: { file: 'LAYOUT PHOTOBOOTH.pdf', label: 'layout photobooth', pernah: /LAYOUT (PHOTOBOOTH|&)|layout photobooth|panduan ukuran/i,
     caption: 'Bentuk & pilihan layout cetak Tetra: 2R photostrip, 4R, dan Polaroid.' },
+  // Ilustrasi ukuran asli 2R / 4R / Polaroid berdampingan dengan skala sama + patokan KTP (Rama 22 Okt 2026).
+  format: { file: 'FORMAT CETAK TETRA.jpg', label: 'ilustrasi format cetak', pernah: /FORMAT CETAK TETRA|ilustrasi format cetak/i,
+    caption: 'Ini perbandingan ukuran asli 2R, 4R, dan Polaroid ya, Kak.' },
   // Ilustrasi skema rekanan (komisi 10% vs potongan 10%), disetujui Rama 8 Okt 2026.
   skema: { file: 'SKEMA REKANAN TETRA.png', label: 'skema rekanan', pernah: /SKEMA REKANAN|skema rekanan/i,
     caption: 'Biar gampang kebayang, ini gambaran dua skema kerja sama rekanan Tetra 😊' },

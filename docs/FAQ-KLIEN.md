@@ -102,7 +102,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - **4R**: lembaran foto seukuran kartu pos ±10×15 cm (4×6 inch), 2–4 pose atau 1 foto besar, bisa portrait maupun landscape. Sekali cetak **1 lembar**. Paling fleksibel dan paling sering dipilih untuk wedding/corporate; area foto besar, muat rombongan.
 - **Polaroid**: gaya foto polaroid dengan bingkai tebal di bawah untuk teks, ±7,5×10 cm per lembar, 1–2 pose. Sekali cetak tamu dapat **2 lembar polaroid**. Cocok untuk kesan vintage/aesthetic.
 - Semua format bisa diatur jumlah dan susunan kolom fotonya (layout bisa dikustom). Klien memilih salah satu layout untuk acaranya.
-- Ada PDF "Layout Photobooth" berisi gambar bentuk ketiga format dan pilihan layout-nya: kirim saat klien bingung bedanya (lihat LAMPIRAN).
+- Ada gambar "Format Cetak" berisi ukuran asli ketiga format berdampingan (skala sama, patokan KTP): kirim saat klien bingung bedanya atau ukurannya. PDF "Layout Photobooth" berisi pilihan susunan pose tiap format: kirim saat klien menanyakan layout/pose (lihat LAMPIRAN).
 
 ## Desain frame sendiri (klien mau bikin/edit desain sendiri)
 - Boleh. Ukuran canvas: **2R/Photostrip 1200×3600 px**, **4R 2400×3600 px** (portrait; untuk landscape dibalik 3600×2400 px), **Polaroid 1800×2400 px per lembar** (satu kertas cetak berisi 2 polaroid berdampingan, total 3600×2400 px).
