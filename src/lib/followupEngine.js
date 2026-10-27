@@ -12,7 +12,10 @@
 // dengan jeda minimal 1 hari dan maksimal 1 pesan per 7 hari per kontak.
 const path = require('path');
 const supa = require('./supa');
-const { getAIResponse, nilaiFollowup } = require('./ai');
+const { getAIResponse, nilaiFollowup, RE_PENUTUP } = require('./ai');
+const lampiranLib = require('./lampiran');
+const undangVendor = require('./undangVendor');
+const fs = require('fs');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
@@ -224,7 +227,9 @@ async function runFollowupCycle(sock) {
     if (pesan.some((p) => p.role === 'user' && RE_TOLAK.test(p.content))) { lewati('klien sudah menolak/pakai vendor lain'); continue; }
     // Satu follow-up per percakapan: yang lagi hanya kalau klien sempat membalas sesudahnya.
     if (state[jid] && !pesan.some((p) => p.role === 'user' && (p.t || 0) > state[jid])) continue;
-    if (pesan.at(-1)?.role === 'user') { lewati('pesan terakhir klien belum dijawab — urusan balasan/assist, bukan follow-up'); continue; }
+    // Penutup "ok/makasih" yang sengaja tidak dibalas ([diam-penutup]) bukan pesan yang belum dijawab (audit 27 Okt:
+    // follow-up mati diam-diam di Nadia, …9546, …2881). Penilai AI tetap memutuskan perlu tidaknya follow-up.
+    if (pesan.at(-1)?.role === 'user' && !RE_PENUTUP.test(String(pesan.at(-1).content).trim())) { lewati('pesan terakhir klien belum dijawab — urusan balasan/assist, bukan follow-up'); continue; }
 
     const transkrip = barisTranskrip(pesan.slice(-80)).join('\n');
     const ringkasan = getRingkasan(jid);
@@ -241,25 +246,34 @@ async function runFollowupCycle(sock) {
     const tanyaAkhir = (String(botAkhir?.content || '').match(/[^.!?\n]*\?/g) || []).at(-1)?.trim() || '';
     const hariDiam = Math.round((now - (botAkhir?.t || now)) / 864e5);
     const tanyaBooking = pesan.some((p) => p.role === 'user' && RE_SOAL_BOOKING.test(p.content));
+    const jamKlien = Math.round((now - (pesan.filter((p) => p.role === 'user').at(-1)?.t || now)) / 36e5);
     const panggilan = cleanName(last.name) || 'Kak';
     const leadContext = `Panggilan klien: ${panggilan}\n` +
-      `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
+      `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pesan terakhir klien ${jamKlien} jam lalu (jangan tulis "tadi" kalau lebih dari 6 jam); pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
       `dia ${tanyaBooking ? 'SUDAH' : 'BELUM'} pernah bertanya soal booking/DP.\n` +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
       `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
-    let msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+    // Penanda [KIRIM:*] dicabut sebelum pengecekan gaya (RE_SLOP memblokir "[") dan dikumpulkan dari tiap draf: dulu draf
+    // berpenanda selalu ditahan/ditulis ulang tanpa lampiran (Syifa minta PL 22 Okt, filenya tak pernah terkirim).
+    const lampiran = new Set();
+    const bersihkan = (m) => {
+      if (typeof m !== 'string') return m;
+      lampiranLib.kunci(m).forEach((k) => lampiran.add(k));
+      return m.replace(/\[KIRIM:[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
+    };
+    let msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
     // Tertahan kalimat terlarang → tulis ulang sekali sekarang, bukan menunggu siklus berikutnya (usulan CS Mintet 12:
     // follow-up Alfa tertunda ±6 jam berulang 3 hari).
     if (typeof msg === 'string' && RE_SLOP.test(msg)) {
       console.log(`[followup] tulis ulang ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
-      msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+      msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
     }
     // Desakan booking tanpa diminta, atau mengulang pertanyaan yang dicuekin → tulis ulang sekali; masih → tidak dikirim.
     const salah = (m) => typeof m === 'string' && !/\[(DIAM|ADMIN_HANDOFF)\]/.test(m) &&
       ((!tanyaBooking && RE_DESAK.test(m)) || ulangTanya(tanyaAkhir, m));
     if (salah(msg)) {
       console.log(`[followup] tulis ulang ${jid} (desak/ulang tanya): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
-      msg = await generateFollowupMessage(panggilan, leadContext, vendor);
+      msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
       if (salah(msg)) { lewati('masih mendesak/mengulang pertanyaan setelah tulis ulang'); continue; }
     }
     if (!msg || typeof msg !== 'string') continue;
@@ -280,6 +294,9 @@ async function runFollowupCycle(sock) {
       rememberBotMsg(sentMsg);
       deliveryLog.track(sentMsg, 'followup→customer');
       tambahRiwayat(jid, 'assistant', msg); // klien membalas follow-up → bot tahu konteksnya
+      if (lampiran.has('pricelist') && !getRiwayat(jid).some((x) => String(x.content).includes('[kirim PDF pricelist]')))
+        await kirimPricelist(sock, jid, 'followup-pricelist', { pdf: true });
+      await lampiranLib.kirimLampiran(sock, jid, [...lampiran], 'followup');
       state[jid] = now;
       sent++;
       console.log(`[followup] terkirim ke ${jid} (${panggilan})`);
@@ -379,7 +396,16 @@ async function followupProspek(sock, paused, sudah) {
       continue;
     }
     const info = (msg.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
-    const pl = /\[KIRIM:\s*pricelist\s*\]/i.test(msg) && !riw.some((x) => String(x.content).includes('[kirim PDF pricelist]'));
+    const lampiran = lampiranLib.kunci(msg);
+    const pl = lampiran.includes('pricelist') && !riw.some((x) => String(x.content).includes('[kirim PDF pricelist]'));
+    // Audit 27 Okt: "ini profil kerja sama rekanan kami" terkirim tanpa PDF. Lampiran yang filenya tidak ada → jangan kirim teksnya.
+    const hilang = lampiran.filter((k) => k !== 'pricelist' && !fs.existsSync(path.join(require('./pricelist').ASSETS_DIR, lampiranLib.LAMPIRAN[k].file)));
+    if (hilang.length) { console.error(`[followup-lead] ${jid}: lampiran ${hilang.join(',')} tidak ada — pesan ditahan`); continue; }
+    let infoUndang = null;
+    if (undangVendor.RE_TAG.test(msg)) {
+      const u = await undangVendor.proses(msg, { phone: nomor, jid });
+      msg = u.teks; infoUndang = u.info;
+    }
     msg = prospekWa.tanpaAngka(msg.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim());
     try {
       if (sudah + sent > 0) await new Promise((r) => setTimeout(r, JEDA_MIN_MS + Math.random() * (JEDA_MAKS_MS - JEDA_MIN_MS)));
@@ -388,6 +414,8 @@ async function followupProspek(sock, paused, sudah) {
       deliveryLog.track(sentMsg, `lead-${jenis}→wa`);
       tambahRiwayat(jid, 'assistant', msg);
       if (pl) await kirimPricelist(sock, jid, 'lead-pricelist', { pdf: true });
+      await lampiranLib.kirimLampiran(sock, jid, lampiran, 'lead');
+      if (infoUndang) await kirimTelegram(`🤝 ${infoUndang} — wa.me/${nomor}`).catch(() => {});
       if (pr) await supa.catatJawabanProspek(nomor, msg + (pl ? ' [+ pricelist]' : '')).catch(() => {});
       if (info) await kirimTelegram(`🤝 Lead ${p.nama || jid.split('@')[0]}: ${info}`).catch(() => {});
       state[jid] = { ...s, n: s.n + (jenis === 'balas' ? 0 : 1) };

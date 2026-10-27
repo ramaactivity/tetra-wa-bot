@@ -304,36 +304,7 @@ const RE_KLAIM = new RegExp(
 const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|\bubah|ganti|batal|cancel|booking|durasi|paket|extend|tambah (jam|unit)/i;
 const KALIMAT_AMAN = 'Oke Kak, aku sampaikan ke admin dulu ya biar dicek jadwalnya. Nanti admin yang kabarin di sini.';
 
-// Lampiran yang boleh diminta AI lewat penanda [KIRIM: kunci]. Dikirim setelah
-// balasan teks, sekali per percakapan (label dicek di riwayat; format label sama
-// dengan booking.kirimKatalog supaya katalog tidak terkirim dua kali).
-// `pernah` = pola nama file di riwayat: file yang sudah dikirim admin manual
-// ("(admin) [kirim dokumen: ...]") atau lewat lampiran lain tidak dikirim ulang.
-const LAMPIRAN = {
-  backdrop: { file: 'BACKDROP TETRA.pdf', label: 'backdrop basic', pernah: /BACKDROP TETRA/i,
-    caption: 'Pilihan backdrop basic Tetra, sudah termasuk di paket.' },
-  katalog: { file: 'KATALOG DESAIN FRAME TETRA.pdf', label: 'katalog desain frame', pernah: /KATALOG DESAIN/i,
-    caption: 'Contoh desain frame Tetra. Belum ada yang cocok? Desain custom juga bisa, gratis.' },
-  // PDF panduan juga memuat halaman layout, jadi layout tidak dikirim kalau panduan sudah.
-  layout: { file: 'LAYOUT PHOTOBOOTH.pdf', label: 'layout photobooth', pernah: /LAYOUT (PHOTOBOOTH|&)|layout photobooth|panduan ukuran/i,
-    caption: 'Bentuk & pilihan layout cetak Tetra: 2R photostrip, 4R, dan Polaroid.' },
-  // Ilustrasi ukuran asli 2R / 4R / Polaroid berdampingan dengan skala sama + patokan KTP (Rama 22 Okt 2026).
-  format: { file: 'FORMAT CETAK TETRA.jpg', label: 'ilustrasi format cetak', pernah: /FORMAT CETAK TETRA|ilustrasi format cetak/i,
-    caption: 'Ini perbandingan ukuran asli 2R, 4R, dan Polaroid ya, Kak.' },
-  // Profil 1 halaman: edisi klien & edisi rekanan (Rama 22 Okt 2026; sumber HTML di repo HERMES docs/ilustrasi-tetra).
-  profil: { file: 'PROFIL TETRA PHOTOBOOTH.pdf', label: 'profil tetra', pernah: /PROFIL TETRA|profil tetra/i,
-    caption: 'Profil singkat Tetra Photobooth ya, Kak.' },
-  rekanan: { file: 'REKANAN TETRA PHOTOBOOTH.pdf', label: 'profil rekanan', pernah: /REKANAN TETRA PHOTOBOOTH|profil rekanan/i,
-    caption: 'Ringkasan kerja sama rekanan Tetra ya, Kak.' },
-  // Ilustrasi skema rekanan (komisi 10% vs potongan 10%), disetujui Rama 8 Okt 2026.
-  skema: { file: 'SKEMA REKANAN TETRA.png', label: 'skema rekanan', pernah: /SKEMA REKANAN|skema rekanan/i,
-    caption: 'Biar gampang kebayang, ini gambaran dua skema kerja sama rekanan Tetra 😊' },
-  // Ilustrasi cetakan foto + sleeve (bingkai kertas) + contoh asli 2R; desain asli di assets/sleeve-desain/ (Rama 22 Okt).
-  sleeve: { file: 'SLEEVE TETRA.jpg', label: 'ilustrasi sleeve', pernah: /SLEEVE TETRA|ilustrasi sleeve/i,
-    caption: 'Ini gambaran cetakan foto dan sleeve-nya ya, Kak.' },
-  panduan: { file: 'LAYOUT & PANDUAN UKURAN.pdf', label: 'panduan ukuran', pernah: /PANDUAN UKURAN/i,
-    caption: 'Panduan ukuran canvas untuk desain frame sendiri (2R 1200×3600 px, 4R 2400×3600 px, Polaroid 1800×2400 px per lembar).' },
-};
+const { LAMPIRAN, kirimLampiran } = require('../lib/lampiran');
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
 // pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
@@ -878,19 +849,7 @@ function registerMessageHandler(sock) {
       if (janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid))) {
         await kirimPricelist(sock, jid, 'janji-pricelist', { pdf: plDenganPdf || !!lead });
       }
-      for (const k of lampiran) {
-        const l = LAMPIRAN[k];
-        if (!l) continue;
-        if (k === 'layout' && lampiran.includes('panduan')) continue; // panduan sudah memuat layout
-        const tanda = `[kirim PDF ${l.label}]`;
-        // Hanya catatan pengiriman file yang dicek, bukan kalimat obrolan ("ini panduan ukurannya").
-        const terkirim = getRiwayat(jid).flatMap((p) => String(p.content).match(/\[kirim (PDF|dokumen:)[^\]]*\]/gi) || []);
-        if (terkirim.some((c) => c.includes(tanda) || l.pernah.test(c))) continue;
-        const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), l.caption);
-        rememberBotMsg(sent);
-        deliveryLog.track(sent, `${k}→customer`);
-        tambahRiwayat(jid, 'assistant', `${tanda}\n${l.caption}`);
-      }
+      await kirimLampiran(sock, jid, lampiran, 'customer');
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }
