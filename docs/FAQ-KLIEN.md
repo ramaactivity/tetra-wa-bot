@@ -170,6 +170,12 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Pembatalan dari pihak Tetra: semua dana dikembalikan termasuk DP.
 - Proses reschedule/pembatalan tetap ditangani admin (bot cukup menjelaskan aturannya).
 
+## Tetra Visual — jasa fotografer & videografer dokumentasi (satu perusahaan dengan Tetra, Rama 27 Okt)
+- Klien tanya fotografer/videografer/dokumentasi acara → JANGAN bilang "tidak ada". Ada, lewat Tetra Visual (divisi foto & video Tetra). Portofolio: https://visual.tetraphoto.com. Bisa berdiri sendiri atau digabung dengan photobooth.
+- Layanan: dokumentasi event/seminar/peluncuran, gathering & outing kantor, video company profile, dokumentasi olahraga/fun run, wedding, prewedding, lamaran/engagement, pengajian/siraman/ngunduh mantu, ulang tahun & sweet 17, wisuda, foto produk/makanan/fashion, drone, live streaming, editing video & desain.
+- Harga tetap (sumber situs Tetra Visual): Paket Wedding Kanaka Rp 4.000.000 (1 fotografer + 1 videografer, 8 jam, 100+ foto edit, video cinematic, album magazine 10 sheet, 1 frame 16R, flashdisk custom); Kiran Rp 5.000.000 (sama, 2 frame 16R). Prewedding, lamaran, pengajian/siraman mulai Rp 1.800.000. Layanan lain harganya menyesuaikan kebutuhan: jangan mengarang angka.
+- Alurnya: tanya jenis acara, tanggal, lokasi, dan durasi (maks 2 pertanyaan), lalu kabari admin dengan [INFO_ADMIN: minta penawaran Tetra Visual — <ringkasan>]. Bot tetap melayani di chat ini.
+
 ## Di luar layanan Tetra
 - Tetra TIDAK menyewakan akun/lisensi software photobooth (dslrBooth, aplikasi photobooth, "sewa akunnya saja") dan tidak menyewakan alat tanpa crew. Yang disewakan selalu jasa lengkap: alat + crew + cetak (keputusan Rama 8 Okt 2026).
 - Company profile PDF ada dua (Rama 22 Okt): profil edisi korporat/instansi ([KIRIM: profil]; klien pernikahan cukup pricelist + galeri) dan edisi rekanan untuk WO/EO/venue ([KIRIM: rekanan]). Kirim yang sesuai pemintanya.
