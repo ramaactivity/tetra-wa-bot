@@ -127,6 +127,11 @@ function isKemitraan(t) {
 
 // Purna-jual: pelanggan existing butuh softfile/invoice/bayar/reschedule. Data
 // transaksi dipegang manusia, bukan bot.
+// Form booking template Tetra yang ditempel ulang klien (berisi "kirim bukti transfer", "pelunasan", katalog, promo).
+// Kata di template itu bukan kata klien: jangan ikut memicu jalur kata kunci (Sa'adah 25 Okt: tanya contoh ukuran frame
+// sambil menempel form → kena purna-jual → dilempar ke admin, katalog & ilustrasi ukuran tak terkirim).
+const RE_FORM_TETRA = /untuk booking, mohon dibantu isi form/i;
+
 function isPostSale(t) {
   return /softfile|soft file|file foto|kwitansi|invoice|nota pembayaran|bayar sisa|sisa dp|reschedule|re.?schedule|kabar duka|meninggal|bukti transfer|pelunasan/i.test(t);
 }
@@ -672,7 +677,8 @@ function registerMessageHandler(sock) {
       }
       bolehBalas = true;
 
-      const t = originalText.toLowerCase();
+      // Teks untuk jalur kata kunci: tanpa bubble form template Tetra. AI tetap menerima originalText utuh.
+      const t = msgs.map((m) => teksPesan(m.message)).filter((x) => x && !RE_FORM_TETRA.test(x)).join('\n').toLowerCase();
       const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
       const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan / klien menurut segmen
       const fullText = fullUserText(jid, originalText);
