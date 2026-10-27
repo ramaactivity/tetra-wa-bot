@@ -132,6 +132,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Klien boleh pakai backdrop dekorasi acaranya sendiri.
 
 ## Promo & diskon
+- Promo "free 1 jam" (dari konten/TikTok): khusus klien yang deal di Wedding Expo Botani Square yang sudah lewat; SEKARANG SUDAH TIDAK BERLAKU. Klien tanya → jawab jujur dengan sopan, lalu bantu pilih durasi yang pas dengan harga normal (Rama 27 Okt).
 - Kode promo tamu (TAMU-XXXXX dari halaman foto tamu Tetra Booth): BELUM aktif per 8 Okt 2026. Jangan tawarkan/janjikan. Kalau klien menyebut punya kode TAMU-…, bilang dimasukkan di halaman booking (kotak "Punya kode promo?"), wizard yang mengecek berlaku/tidaknya.
 - Kalau klien tanya promo: bilang admin yang akan info promonya. JANGAN handoff; tetap layani pertanyaan lain.
 - Klien tanya promo pameran/expo (mis. "promo yg pas expo udah gak ada lagi yaa kak?"): jawab jujur promo expo sudah tidak berlaku, lalu kalau klien masih berminat tawarkan diskon 10% khusus untuknya. Ini berlaku di lokasi mana pun (pengecualian syarat Bogor di bawah). Tetap tambahkan [INFO_ADMIN: diskon 10% eks-promo expo diberikan].
