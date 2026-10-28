@@ -195,10 +195,13 @@ BACA KLIEN DULU — setiap klien unik, jangan pukul rata (Rama 22 Okt). Sebelum 
 4) Gayanya? Jawaban makin pendek atau pertanyaan kita dilewati = dia mau angka/kepastian; jangan tanya ulang yang dilewati. Formal → tertata; santai → ringan.
 
 KONTAK PERTAMA (konteks menyebut "KONTAK PERTAMA"):
+- Pesan pertama ke orang baru = SATU pesan pendek seperti admin yang ramah (2–4 kalimat, maksimal ±350 karakter), bukan brosur. Jawab yang dia tanya saja, sisanya biarkan dia yang bertanya. Data Rama 28 Okt (99 kontak pertama): balasan pertama di atas 400 karakter hanya dibalas 41%, di bawah 400 dibalas 87%; dua angka harga atau lebih cuma dibalas 33%.
+- Di pesan pertama: maksimal SATU angka harga, TANPA daftar isi paket panjang, TANPA saran naik durasi/paket, TANPA "catatan jujur" soal jumlah tamu. Hal-hal itu disampaikan nanti kalau dia lanjut ngobrol atau bertanya. Aturan ini menang atas aturan HARGA & PRICELIST di bawah untuk pesan pertama.
 - Sapa singkat dan bervariasi, perkenalkan diri sebagai tim Tetra sekali (bukan "admin"). Pesan yang terdengar seperti jawaban ("boleh", "ok", "iya silakan") = balasan atas pesan kita: lakukan yang kita tawarkan, tanpa perkenalan dan tanpa sebut website.
-- Template website berisi lengkap ("cek ketersediaan serta rekomendasi paket") = dia sudah menggali sendiri. Jawab yang dia tunggu: status tanggal (cek jadwal), harga untuk jam/durasi yang dia isi, lalu satu langkah berikut yang sesuai keseriusannya. JANGAN bacakan ulang isiannya, JANGAN tanya hal yang sudah dia isi.
-- Isian jam/durasi = batasan acaranya, bukan bahan upsell: sebut harga durasi itu (durasi yang tak ada di tabel dibulatkan ke atas). Kalau tamunya banyak untuk durasi itu, boleh sampaikan jujur sekali sebagai info + satu opsi naik dengan harganya; keputusan di klien.
-- Template kosong atau isian minim → JANGAN menebak jenis acaranya. Beri gambaran harga netral (mulai 2 jam *Rp 2.000.000*, sudah all-in) lalu satu kalimat tanya acaranya apa dan tanggal berapa, supaya bisa cek slot dan kasih paket yang pas.
+- Template website berisi lengkap ("cek ketersediaan serta rekomendasi paket") = dia sudah menggali sendiri. Jawab yang dia tunggu, singkat: status tanggal (cek jadwal) + harga untuk jam/durasi yang dia isi + satu pertanyaan ringan yang nyambung (mis. lokasinya di mana). JANGAN bacakan ulang isiannya, JANGAN tanya hal yang sudah dia isi.
+- Isian jam/durasi = batasan acaranya, bukan bahan upsell: sebut harga durasi itu saja (durasi yang tak ada di tabel dibulatkan ke atas). Kalau tamunya banyak untuk durasi itu, simpan untuk pesan berikutnya setelah dia membalas — jangan di pesan pertama.
+- Template kosong, isian minim, atau tanya "rate/harga" tanpa detail → JANGAN menebak jenis acaranya dan JANGAN mendaftar beberapa harga. Cukup "mulai *Rp 2.000.000* untuk 2 jam, sudah termasuk cetak sepuasnya" lalu satu kalimat tanya acaranya apa dan tanggal berapa.
+- Minta PL/pricelist di pesan pertama → [KIRIM: pricelist] + satu kalimat pengantar + satu pertanyaan ringan; JANGAN salin isi PL ke teks.
 - Isian samar ("Oktober/November", tanggal tanpa tahun) → pakai yang sudah ada, pastikan yang perlu saja.
 
 HARGA & PRICELIST (Rama 22 Okt, menggantikan aturan 1 Okt "tahan pricelist sampai kebutuhan jelas"; audit: 8 klien yang harganya ditahan semuanya hilang):
@@ -367,7 +370,7 @@ function bocorPikiran(teks) {
 const KATA_TERLARANG = [...(SYSTEM_PROMPT.match(/DILARANG kata robot:(.*)/)?.[1] || '').matchAll(/"([^"]+)"/g)]
   .map((m) => m[1].toLowerCase().replace(/\?$/, ''));
 const isiKlien = (teks) => teks.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\S+/g, '').trim();
-function masalahGaya(teks) {
+function masalahGaya(teks, pertama = false) {
   const isi = isiKlien(teks);
   const t = normal(isi);
   const out = [];
@@ -382,6 +385,10 @@ function masalahGaya(teks) {
   }
   if ((isi.match(/\p{Extended_Pictographic}/gu) || []).length > 1) out.push('emoji maksimal 1');
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
+  // Kecuali KONTAK PERTAMA (Rama 28 Okt "terlalu ngegas"; data 99 kontak pertama: >400 karakter dibalas 41% vs <400 87%,
+  // >=2 angka harga 33%): pesan pertama dipaksa ringkas.
+  if (pertama && isi.length > 420) out.push(`pesan pertama ke orang baru terlalu panjang (${isi.length} karakter): ringkas jadi 2–4 kalimat (maks ±350 karakter), jawab yang dia tanya saja, buang daftar isi paket, saran naik durasi/paket, dan catatan tambahan; sisakan satu pertanyaan ringan`);
+  if (pertama && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pesan pertama cukup SATU angka harga (yang paling sesuai pertanyaannya)');
   // Panjang sengaja TIDAK dicek (Rama 22 Okt: "panjang pendek tidak merepresentasikan kualitas"; data: 200–400
   // karakter dibalas 89%, <200 cuma 67%). Ukurannya tepat sasaran — dijaga lewat aturan prompt.
   return out;
@@ -517,7 +524,7 @@ async function panggil(endpoint, history, message, leadContext) {
         const ulang = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
         if (ulang && !bocorPikiran(ulang)) teks = ulang;
       }
-      const gaya = masalahGaya(teks);
+      const gaya = masalahGaya(teks, /KONTAK PERTAMA/.test(leadContext || ''));
       if (gaya.length) {
         console.log(`[gaya ${endpoint.model}] ${gaya.join('; ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
