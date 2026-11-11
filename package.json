@@ -4,7 +4,8 @@
   "description": "Auto-reply WhatsApp bot untuk Tetra Photobooth",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "regresi": "node uji-harga.js && node uji-regresi.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

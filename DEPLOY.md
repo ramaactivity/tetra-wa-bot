@@ -50,8 +50,12 @@ $SSH "cp $VPS_PROJECT_DIR/$F $VPS_PROJECT_DIR/$F.bak-\$(date +%Y%m%d-%H%M)"
 
 # upload → cek syntax di server → restart
 scp -i "$VPS_SSH_KEY" "$F" "$VPS_USER@$VPS_HOST:$VPS_PROJECT_DIR/$F"
-$SSH "cd $VPS_PROJECT_DIR && node -c $F && pm2 restart $PM2_APP"
+$SSH "cd $VPS_PROJECT_DIR && node -c $F && npm run regresi && pm2 restart $PM2_APP"
 ```
+
+> **WAJIB sebelum restart: `npm run regresi` lolos** (uji-harga.js + uji-regresi.js: kasus gagal asli dari audit 22 Okt,
+> 27 Okt, Nov 2026, termasuk panggilan AI sungguhan ±2 menit). Gagal = jangan restart; perbaiki akarnya, jangan melonggarkan uji.
+> Bug baru dari chat asli → tambahkan kasusnya ke uji-regresi.js supaya tidak terulang.
 
 ## 2b. Deploy beberapa file sekaligus
 
@@ -62,7 +66,7 @@ for F in $FILES; do
   $SSH "cp $VPS_PROJECT_DIR/$F $VPS_PROJECT_DIR/$F.bak-\$(date +%Y%m%d-%H%M)"
   scp -i "$VPS_SSH_KEY" "$F" "$VPS_USER@$VPS_HOST:$VPS_PROJECT_DIR/$F"
 done
-$SSH "cd $VPS_PROJECT_DIR && for F in $FILES; do node -c \$F || exit 1; done && pm2 restart $PM2_APP"
+$SSH "cd $VPS_PROJECT_DIR && for F in $FILES; do node -c \$F || exit 1; done && npm run regresi && pm2 restart $PM2_APP"
 ```
 
 ---
