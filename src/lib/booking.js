@@ -1,4 +1,4 @@
-// Tahap setelah DP: kumpulkan data acara (boleh dicicil klien), teruskan bukti
+// Tahap setelah DP: kirim form data acara lengkap sekali (Rama 11 Nov), teruskan bukti
 // transfer & rekap ke admin untuk diinput ke Tetra Ops, dan ingatkan berkala
 // sampai lengkap. Keputusan Rama 27 Sep 2026.
 //
@@ -85,42 +85,38 @@ function teksUnit(d) {
 }
 const isWedding = (b) => /wedding|nikah|pengantin|resepsi|akad|lamaran|engagement/i.test(`${b.data.nama_acara || ''} ${b.data.catatan || ''} ${b.jenis || ''}`);
 
-// Form untuk klien. Yang sudah diketahui langsung terisi supaya klien tinggal cek.
+// Form untuk klien, format form admin Tetra (Rama 11 Nov: "langsung aja: kaka tolong dibantu untuk melengkapi form berikut yaa",
+// bukan ditanya dicicil). Yang sudah diketahui langsung terisi supaya klien tinggal cek.
 function teksForm(b, pembuka) {
   const w = isWedding(b);
   const d = b.data;
-  const baris = (label, v) => `• ${label}: ${v || ''}`.trimEnd();
+  const baris = (label, v) => `- ${label}: ${v || ''}`.trimEnd();
   return [
-    pembuka,
+    ...(pembuka ? [pembuka, ''] : []),
+    'Kak, tolong dibantu untuk melengkapi form berikut yaa.',
     '',
-    'Biar tim Tetra bisa siapin semuanya, bantu lengkapi data acaranya ya Kak. Boleh dicicil, nggak harus sekaligus. Yang sudah aku tahu sudah aku isi, tinggal dicek.',
+    '1. Data Event',
+    baris(w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
+    baris('Tanggal Event', d.tanggal),
+    baris('Jam Photobooth', d.jam),
+    baris('Lokasi Event (+ link Google Maps)', [d.lokasi, d.maps].filter(Boolean).join(' ')),
+    baris('Paket yang Dipilih', d.paket),
+    ...(teksUnit(d) ? [baris('Jumlah Unit', teksUnit(d))] : []),
+    baris('Perkiraan Jumlah Tamu', d.jumlah_tamu),
+    baris('No. Kontak PIC / WO di hari H', d.pic || d.kontak_wo),
+    baris(w ? 'Instagram Pengantin' : 'Instagram Acara (opsional)', d.instagram),
     '',
-    '*1. Data acara*',
-    baris(w ? 'Nama pengantin' : 'Nama acara / instansi', d.nama_acara),
-    baris('Tanggal', d.tanggal),
-    baris('Jam photobooth', d.jam),
-    baris('Lokasi + link Google Maps', [d.lokasi, d.maps].filter(Boolean).join(' ')),
-    baris('Paket', d.paket),
-    ...(teksUnit(d) ? [baris('Jumlah unit', teksUnit(d))] : []),
-    baris('Perkiraan jumlah tamu', d.jumlah_tamu),
-    baris('PIC di hari H (nama & no. HP)', d.pic),
-    baris('Kontak WO/EO (kalau ada)', d.kontak_wo),
-    baris(w ? 'Instagram pengantin' : 'Instagram acara (opsional)', d.instagram),
-    '',
-    '*2. Frame foto*',
-    baris('Ukuran', d.ukuran_frame || '2R photostrip / 4R / Polaroid'),
-    baris('Orientasi', d.orientasi || 'portrait / landscape'),
+    '2. Frame Foto',
+    baris('Ukuran Frame', d.ukuran_frame || '2R / 4R / Polaroid'),
     baris('Desain', d.desain_frame || 'pilih dari katalog di bawah, atau custom'),
-    baris('Teks di frame (nama, tanggal, hashtag)', d.teks_frame),
+    baris('Teks di Frame (nama, tanggal, hashtag)', d.teks_frame),
     '',
-    '*3. Backdrop*',
-    baris('Pilihan', d.backdrop || 'basic Tetra (White/Red/Silver/Gold/Emerald Green/Blue) atau dekorasi acara'),
-    '',
-    'Kalau lebih enak ngobrol daripada ngisi, santai aja Kak, nanti aku tanyain pelan-pelan.',
+    '3. Backdrop',
+    baris('Backdrop', d.backdrop || 'basic Tetra (White/Red/Silver/Gold/Emerald Green/Blue) atau dari klien'),
   ].join('\n');
 }
 
-// Setelah data wajib lengkap (dari form atau digali bertahap), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
+// Setelah data wajib lengkap (dari form atau chat), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
 function teksKonfirmasi(b) {
   const isi = FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
     .map(([k, label]) => `• ${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]}`);
@@ -242,12 +238,12 @@ function konteksAI(jid) {
   if (!b || !aktif(jid)) return '';
   const k = kurang(b);
   const terisi = FIELD.filter(([key]) => b.data[key]).map(([key, label]) => `${label}=${b.data[key]}`).join('; ');
-  return `\n\nTAHAP BOOKING (klien sudah DP; verifikasi & invoice tetap dari admin). Form data sudah dikirim; kalau klien tidak mengisi, gali bertahap lewat obrolan.\n` +
+  return `\n\nTAHAP BOOKING (klien sudah DP; verifikasi & invoice tetap dari admin). Form data sudah dikirim.\n` +
     `Sudah terisi: ${terisi || '-'}\n` +
     (b.dikonfirmasi && Date.now() - b.dikonfirmasi < 5 * 60e3
       ? 'Rekap data barusan dikirim ke klien untuk dicek: JANGAN kirim rekap/daftar lagi; tanggapi pesannya singkat saja.\n' : '') +
     (k.length
-      ? `Masih kurang: ${k.map((x) => x.label).join(', ')}. Kalau pas, tanyakan maks 2 yang kurang secara natural. Jangan kirim ulang form lengkap.`
+      ? `Masih kosong: ${k.map((x) => x.label).join(', ')}. Kalau perlu, minta yang kosong saja dalam satu kalimat singkat tanpa menjelaskan alasan panjang (Rama 11 Nov); jangan tanya ulang yang sudah diisi, jangan kirim ulang form lengkap.`
       : 'Data wajib sudah lengkap. Cukup konfirmasi kalau klien mengubah sesuatu.');
 }
 
