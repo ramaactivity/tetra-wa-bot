@@ -36,7 +36,7 @@ function strategi() {
 // 22 Okt (usulan CS Mintet 20): kata biasa "DP/bayar/diskon" tidak lagi membuang baris — dulu 7 dari 32 pelajaran penting
 // ("jangan tawarkan DP sebelum paket jelas", seluruh pola [eo_wo]/[venue]) tak pernah sampai ke bot. Yang dibuang: angka
 // (lewat angkaRupiah + persen), rekening/bank, link, dan kalimat yang MEMBERI keringanan ("kasih diskon", "boleh gratis").
-const RE_PELAJARAN_BAHAYA = /\b(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s*(?:ratus|puluh|belas)?\s*(?:ribu|juta)\b|rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|\d+\s*%|persen|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas|(?<!\b(?:jangan|tidak|tak|dilarang|bukan|belum)\s+(?:\p{L}+\s+)?)\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)/iu;
+const RE_PELAJARAN_BAHAYA = /\b(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s*(?:ratus|puluh|belas)?\s*(?:ribu|juta)\b|rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|\d+\s*%|persen|\bhttps?:|\bwww\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas|(?<!\b(?:jangan|tidak|tak|dilarang|bukan|belum)\s+(?:\p{L}+\s+)?)\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)/iu;
 const PELAJARAN_FILE = () => process.env.PELAJARAN_FILE ||
   path.join(process.env.HOME || '/home/ubuntu', '.hermes/profiles/tetra-wa-bot/skills/cs-mintet-pelajaran/SKILL.md');
 // Fakta dari balasan admin (dipelajari CS Mintet otomatis): baris
@@ -45,7 +45,13 @@ const PELAJARAN_FILE = () => process.env.PELAJARAN_FILE ||
 // fakta. Kutipan yang pernah lolos disimpan, jadi fakta tidak hilang saat riwayat 90 hari habis.
 const RIWAYAT_FILE = () => process.env.RIWAYAT_FILE || path.join(__dirname, '..', '..', 'data', 'riwayat.json');
 const KUTIPAN_OK_FILE = () => process.env.KUTIPAN_OK_FILE || path.join(__dirname, '..', '..', 'data', 'kutipan-admin-ok.json');
-const RE_FAKTA_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|diskon|promo|potongan|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas/i;
+// Usulan CS Mintet #30 (Rama setuju 11 Nov): dulu kata "diskon/promo/potongan" di mana pun membuang fakta admin yang sah
+// ("promo free 1 jam sudah tidak berlaku"). Sekarang sama dengan penjaga pelajaran (nominal, persen, rekening, link, injeksi,
+// kalimat yang memberi keringanan) + fakta promo/diskon/gratis yang MEMBERI keringanan tanpa penyangkal tetap dibuang.
+const RE_FAKTA_KERINGANAN = /\b(diskon|potongan|gratis|free|promo)\b/i;
+const faktaBahaya = (l) => RE_PELAJARAN_BAHAYA.test(l) ||
+  (RE_FAKTA_KERINGANAN.test(l) && /\b(boleh|bisa|dikasih|diberi(kan)?|dapat|berlaku|ada)\b/i.test(l) &&
+    !/\b(tidak|tak|bukan|dilarang|jangan|belum)\b/i.test(l));
 const normal = (t) => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
 let cacheAdmin = { mtime: -1, teks: '' };
 function teksAdmin() {
@@ -92,7 +98,7 @@ function pelajaran(hanyaFakta = false) {
     const baris = bagianSkill(isi, 'Pelajaran')
       .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 60);
     const fakta = bagianSkill(isi, 'Fakta dari admin').map((l) => l.match(/^\s*-\s*(.+?)\s*\(admin:\s*"([^"]+)"\)\s*$/))
-      .filter((m) => m && !angkaRupiah(m[1]).length && !RE_FAKTA_BAHAYA.test(m[1]) && kutipanSah(m[2]))
+      .filter((m) => m && !angkaRupiah(m[1]).length && !faktaBahaya(m[1]) && kutipanSah(m[2]))
       .map((m) => `- ${m[1]}`).slice(0, 60);
     const pola = bagianSkill(isi, 'Pola klien')
       .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 60);
@@ -1032,4 +1038,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
