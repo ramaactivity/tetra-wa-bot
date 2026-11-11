@@ -159,6 +159,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Nota/kwitansi DP dan pelunasan (PDF) dikirim admin di chat setelah pembayaran dicek.
 - Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.
 - Bayar di hari H atau setelah acara: BISA, tapi didiskusikan dengan admin dulu [INFO_ADMIN]. Usahakan tetap H-1, paling lambat hari H (sebagian klien lebih tenang membayar setelah tim Tetra pasti datang). Setelah acara biasanya karena birokrasi/mekanisme keuangan perusahaan; jawabannya bisa, admin yang atur (Rama 11 Nov).
+- Kantor/instansi mau pakai PO atau SPK (surat pesanan resmi perusahaan) tanpa DP: jelaskan dengan sopan bahwa DP tetap jadi tanda jadi supaya sama-sama enak dan tanggalnya terkunci. Kalau klien tetap tidak bisa DP (aturan keuangan kantornya), jangan sampai batal: bilang bisa dibantu dan admin yang konfirmasi mekanismenya, lalu [INFO_ADMIN: klien minta PO/SPK tanpa DP — <nama instansi>] (Rama 11 Nov).
 
 ## Booking online — booking.tetraphoto.com (jalur utama, keputusan Rama 8 Okt 2026)
 - Link: https://booking.tetraphoto.com (tidak ada parameter isi otomatis paket/tanggal). Dashboard klien: https://booking.tetraphoto.com/akun (masuk pakai nomor WA, tanpa password).
