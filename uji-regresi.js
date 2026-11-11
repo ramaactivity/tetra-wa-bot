@@ -112,6 +112,10 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
       'Cibubur masih masuk Jabodetabek jadi tidak ada biaya tambahan, sudah termasuk dalam harga.'])
       assert.ok(ai.basaBasi(x).length, x);
     assert.deepStrictEqual(ai.basaBasi('Cibubur masih free transport ya Kak.'), []);
+    assert.deepStrictEqual(ai.basaBasi('Soal pajak, harga kami aslinya belum termasuk pajak, tapi kalau ketentuan kantor mewajibkan, nanti sistemnya di-gross up 2,5%.'), []);
+    assert.ok(ai.masalahGaya('Untuk tanggal 6 Desember slotnya masih available nih Kak.').some((m) => /frasa kaku/.test(m)));
+    assert.ok(ai.masalahGaya('Biar lebih gampang, ini ada gambaran perbandingannya ya Kak. Silahkan Kak, berikut perbandingan format cetaknya ya. [KIRIM: format]').some((m) => /SATU kalimat/.test(m)));
+    assert.ok(!ai.masalahGaya('Silahkan Kak, berikut perbandingan format cetaknya ya. Rencananya untuk acara apa Kak? [KIRIM: format]').some((m) => /SATU kalimat/.test(m)));
     assert.deepStrictEqual(ai.basaBasi('Dengan 300 tamu, 3 jam bikin semua tamu kebagian foto tanpa antre lama.'), []);
     assert.deepStrictEqual(ai.basaBasi('Cukup Kak, soalnya 1 jam bisa melayani 100+ tamu, jadi 3 jam sudah pas buat 300 tamu.', '3 jam cukup ga buat 300 tamu?'), []);
     assert.ok(ai.frasaKaku('Paham, Kak. Tanggal 19 Desember sendiri masih kosong di jam itu.').length >= 2);

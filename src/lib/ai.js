@@ -469,7 +469,8 @@ const isiKlien = (teks) => teks.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https
 const RE_VALIDASI = /(\d+\s*jam|durasi(nya)?|paket(nya)?)[^.?!\n]{0,40}\b(sudah|udah|memang)\s*(cukup|pas|sesuai|aman)\b|\b(sudah|udah|memang)\s+(cukup|pas|sesuai)\b[^.?!\n]{0,30}\b(tamu|jam)\b/i;
 const RE_ALASAN = /\b(karena|soalnya|biar|supaya|sehingga|jadi|kebagian|antre|antri|per jam)\b/i;
 const RE_CREW = /\btermasuk\b[^.?!\n]{0,50}\bcrew\b|\bcrew\s+(yang\s+)?(standby|siap)\b/i;
-const RE_DAFTAR_ISI = /\b(sudah\s+)?(termasuk|include)\s+[^.?!\n,]{2,40},\s*[^.?!\n,]{2,40}(,\s*|\s+dan\s+)[^.?!\n]{2,40}/i;
+// Uji replay 11 Nov: "belum termasuk pajak, tapi kalau …, nanti …" bukan daftar isi paket.
+const RE_DAFTAR_ISI = /(?<!belum\s)\b(termasuk|include)\s+([^.?!\n,]{2,30}),\s*([^.?!\n,]{2,30})(,\s*|\s+dan\s+)[^.?!\n]{2,30}/i;
 const RE_PENEGAS = /\b(tidak|tanpa|gak|nggak|ga)\s+(ada\s+)?biaya(\s+tambahan)?\b[^.?!\n]{0,30}\b(sudah\s+)?(termasuk|include|gratis|free)\b|\b(gratis|free)\b[^.?!\n]{0,30}\b(tanpa|tidak\s+ada)\s+biaya\b|\bsudah\s+(termasuk|include)\s+(dalam|di)\s+harga\b/i;
 function basaBasi(isi, pesanKlien = '') {
   const out = [];
@@ -478,7 +479,8 @@ function basaBasi(isi, pesanKlien = '') {
   if (v && !(/cukup|pas\b|ideal|berapa jam|enaknya|sebaiknya|rekomendasi|saran|kurang/i.test(tanya) && RE_ALASAN.test(isi)))
     out.push(`hapus kalimat validasi yang tidak diminta ("${v[0]}") — basa-basi; kalau klien memang bertanya cukup/tidak, jawab dengan alasan & manfaat konkret untuk acaranya`);
   if (RE_CREW.test(isi) && !/crew|kru|petugas|operator|teknis/i.test(tanya)) out.push('jangan menjual crew (itu standar minimum): pilih satu nilai lain yang relevan untuk acaranya, atau buang');
-  if (RE_DAFTAR_ISI.test(isi) && !/termasuk apa|dapat apa|include|sudah termasuk|isi paket|fasilitas/i.test(tanya)) out.push('jangan mendaftar isi paket: sebut SATU nilai yang paling relevan untuk acaranya');
+  const di = isi.match(RE_DAFTAR_ISI);
+  if (di && !/\b(tapi|kalau|namun|nanti)\b/i.test(di[0]) && !/termasuk apa|dapat apa|include|sudah termasuk|isi paket|fasilitas/i.test(tanya)) out.push('jangan mendaftar isi paket: sebut SATU nilai yang paling relevan untuk acaranya');
   if (RE_PENEGAS.test(isi)) out.push('buang penegas yang mengulang makna (mis. "tidak ada biaya tambahan, sudah termasuk dalam harga"): cukup satu pernyataan singkat');
   return out;
 }
@@ -509,6 +511,13 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   // Rama 11 Nov: harga umum lewat lampiran pricelist, bukan daftar harga di chat.
   if (/\[KIRIM:\s*pricelist\]/i.test(teks) && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pricelist sudah dilampirkan: jangan mendaftar harga di teks, cukup satu kalimat pengantar yang menunjuk ke lampiran di bawahnya');
   out.push(...basaBasi(isi, pesanKlien));
+  // Regresi 11 Nov: dua kalimat pengantar untuk satu lampiran ("ini ada gambaran…" + "Silahkan Kak, berikut…") = redundant.
+  if (/\[KIRIM:/i.test(teks) && (isi.match(/\b(berikut|ini (ada |dia )?(gambaran|perbandingan|contoh))\b/gi) || []).length >= 2)
+    out.push('pengantar lampiran cukup SATU kalimat (senada "Silahkan Kak, berikut … ya"), jangan dua kalimat yang maknanya sama');
+  const kaku = frasaKaku(teks);
+  if (kaku.length) out.push(`hapus frasa kaku: "${kaku.join('", "')}" — ganti dengan kalimat biasa`);
+  if (/\[KIRIM:\s*format\]/i.test(teks) && new Set((isi.match(/\b(2R|4R|polaroid)\b/gi) || []).map((x) => x.toLowerCase())).size >= 2 && isi.length > 250)
+    out.push('ilustrasi format sudah dilampirkan: jangan jelaskan tiap format di teks, cukup pengantar singkat + satu pertanyaan');
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
   // Kecuali KONTAK PERTAMA (Rama 28 Okt "terlalu ngegas"; data 99 kontak pertama: >400 karakter dibalas 41% vs <400 87%,
   // >=2 angka harga 33%): pesan pertama dipaksa ringkas.

@@ -8,7 +8,7 @@ Setiap kali Rama menandai frasa baru, cukup tambah satu baris di sini (tidak per
 - paling menentukan  # Rama 11 Nov: "baku banget: durasi yang dipilih paling menentukan"
 - satu catatan jujur  # frasa mesin, uji buta Tahap 2
 - keputusannya di  # frasa mesin, uji buta Tahap 2
-- sudah all-in:  # frasa mesin, uji buta Tahap 2
+- sudah all-in  # frasa mesin, uji buta Tahap 2
 - tenang aja  # frasa mesin, uji buta Tahap 2
 - aku dari tim tetra  # pembuka berulang, uji buta Tahap 2
 - lebih lega  # frasa mesin, uji buta Tahap 2
@@ -46,3 +46,7 @@ Setiap kali Rama menandai frasa baru, cukup tambah satu baris di sini (tidak per
 - sudah include di harga  # varian
 - paham, kak  # Rama 11 Nov: pembuka basa-basi ("jawaban yang muter2 gajelas")
 - masih kosong di jam  # Rama 11 Nov: pakai "masih available"
+- biar lebih gampang kebayang  # varian "biar lebih kebayang" (regresi 11 Nov)
+- paham kok  # varian "Paham, Kak" (replay 11 Nov)
+- cekin  # Rama 11 Nov: varian "cekkan/cekin slotnya"
+- sudah termasuk di dalam paket  # penegas (replay 11 Nov)
