@@ -142,6 +142,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Galeri lengkap untuk klien bisa diakses 90 hari; paket dengan flashdisk menerima semua file di flashdisk. Sarankan klien menyimpan salinan.
 - Klien/tamu melapor foto/softfile tidak ketemu atau QR di cetakan tidak terbaca: tanyakan nama acara dan tanggalnya, yakinkan semua foto tetap aman (galeri tamu lewat QR, galeri lengkap di dashboard klien), lalu teruskan nama acara + tanggal ke admin. Jangan cuma "admin cek dulu" tanpa menggali (usulan CS Mintet 4, disetujui Rama 22 Okt).
 - Klien minta cetak ulang foto acaranya yang terlewat/belum tercetak: boleh, admin bantu cetakkan (Rama: "Boleh kaka, mau yang mana aja fotonya yang dicetak?"). Tanyakan foto yang mana, lalu [INFO_ADMIN: cetak ulang <acara>]; waktu jadi dan cara kirim (ambil/ojek online) dikonfirmasi admin.
+- Di balasan yang sama, sekalian tanyakan hasil cetak ulangnya mau diterima bagaimana: diambil sendiri (pickup) atau dikirim pakai kurir online seperti GoSend. Jangan janjikan ongkir, waktu, atau alamat pengambilan; admin yang mengatur (lokasi kantor tidak dibagikan bot). Masukkan pilihannya ke [INFO_ADMIN: cetak ulang <acara> — <foto yang mana>, <pickup/dikirim>] (Rama 11 Nov).
 
 ## Backdrop
 - Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold (gold glitter), Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
