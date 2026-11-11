@@ -53,6 +53,14 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.ok(!msgs._urusanKlien(pemasok));
     assert.ok(msgs._urusanKlien([{ role: 'user', content: 'kak untuk acara tanggal 28 jam berapa crew datang?' }]));
   });
+  await kasus('assist diam saat admin baru membalas, kecuali ada pertanyaan baru (usulan #60)', () => {
+    const now = Date.now();
+    const hist = [{ role: 'user', content: 'kak desainnya udah fix ya', t: now - 50 * 60e3 }, { role: 'assistant', content: '(admin) siap kak aku proses', t: now - 40 * 60e3 }];
+    assert.ok(msgs._adminMasihPegang(hist, [{ role: 'user', content: 'oke makasih kak', t: now - 25 * 60e3 }], now));
+    assert.ok(!msgs._adminMasihPegang(hist, [{ role: 'user', content: 'kak kalau pelunasan kapan ya?', t: now - 25 * 60e3 }], now));
+    const lama = [{ role: 'assistant', content: '(admin) siap kak', t: now - 3 * 3600e3 }];
+    assert.ok(!msgs._adminMasihPegang(lama, [{ role: 'user', content: 'oke kak', t: now - 25 * 60e3 }], now));
+  });
   await kasus('link & alamat karangan ditangkap (…2792)', () => {
     assert.ok(ai.tautanAsing('share lok https://maps.app.goo.gl/w132t81yQ9kZ7dLLA', ai._sumberHarga()).length);
     assert.ok(ai.tautanAsing('Kawasan Niaga Citra Indah Blok A1 Sentul ya mas', ai._sumberHarga()).length);

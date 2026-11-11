@@ -400,6 +400,16 @@ setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error(
 // dipegang admin tetap diam (audit Nov …2792: assist menjawab pemasok kertas DNP atas nama admin, menyanggupi
 // "dikirim siang ini", lalu mengarang alamat & link share lok — admin: "bot wa saya error").
 const RE_URUSAN_KLIEN = /photo ?booth|\bbooth\b|acara|event|wedding|nikah|resepsi|lamaran|ulang tahun|ultah|wisuda|gathering|tanggal|\btgl\b|paket|harga|pricelist|\bpl\b|booking|\bdp\b|pelunasan|frame|backdrop|cetak|softfile|galeri|360|magazine|photo ?stage|snapbook|sleeve|crew|venue/i;
+// Usulan CS Mintet #60 (disetujui Rama 11 Nov): admin yang baru membalas (≤ ADMIN_AKTIF_MENIT) sedang memegang
+// chat — assist diam, kecuali klien mengajukan pertanyaan baru setelah balasan admin itu.
+const ADMIN_AKTIF_MENIT = 60;
+const RE_TANYA_BARU = /\?|\b(berapa|kapan|gimana|bagaimana|apakah|bisa(kah)?|boleh(kah)?|ada(kah)?|dimana|di mana|apa)\b/i;
+function adminMasihPegang(hist, baru, now = Date.now()) {
+  const admin = [...hist].reverse().find((p) => p.role === 'assistant' && /^\(admin\)/.test(String(p.content)) && p.t);
+  if (!admin || now - admin.t > ADMIN_AKTIF_MENIT * 60e3) return false;
+  return !baru.some((p) => RE_TANYA_BARU.test(String(p.content)));
+}
+
 function urusanKlien(riwayat) {
   return riwayat.some((p) => p.role === 'user' && RE_URUSAN_KLIEN.test(String(p.content)));
 }
@@ -565,6 +575,7 @@ function registerMessageHandler(sock) {
       if (umur < ASSIST_MENIT * 60e3 || now - tAkhir > ASSIST_MAKS_MS || assistDinilai.get(jid) === tAkhir) continue;
       assistDinilai.set(jid, tAkhir);
       if (!urusanKlien(riw)) { console.log(`[assist] ${jid.split('@')[0]}: bukan urusan klien (pemasok/pribadi) — bot diam`); continue; }
+      if (adminMasihPegang(riw.slice(0, i), baru, now)) { console.log(`[assist] ${jid.split('@')[0]}: admin membalas <${ADMIN_AKTIF_MENIT} mnt lalu & tidak ada pertanyaan baru — bot diam`); continue; }
       const num = await nomor(jid);
       await runSerial(jid, () => assistSatu(jid, num, riw.slice(0, i), baru, Math.round(umur / 60e3)));
     }
@@ -1052,4 +1063,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _adminMasihPegang: adminMasihPegang, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
