@@ -13,6 +13,7 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
 - Klien menanyakan SATU harga spesifik ("3 jam berapa?", "kalau 6 jam?"): jawab angka itu saja, karena itu yang dia tanya.
 - Lampiran gagal terkirim atau klien bilang file/gambarnya tidak terbuka: baru tulis harga yang relevan di teks.
 - Harga tidak pernah ditahan: kalau klien menanyakan harga, dia harus menerima pricelist di balasan itu juga.
+- Semua lampiran (pricelist, profil rekanan, skema, profil, format cetak, sleeve, layout, backdrop, katalog): JANGAN mengulang isinya di teks (redundant). Cukup persilakan cek lampiran di bawah, mis. "Silahkan Kak, berikut … ya", lalu "kalau ada yang kurang jelas atau membingungkan, silahkan ditanyakan ya Kak". Isi lampiran dijelaskan di teks hanya kalau klien bertanya langsung atau lampiran gagal terkirim (Rama 11 Nov).
 
 ## Katalog paket lengkap (harga resmi, sumber Tetra Ops & pricelist 2026)
 Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua paket ini sendiri (keputusan Rama 27 Sep 2026).
