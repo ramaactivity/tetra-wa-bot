@@ -37,6 +37,15 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.strictEqual(namaDariChat('Halo Tetra!\nNama: rara\nTanggal: 28 Nov'), 'rara');
     assert.strictEqual(namaDariChat('Nama Pengantin: Saadah & Muhammed'), null);
   });
+  await kasus('tanda AI dirapikan: tanda pisah jadi koma, rentang jam tetap, bold maks satu (Rama 11 Nov)', () => {
+    const r = ai.rapikanGaya('Halo Kak — untuk *3 jam* harganya *Rp 2.500.000* — sudah termasuk cetak.\nJam 11.30–14.00 aman.\n[KIRIM: pricelist]');
+    assert.ok(!/[—–]/.test(r), r);
+    assert.match(r, /11\.30-14\.00/, r);
+    assert.strictEqual((r.match(/\*[^*\n]+\*/g) || []).length, 1, r);
+    assert.match(r, /Rp 2\.500\.000/, r);
+    assert.match(r, /\n\[KIRIM: pricelist\]$/, r);
+    assert.strictEqual(ai.rapikanGaya('Siap Kak, aman.'), 'Siap Kak, aman.');
+  });
   await kasus('mode assist tidak menjawab pemasok (…2792 kertas DNP)', () => {
     const pemasok = [{ role: 'user', content: 'Selamat pagi mas, saya temennya gilang yang jual paper dnp' },
       { role: 'assistant', content: '(admin) Harganya berapa mas?' }, { role: 'user', content: '1,1 mass satunya, kalo dua sejuta' },

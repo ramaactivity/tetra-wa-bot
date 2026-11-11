@@ -404,7 +404,8 @@ async function kirimTeks(raw) {
     return { ok: false, pesan: 'payload bukan JSON' };
   }
   const nomor = String(p.nomor || '').replace(/\D/g, '');
-  const pesan = String(p.pesan || '').trim();
+  // Sapaan prospek ditulis model (Bruno): tanda AI dirapikan sama seperti balasan chat.
+  const pesan = require('./lib/ai').rapikanGaya(String(p.pesan || '').trim());
   if (!/^628\d{8,11}$/.test(nomor)) return { ok: false, pesan: `Bukan nomor HP Indonesia: "${p.nomor}"` };
   if (!pesan || pesan.length > 1000) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
   if (timWa.anggota(nomor)) return tolakNomorTim(nomor);

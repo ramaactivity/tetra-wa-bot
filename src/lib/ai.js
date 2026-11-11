@@ -866,7 +866,28 @@ function alarmModel(jenis, teks) {
   alarmTerakhir[jenis] = Date.now();
   require('./notify').kirimTelegram(teks).catch((e) => console.error('[alarm] Telegram:', e.message));
 }
+// Tanda AI yang bikin klien merasa dibalas bot (Rama 11 Nov: "banyak yang kabur pas merasakan ah ini mah dijawab bot"):
+// tanda pisah "—"/"–" di tengah kalimat dan banyak teks tebal. Dirapikan deterministik untuk SEMUA teks buatan model
+// (balasan chat & follow-up lewat getAIResponse, sapaan prospek lewat bot.js). Baris penanda [..] tidak disentuh;
+// rentang angka (11.30–14.00) jadi tanda hubung biasa; bold hanya yang pertama yang dibiarkan.
+function rapikanGaya(teks) {
+  let tebal = 0;
+  return String(teks || '').split('\n').map((baris) => {
+    if (/^\s*\[[A-Z_]+/.test(baris)) return baris;
+    let b = baris.replace(/(\d)\s*[–—]\s*(\d)/g, '$1-$2')
+      .replace(/^\s*[–—]\s*/, '')
+      .replace(/\s*[–—]\s*$/, '')
+      .replace(/\s*[–—]\s*/g, ', ')
+      .replace(/,\s*([,.!?])/g, '$1');
+    b = b.replace(/\*([^*\n]+)\*/g, (m, isi) => (tebal++ ? isi : m));
+    return b;
+  }).join('\n');
+}
+
 async function getAIResponse(history, message, leadContext) {
+  return rapikanGaya(await jawabAI(history, message, leadContext));
+}
+async function jawabAI(history, message, leadContext) {
   if (cumaMenutup(history, message)) {
     console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
     return '[DIAM]';
@@ -1038,4 +1059,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
