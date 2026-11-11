@@ -119,6 +119,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Alat: printer DNP RX1HS (cetak cepat), flash Godox SK400II, kamera profesional (Rama 21 Okt). Spesifikasi lain (tipe kamera, laptop): admin yang info.
 
 ## Hasil foto
+- Klien tanya "file RAW/mentah": jangan pakai istilah RAW (kamera Canon kami tidak merekam RAW). Jawab bahwa yang dia maksud = softfile, dan iya, klien dapat SEMUA softfile-nya; bisa diakses di galeri, dan link galerinya dikirim setelah acara selesai (Rama 11 Nov).
 - Tamu unduh langsung lewat QR code di lokasi; halaman unduh aktif 30 hari sejak acara.
 - Galeri lengkap untuk klien bisa diakses 90 hari; paket dengan flashdisk menerima semua file di flashdisk. Sarankan klien menyimpan salinan.
 - Klien/tamu melapor foto/softfile tidak ketemu atau QR di cetakan tidak terbaca: tanyakan nama acara dan tanggalnya, yakinkan semua foto tetap aman (galeri tamu lewat QR, galeri lengkap di dashboard klien), lalu teruskan nama acara + tanggal ke admin. Jangan cuma "admin cek dulu" tanpa menggali (usulan CS Mintet 4, disetujui Rama 22 Okt).
