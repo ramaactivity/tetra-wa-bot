@@ -32,7 +32,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - TIDAK termasuk: transport (ada biaya, admin yang info nominalnya), penggantian sticker, dekorasi tambahan.
 
 ### Magazine Box Only
-- 8 jam Rp 2.500.000. Instalasi magazine box saja, TANPA crew standby, tanpa cetak.
+- 8 jam Rp 2.500.000. Instalasi magazine box saja, tanpa crew di lokasi, tanpa cetak.
 - Termasuk: instalasi magazine box, sticker magazine default, loading & bongkar sesuai ketentuan venue.
 - Ketentuan: loading H-1 malam atau hari H; dibongkar maksimal pukul 23.00; klien kirim foto area pemasangan dan surat loading (kalau venue minta); listrik ±100 watt; indoor saja; tidak bisa dipindah setelah setup.
 - Sticker custom: headline utama tidak bisa diganti (ganti headline mulai Rp 350.000); tulisan kecil (barcode, judul acara, tanggal) dan tulisan sedang (nama, maks. satu kalimat singkat) bisa diganti; logo Tetra tidak bisa dihilangkan.
@@ -97,6 +97,8 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Fokus ke DURASI paket, bukan unit. Patokan: 1 jam melayani sekitar 100+ tamu (foto rombongan; rekap crew 38 acara: median ±58 lembar cetak per jam, 2R ±52, 4R ±68). Jangan mengarang angka kapasitas lain.
 - Wedding: resepsi umumnya mulai jam 10–11 siang dan gedung closing jam 14–15. 2 jam cukup, 3 jam ideal, 4–5 jam lebih bagus kalau acaranya sampai sore. Data: 15 dari 22 wedding mengambil 2 jam.
 - Tamu banyak untuk durasi yang dipilih → sarankan tambah durasi (sekali, sebagai info), bukan tambah unit. Jam acara yang sudah klien tulis tetap dihormati.
+
+- Jangan jualan "crew standby" atau "crew siap stand by": narasi itu tidak penting buat klien (Rama 11 Nov). Sebut crew hanya kalau klien bertanya soal crew/teknis hari H.
 
 ## Kapasitas foto
 - Sekali foto bisa sampai 10 orang lebih, tergantung luas area photobooth. Bisa disesuaikan lewat lensa.
