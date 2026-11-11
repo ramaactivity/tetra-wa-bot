@@ -6,7 +6,7 @@
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
 const { proto, downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
+const { HANDOFF_AI_MS, getRiwayat, getRingkasan, getProfil, simpanProfil, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
@@ -16,6 +16,7 @@ const deliveryLog = require('../lib/deliveryLog');
 const { notifyAdmin, kirimTelegram } = require('../lib/notify');
 const undangVendor = require('../lib/undangVendor');
 const { ekstrakGaleri, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation } = require('../lib/ai');
+const aiLib = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
@@ -581,13 +582,20 @@ function registerMessageHandler(sock) {
     }
   };
 
+  // Profil klien V2 (karakter & kebutuhan) diperbarui tiap giliran dan dimuat ke konteks; V1 tidak berubah.
+  const profilKlien = async (jid, teks) => {
+    if (!aiLib.pakaiV2()) return '';
+    const p = await aiLib.perbaruiProfil(getProfil(jid), getRiwayat(jid), teks);
+    if (p) simpanProfil(jid, p);
+    return p ? `PROFIL KLIEN (catatan internal hasil membaca percakapan; JANGAN dikirim/dikutip ke klien; pakai untuk menyesuaikan isi, nada, panjang, dan cara meyakinkan):\n${p}\n\n` : '';
+  };
   const assistSatu = async (jid, num, hist, baru, menit) => {
     const teks = baru.map((p) => p.content).join('\n');
     const mulai = Date.now();
     const vendor = await vendorLib.cari(num);
     const kBooking = vendor || getProspek(jid) ? '' : await klienBooking.konteks(num);
     let jawab = await getAIResponse(hist, teks,
-      buildLeadContext(fullUserText(jid, ''), jid, teks, '', vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking + KONTEKS_ASSIST(menit));
+      (await profilKlien(jid, teks)) + buildLeadContext(fullUserText(jid, ''), jid, teks, '', vendor) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking + KONTEKS_ASSIST(menit));
     const nama = jid.split('@')[0];
     // Bot tidak menjawab tapi klien menunggu: admin WAJIB tahu (WA admin + Telegram CS Mintet).
     const kabari = async (topik) => {
@@ -799,8 +807,9 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       const kBooking = lead || vendor ? '' : await klienBooking.konteks(phoneDigits(msg));
+      const kProfil = await profilKlien(jid, originalText);
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
+        kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -838,7 +847,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking +
+          kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');

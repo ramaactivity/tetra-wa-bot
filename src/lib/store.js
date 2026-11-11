@@ -83,6 +83,9 @@ function getRiwayat(jid) {
 function getRingkasan(jid) {
   return aktif(jid) ? riwayat[jid].ringkasan || '' : '';
 }
+// Profil klien V2 (karakter, kebutuhan, keberatan, tahap) yang diperbarui tiap giliran; catatan internal, tidak pernah dikirim.
+const getProfil = (jid) => (aktif(jid) && riwayat[jid].profil) || '';
+const simpanProfil = (jid, profil) => simpanKontak(jid, { profil });
 
 function simpanKontak(jid, patch) {
   riwayat[jid] = { ...(aktif(jid) ? riwayat[jid] : {}), ts: Date.now(), ...patch };
@@ -170,6 +173,8 @@ module.exports = {
   HANDOFF_AI_MS,
   getRiwayat,
   getRingkasan,
+  getProfil,
+  simpanProfil,
   tambahRiwayat,
   getProspek,
   tandaiProspek,

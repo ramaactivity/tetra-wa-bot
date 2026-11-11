@@ -46,6 +46,12 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.match(r, /\n\[KIRIM: pricelist\]$/, r);
     assert.strictEqual(ai.rapikanGaya('Siap Kak, aman.'), 'Siap Kak, aman.');
   });
+  await kasus('lokasi kantor & janji temu sepihak ditangkap, kalimat sah lolos (Rama 11 Nov)', () => {
+    for (const t of ['nanti langsung aku samperin ke sana', 'Boleh mas, ini share lok kantor kami', 'Silakan datang ke kantor kami di Bogor',
+      'Oke Kak, besok jam 10 kita ketemu di kantor ya', 'aku tunggu di lobby ya', 'nanti aku antar flashdisknya']) assert.ok(ai.RE_JANJI_TEMU.test(t), t);
+    for (const t of ['crew datang paling lambat 1 jam sebelum acara', 'Tim kami datang ke venue jam 9 buat setup',
+      'Kalau mau ketemu, admin yang atur jadwalnya ya']) assert.ok(!ai.RE_JANJI_TEMU.test(t), t);
+  });
   await kasus('mode assist tidak menjawab pemasok (…2792 kertas DNP)', () => {
     const pemasok = [{ role: 'user', content: 'Selamat pagi mas, saya temennya gilang yang jual paper dnp' },
       { role: 'assistant', content: '(admin) Harganya berapa mas?' }, { role: 'user', content: '1,1 mass satunya, kalo dua sejuta' },

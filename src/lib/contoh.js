@@ -58,7 +58,46 @@ function blokPrompt(pesan, history, konteks) {
       x.teks.replace(/Rp\s?[\d.,]+(\s?(jt|juta|rb|ribu|k)\b)?/gi, 'Rp …')).join('\n');
 }
 
-module.exports = { pilih, blokPrompt, urai, jenisDari };
+// Gaya admin MANUSIA (Rama 11 Nov: "masih kaku seperti robot… banyak yang kabur pas merasakan dijawab bot"): pasangan
+// pesan klien → balasan "(admin)" asli dari riwayat yang lalu dibalas lagi oleh klien. Disuntik sebagai referensi NADA.
+// ponytail: riwayat dipindai ulang hanya kalau berkasnya berubah (cache mtime); cukup untuk ratusan chat.
+const RIWAYAT = () => process.env.RIWAYAT_FILE || path.join(__dirname, '..', '..', 'data', 'riwayat.json');
+let cache = { mtime: 0, pasangan: [] };
+const samarkan = (t) => String(t)
+  .replace(/\b(?:\+?62|0)8\d{7,12}\b/g, '[nomor]').replace(/\d{6,}/g, '[angka]')
+  .replace(/Rp\s?[\d.,]+(\s?(jt|juta|rb|ribu|k)\b)?/gi, 'Rp …')
+  .replace(/\b(Kak|Ka|kak|ka|Mas|mas|Mba|Mbak|mba|Bu|Pak|Teh|teh)\s+[A-Z][a-z]+/g, '$1 [nama]');
+function pasanganAdmin() {
+  let st; try { st = fs.statSync(RIWAYAT()); } catch { return []; }
+  if (st.mtimeMs === cache.mtime) return cache.pasangan;
+  const out = [];
+  try {
+    for (const v of Object.values(JSON.parse(fs.readFileSync(RIWAYAT(), 'utf-8')))) {
+      const p = v.pesan || [];
+      for (let i = 1; i < p.length; i++) {
+        const c = String(p[i].content || '');
+        if (p[i].role !== 'assistant' || !c.startsWith('(admin)') || p[i - 1].role !== 'user') continue;
+        const balas = c.slice(7).trim();
+        if (balas.length < 40 || balas.length > 350 || /\[kirim|rekening|\bbca\b/i.test(balas)) continue;
+        if (!p.slice(i + 1, i + 3).some((x) => x.role === 'user')) continue; // klien membalas lagi
+        const klien = String(p[i - 1].content || '').slice(0, 300);
+        out.push({ klien: samarkan(klien), admin: samarkan(balas), kunci: kata(klien) });
+      }
+    }
+  } catch { return []; }
+  cache = { mtime: st.mtimeMs, pasangan: out };
+  return out;
+}
+function gayaAdmin(pesan, n = 3) {
+  const q = kata(pesan);
+  const skor = (c) => { let k = 0; for (const w of c.kunci) if (q.has(w)) k++; return k / Math.sqrt((c.kunci.size || 1) * (q.size || 1)); };
+  const top = pasanganAdmin().map((c) => ({ c, s: skor(c) })).sort((a, b) => b.s - a.s).slice(0, n).map((x) => x.c);
+  if (!top.length) return '';
+  return '\n\nGAYA ADMIN MANUSIA TETRA (balasan asli admin yang lalu dibalas klien; tiru NADA & cara ngobrolnya (santai, pendek, ' +
+    'manusiawi), BUKAN isi/faktanya):\n' + top.map((x) => `Klien: ${x.klien}\nAdmin: ${x.admin}`).join('\n---\n');
+}
+
+module.exports = { pilih, blokPrompt, urai, jenisDari, gayaAdmin, samarkan };
 
 if (require.main === module) {
   // Uji cepat tanpa jaringan: node src/lib/contoh.js

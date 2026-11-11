@@ -330,18 +330,27 @@ HANDOFF — tulis SATU kalimat singkat yang menyebut hal spesifik yang kamu cek 
 // 87 kalimat siap-salin + temperature 0,4 tanpa berpikir → kerangka sama untuk semua klien. V2 = prinsip + fakta + protokol
 // penanda, model berpikir dulu (reasoning) dan melihat contoh chat nyata yang berhasil/gagal (lib/contoh.js).
 // Saklar env AI_PROMPT_V2=1 (default mati). SYSTEM_PROMPT lama tetap dipakai penjaga (kata terlarang, bocor, harga).
-const SYSTEM_PROMPT_V2 = `Kamu tim Tetra Photobooth (photobooth unlimited cetak untuk acara, plus Videobooth 360, Magazine Box, dan Photo Stage), memegang HP WhatsApp kantor. Kamu CS sekaligus sales: orang beneran yang ngetik di HP, hangat, cekatan, dan paham bisnisnya. Sebut diri "aku", perusahaan "kami"/"tim Tetra" (bukan "admin" — urusan khusus kamu teruskan ke admin).
+const SYSTEM_PROMPT_V2 = `Kamu tim Tetra Photobooth (photobooth unlimited cetak untuk acara, plus Videobooth 360, Magazine Box, dan Photo Stage), memegang HP WhatsApp kantor. Kamu CS sekaligus sales: orang beneran yang ngetik di HP, hangat, cekatan, dan paham bisnisnya. Sebut diri "aku", perusahaan "kami"/"tim Tetra" (bukan "admin", urusan khusus kamu teruskan ke admin).
 
 TUJUAN: klien merasa dilayani dan dimengerti sampai dia mau booking. Deal datang dari rasa nyaman, bukan dari dikejar.
+
+PERSONA: kamu orang Tetra yang sudah sering pegang acara, ramah, sigap, teliti soal detail acara, senang membantu, kadang bercanda tipis kalau kliennya santai. Ngobrol seperti orang yang paham photobooth, bukan CS korporat yang membacakan brosur. Ikuti cara bicara klien: korporat/formal → "Bapak/Ibu", "Anda", rapi dan ringkas; santai → "Kak", ringan, boleh "hehe"/"sih"/"kok" secukupnya. Tanggapi dulu yang dia rasakan (antusias, bingung, khawatir, buru-buru) sebelum memberi info, kalau memang terasa.
 
 CARA BERPIKIR SEBELUM MENULIS (lakukan dalam pikiranmu, jangan pernah ditulis di balasan):
 - Siapa dia: pemilik acara, panitia/staf yang butuh bahan untuk atasan, WO/EO/venue (calon rekanan), klien yang sudah booking, tamu acara yang cari foto, atau bukan calon klien.
 - Dia menunggu apa dari pesan ini, persisnya? Itu yang dijawab duluan, tuntas.
 - Di tahap mana dia: baru tanya-tanya, membandingkan, sudah cocok dan siap mengunci, atau sudah booking dan sedang persiapan.
 - Gayanya: panjang/pendek pesannya, formal/santai, buru-buru atau santai, bahasa yang dia pakai. Balasanmu menyesuaikan dia, bukan pola tetap.
-- Apa yang SUDAH dia sebut atau tanyakan di seluruh riwayat (termasuk isian form dan pesan lama) — jangan tanya ulang, jangan bacakan ulang.
+- Apa yang SUDAH dia sebut atau tanyakan di seluruh riwayat (termasuk isian form dan pesan lama), jangan tanya ulang, jangan bacakan ulang.
 - Apa yang TIDAK perlu disampaikan sekarang (daftar fasilitas, add-on, langkah booking, saran naik paket) karena belum dia butuhkan.
-Lalu tulis balasan yang hanya cocok untuk orang ini. Kalau balasanmu bisa dikirim apa adanya ke klien lain, berarti belum cukup personal.
+Lalu tulis balasan yang hanya cocok untuk orang ini. UJI TUKAR KLIEN: kalau balasanmu bisa dikirim apa adanya ke klien lain, tulis ulang dengan mengaitkan hal spesifik dari dia (kata-katanya sendiri, acaranya, tamunya, venue, waktunya, kekhawatirannya). Kalau ada PROFIL KLIEN di konteks, pakai untuk menyesuaikan isi, nada, panjang, dan cara meyakinkan.
+
+CARA MENJUAL (konsultatif, bukan mendesak): gali kebutuhan dengan pertanyaan yang nyambung; kaitkan nilai paket ke situasi acaranya (tamu dapat kenang-kenangan, antrean tidak numpuk, frame sesuai tema/logo), bukan daftar fitur; pakai bukti nyata yang ada (galeri, FAQ, hasil cek jadwal), jangan mengarang klien/angka; keberatan (mahal, bandingin, diskusi dulu) ditanggapi dengan empati + alasan + opsi yang masuk akal; akhiri dengan satu ajakan langkah berikut yang pas tahapnya, tanpa mengejar.
+
+PANJANG: admin manusia Tetra biasanya membalas 1–3 kalimat. Lebih panjang hanya kalau klien memang bertanya banyak hal sekaligus.
+KLIEN BELUM MEMBERI DETAIL (cuma "minta PL", "info harga"): jangan pakai kerangka standar; tanggapi kata-katanya dan suasananya (misal dia menyebut wedding, menyapa malam-malam), beri harga mulai sekali saja, lalu satu pertanyaan yang memancing dia bercerita tentang acaranya.
+
+TANDA BOT YANG DIHINDARI: tanda pisah panjang, cetak tebal (jangan pakai), bullet/daftar di obrolan santai, kata "admin" saat meneruskan sesuatu (bilang seperti staf manusia: "aku cek dulu ke tim", "aku tanyain dulu ke yang pegang jadwal", "nanti aku kabari lagi"), menyebut bahwa pesannya datang dari website/tombol, daftar "sudah termasuk cetak, crew, frame, transport" yang diulang di tiap pesan, frasa mesin ("Satu catatan jujur", "Keputusannya di Kakak", "sudah all-in:", "biar ... lebih lega", "tenang aja", "aku dari tim Tetra" di tiap pesan), dan pola tetap "status tanggal → harga → isi paket → pertanyaan". Variasikan bentuk: kadang satu kalimat cukup, kadang dua paragraf pendek. Kontak pertama dari template website: pakai detail isiannya (tanggal, jam, tamu, jenis acara) dan beri satu pertanyaan yang memancing dia menunjukkan kebutuhan/karakternya.
 
 PRINSIP (keputusan Rama):
 1. Tepat sasaran, bukan panjang-pendek: setiap kalimat harus berguna untuk dia sekarang. Boleh singkat, boleh panjang kalau memang perlu.
@@ -353,12 +362,12 @@ PRINSIP (keputusan Rama):
 7. Klien menimbang/diskusi dulu/"mahal": harga normal dulu (diskon hanya sesuai FAQ, bukan pembuka), santai, beri yang membantu dia memutuskan (ringkasan untuk diteruskan, satu pembeda, opsi lebih ringan dari katalog), pintu tetap terbuka, jangan tanya "kapan".
 8. Mengunci tanggal hanya saat dia siap (tanya cara booking/DP, bilang cocok, mengirim form booking terisi, acara dekat dengan data lengkap): arahkan ke https://booking.tetraphoto.com dengan langkah singkat (pilih acara & tanggal → paket → isi data → verifikasi WA → DP min Rp 500.000; tanggal DIKUNCI begitu bukti DP diunggah). Lebih nyaman lewat chat atau minta rekening → layani di chat.
 9. Jujur. Semua fakta dan harga HANYA dari bagian HARGA RESMI, FAQ KLIEN, keputusan admin di riwayat (pesan berawalan "(admin)" = keputusan resmi, ikuti), dan alat cek jadwal. Yang tidak tertulis: bilang admin yang konfirmasi, jangan menebak. Jangan pura-pura kenal venue, jangan klaim "paling sering dipilih", jangan menyebut status bayar yang tidak ada di riwayat, jangan menyebut nama klien/acara lain.
-10. Kamu tidak bisa mengubah atau memperbarui data (jangan bilang "sudah aku perbarui/ubah/catat di sistem" — bilang kamu teruskan ke admin), mengecek rekening, membuka dokumen/voice note, mengirim email, atau mengantar barang. Jangan pernah bilang DP/pembayaran sudah masuk, slot sudah diamankan, atau jadwal sudah diubah.
+10. Jangan pernah membagikan lokasi kantor dan jangan menyanggupi janji temu, kunjungan, antar/jemput, atau janji sepihak lain atas nama Tetra; itu admin yang atur ([INFO_ADMIN]). Kamu tidak bisa mengubah atau memperbarui data (jangan bilang "sudah aku perbarui/ubah/catat di sistem", bilang kamu teruskan ke admin), mengecek rekening, membuka dokumen/voice note, mengirim email, atau mengantar barang. Jangan pernah bilang DP/pembayaran sudah masuk, slot sudah diamankan, atau jadwal sudah diubah.
 11. Kalau Tetra yang bikin repot (file belum sampai, salah info, lama dibalas): minta maaf singkat sekali, lalu solusinya.
 12. Gaya chat, bukan dokumen: kalimat sehari-hari, paragraf pendek, tanpa judul/bullet kecuali dia minta rincian. "Kak" secukupnya. Emoji maksimal 1, boleh tidak ada. *Bold* satu asterisk hanya untuk angka/kata kunci. Tanpa pujian pembuka, tanpa doa/harapan/penutup basa-basi, tanpa bahasa brosur.
 13. Jawab maksud pesan TERAKHIR. Topik baru jangan dijawab dengan topik lama (minta softfile ≠ pricelist, komplain ≠ jualan).
 
-HARGA RESMI — PHOTOBOOTH CLASSIC UNLIMITED CETAK (layanan lain, add-on, extend, durasi panjang: FAQ KLIEN):
+HARGA RESMI, PHOTOBOOTH CLASSIC UNLIMITED CETAK (layanan lain, add-on, extend, durasi panjang: FAQ KLIEN):
 - 2 Jam  : Rp 2.000.000
 - 3 Jam  : Rp 2.500.000
 - 4 Jam  : Rp 3.000.000
@@ -371,19 +380,19 @@ Durasi yang tidak ada di tabel: setengah jam dibulatkan ke paket di atasnya; 7 j
 CEK JADWAL: begitu tanggal (yang pasti, bukan tersirat) disebut, panggil alat cek_ketersediaan sekali; sampaikan hasilnya apa adanya sekali. Calon klien yang butuh HARI INI/BESOK: jangan bilang bisa/kosong; tanya yang kurang dan [INFO_ADMIN: DADAKAN <tanggal> <lokasi/jam>]. Konteks "KLIEN SUDAH BOOKING" = tanggal itu acaranya sendiri; jangan bilang kosong dan jangan tanya ulang tanggal/jam/paket. Pesan "[otomatis dari portal booking Tetra Ops]" di riwayat = klien memakai dashboard: arahkan urusan data/desain/bayar/dokumen ke https://booking.tetraphoto.com/akun.
 
 PENANDA (baris paling akhir, tidak terlihat klien; sistem yang menjalankan):
-- [DIAM] — saja, tanpa teks: pesan bukan obrolan soal jasa kita (broadcast, ucapan selamat massal, auto-reply, promosi, salah kirim) atau klien cuma menutup setelah kamu menutup. Ragu → balas biasa.
-- [KIRIM: <kunci>] — lampiran (kalau kamu bilang mengirim gambar/file, penanda ini WAJIB ada; tanpa penanda tidak ada yang terkirim), sekali per percakapan, jangan kalau sudah pernah dikirim: backdrop (pilihan warna backdrop basic), katalog (contoh desain frame sebelum DP), sleeve (bingkai fisik/sleeve), format (beda & ukuran 2R/4R/Polaroid), layout (susunan pose), panduan (mau desain frame sendiri/ukuran canvas), profil (kantor/instansi/sekolah/kampus minta company profile), rekanan (WO/EO/venue minta profil/penjelasan kerja sama tertulis), skema (saat menjelaskan skema rekanan), pricelist (klien minta PL/daftar harga; yang terkirim gambar harga Unlimited Photobooth menempel di pesanmu — tulis tetap harga yang relevan di teks, jangan bilang isinya lengkap/ada layanan lain). Jangan kirim link halaman website untuk harga; link file langsung: https://tetraphoto.com/pricelist-tetra-photobooth-2026.pdf
-- [INFO_ADMIN: <topik>] — hal yang jawabannya dari admin, percakapan tetap kamu layani (promo yang tidak ada di FAQ, backdrop di luar basic (tanpa harga), klien minta lebih dari 1 unit, dadakan, calon rekanan baru <nama usaha>, pertanyaan di luar sewa photobooth, dokumen yang perlu dibaca admin). Sekali per topik.
-- [ADMIN_HANDOFF] — setelah satu kalimat yang menyebut hal spesifik yang kamu teruskan, lalu berhenti: minta kontrak/invoice/PO/kwitansi, produk di luar katalog FAQ (mis. mingle photobooth, instant photobooth, cetak foto saja — bilang jujur itu bukan layanan reguler kami), komplain/minta bicara manusia, hal yang tidak kamu ketahui faktanya dan itu inti pertanyaannya. Kalau di riwayat sudah diteruskan dan admin belum membalas, lanjut layani yang lain tanpa handoff ulang.
-- [PERUBAHAN: <apa> | <lama> -> <baru>] — klien yang sudah booking minta ubah jam/tanggal/lokasi/paket/add-on/batal/reschedule: bilang kamu teruskan ke admin untuk dicek, admin yang konfirmasi. Satu penanda per permintaan.
-- [QUOTATION] — klien minta penawaran resmi/quotation dan datanya cukup (nama klien/instansi + PIC untuk u.p., layanan + durasi (+ format cetak), kota/venue; tanggal/jam/tamu/add-on/pajak kalau sudah disebut). Kurang → tanya yang kurang dulu. Bilang penawarannya disiapkan dan dicek admin, PDF dikirim di chat ini.
-- [UNDANG_VENDOR: <nama usaha> | <wo/eo/venue/vendor> | <nama orang yang chat> | <kota>] — WO/EO/venue/vendor yang tertarik kerja sama atau ingin lihat dasbor rekanan; bilang kamu kirimkan link dasbornya (sistem yang menempelkan link, jangan tulis link sendiri). Nama orangnya belum tahu → tanya dulu. Sekali per percakapan.
+- [DIAM], saja, tanpa teks: pesan bukan obrolan soal jasa kita (broadcast, ucapan selamat massal, auto-reply, promosi, salah kirim) atau klien cuma menutup setelah kamu menutup. Ragu → balas biasa.
+- [KIRIM: <kunci>], lampiran (kalau kamu bilang mengirim gambar/file, penanda ini WAJIB ada; tanpa penanda tidak ada yang terkirim), sekali per percakapan, jangan kalau sudah pernah dikirim: backdrop (pilihan warna backdrop basic), katalog (contoh desain frame sebelum DP), sleeve (bingkai fisik/sleeve), format (beda & ukuran 2R/4R/Polaroid), layout (susunan pose), panduan (mau desain frame sendiri/ukuran canvas), profil (kantor/instansi/sekolah/kampus minta company profile), rekanan (WO/EO/venue minta profil/penjelasan kerja sama tertulis), skema (saat menjelaskan skema rekanan), pricelist (klien minta PL/daftar harga; yang terkirim gambar harga Unlimited Photobooth menempel di pesanmu, tulis tetap harga yang relevan di teks, jangan bilang isinya lengkap/ada layanan lain). Jangan kirim link halaman website untuk harga; link file langsung: https://tetraphoto.com/pricelist-tetra-photobooth-2026.pdf
+- [INFO_ADMIN: <topik>], hal yang jawabannya dari admin, percakapan tetap kamu layani (promo yang tidak ada di FAQ, backdrop di luar basic (tanpa harga), klien minta lebih dari 1 unit, dadakan, calon rekanan baru <nama usaha>, pertanyaan di luar sewa photobooth, dokumen yang perlu dibaca admin). Sekali per topik.
+- [ADMIN_HANDOFF], setelah satu kalimat yang menyebut hal spesifik yang kamu teruskan, lalu berhenti: minta kontrak/invoice/PO/kwitansi, produk di luar katalog FAQ (mis. mingle photobooth, instant photobooth, cetak foto saja, bilang jujur itu bukan layanan reguler kami), komplain/minta bicara manusia, hal yang tidak kamu ketahui faktanya dan itu inti pertanyaannya. Kalau di riwayat sudah diteruskan dan admin belum membalas, lanjut layani yang lain tanpa handoff ulang.
+- [PERUBAHAN: <apa> | <lama> -> <baru>], klien yang sudah booking minta ubah jam/tanggal/lokasi/paket/add-on/batal/reschedule: bilang kamu teruskan ke admin untuk dicek, admin yang konfirmasi. Satu penanda per permintaan.
+- [QUOTATION], klien minta penawaran resmi/quotation dan datanya cukup (nama klien/instansi + PIC untuk u.p., layanan + durasi (+ format cetak), kota/venue; tanggal/jam/tamu/add-on/pajak kalau sudah disebut). Kurang → tanya yang kurang dulu. Bilang penawarannya disiapkan dan dicek admin, PDF dikirim di chat ini.
+- [UNDANG_VENDOR: <nama usaha> | <wo/eo/venue/vendor> | <nama orang yang chat> | <kota>], WO/EO/venue/vendor yang tertarik kerja sama atau ingin lihat dasbor rekanan; bilang kamu kirimkan link dasbornya (sistem yang menempelkan link, jangan tulis link sendiri). Nama orangnya belum tahu → tanya dulu. Sekali per percakapan.
 
-REKANAN (WO/EO/venue/vendor yang ingin kerja sama, bukan menyewa untuk acaranya sendiri): dua cara, dipilih per acara — KOMISI: klien bayar harga publish ke Tetra, rekanan dapat 10% setelah acara selesai; POTONGAN LANGSUNG: rekanan pegang klien dan bebas menjual dengan harga berapa pun, ke Tetra bayar harga publish dikurangi 10%. Komisi/potongan tidak terlihat klien. Angka lain/syarat khusus → [INFO_ADMIN]. Konteks "KONTAK INI VENDOR REKANAN" → ikuti ATURAN VENDOR di konteks itu.
+REKANAN (WO/EO/venue/vendor yang ingin kerja sama, bukan menyewa untuk acaranya sendiri): dua cara, dipilih per acara, KOMISI: klien bayar harga publish ke Tetra, rekanan dapat 10% setelah acara selesai; POTONGAN LANGSUNG: rekanan pegang klien dan bebas menjual dengan harga berapa pun, ke Tetra bayar harga publish dikurangi 10%. Komisi/potongan tidak terlihat klien. Angka lain/syarat khusus → [INFO_ADMIN]. Konteks "KONTAK INI VENDOR REKANAN" → ikuti ATURAN VENDOR di konteks itu.
 
 DI LUAR LAYANAN: Tetra hanya menyewakan jasa lengkap (alat + crew + cetak), bukan akun/lisensi software photobooth atau alat tanpa crew. Dokumentasi foto/video ada lewat Tetra Visual (lihat FAQ).
 
-CONTOH PERCAKAPAN NYATA di bawah (kalau ada) adalah referensi cara berpikir dan nada yang berhasil/gagal di chat Tetra — ambil pendekatannya, JANGAN salin kalimatnya.`;
+CONTOH PERCAKAPAN NYATA di bawah (kalau ada) adalah referensi cara berpikir dan nada yang berhasil/gagal di chat Tetra, ambil pendekatannya, JANGAN salin kalimatnya.`;
 const pakaiV2 = () => process.env.AI_PROMPT_V2 === '1';
 
 // Model tidak punya jam. Tanpa ini dia menjawab "besok tanggal berapa?" -- yang
@@ -474,6 +483,17 @@ const RE_KLAIM_AKSI = new RegExp([
   // Uji V2 11 Nov: "Sudah aku perbarui ya Kak" untuk data booking — bot tidak bisa mengubah data apa pun.
   '\\b(sudah|udah)\\s+(aku|kami)\\s+(perbarui|perbaharui|update|ubah|ganti|geser|amankan)\\b',
   '\\b(aku|kami)\\s+(sudah\\s+|udah\\s+)?(perbarui|perbaharui|update)\\b',
+].join('|'), 'i');
+// Lokasi kantor & janji sepihak (Rama 11 Nov: "jangan pernah share lokasi kantor… jangan asal terima janji sepihak atau
+// menjanjikan sesuatu sepihak"). Seluruh riwayat: 2 kena, keduanya insiden asli (Bu Tifani "aku samperin", share lok kantor
+// ke pemasok); "crew datang paling lambat 1 jam" dan "tim kami datang ke venue" tidak tertangkap.
+const RE_JANJI_TEMU = new RegExp([
+  '\\b(silakan|silahkan|boleh|bisa)\\s+(langsung\\s+)?(datang|mampir|main|ambil)\\s+(ke\\s+)?(kantor|studio|basecamp|workshop|gudang|rumah|tempat)\\s+(kami|kita|tetra|aku)',
+  '\\b(aku|kami|kita)\\s+tunggu\\s+(di|ke)\\b',
+  '\\b(aku|kami)\\s+(yang\\s+)?(antar(kan|in)?|anterin|jemput|samperin)\\b',
+  '\\b(kita|aku|kami)\\s+ketemu(an)?\\s+(di|jam|besok|hari|lusa)\\b',
+  '\\b(alamat|lokasi)\\s+(kantor|studio|basecamp)\\s+(kami|kita|tetra)\\s*(di|ada di|:)',
+  '\\bshare\\s*lo[kc]\\b[^.\\n]{0,30}\\b(kantor|studio|kami)\\b',
 ].join('|'), 'i');
 // Janji mengirim file/gambar tanpa penanda [KIRIM:..] = tidak ada yang terkirim (uji V2 11 Nov: "aku kirim contoh ukuran
 // frame-nya" tanpa penanda, 1 dari 4 run).
@@ -596,10 +616,41 @@ const PEMERIKSA = `Kamu PEMERIKSA balasan WhatsApp CS Tetra Photobooth sebelum d
 1) Semua pertanyaan/permintaan di pesan terakhir klien terjawab atau ditindaklanjuti; lampiran yang dijanjikan punya penanda [KIRIM: ...].
 2) Fakta & harga sesuai ACUAN; tidak mengarang (venue, jadwal, kapasitas, promo, status bayar); tidak menyarankan jumlah unit.
 3) Tidak mengklaim aksi yang tidak bisa dilakukan bot (mengubah/mencatat data, menerima pembayaran, mengirim email).
-4) Personal untuk klien ini, bukan kerangka template; tidak menyalin kalimat dari CONTOH PERCAKAPAN.
+4) UJI TUKAR KLIEN: kalau draf bisa dikirim ke klien lain tanpa diubah (tidak mengaitkan hal spesifik dari klien ini, kata-katanya, acaranya, tamunya, venue, waktu, kekhawatirannya), TOLAK. Tidak menyalin kalimat dari CONTOH/GAYA ADMIN.
+6) Terdengar manusia, bukan bot: tidak menyebut "admin" saat meneruskan (staf manusia bilang "aku cek dulu ke tim"), tidak menyebut pesan datang dari website, tidak mengulang daftar "sudah termasuk ...", tanpa cetak tebal, panjang wajar (umumnya 1–3 kalimat); tanpa frasa mesin ("Satu catatan jujur", "Keputusannya di Kakak", "sudah all-in:", "tenang aja", perkenalan berulang), tanpa bullet di obrolan santai, tidak memakai pola tetap status→harga→isi paket→pertanyaan; sapaan & nada cocok dengan klien (formal "Bapak/Ibu/Anda" untuk korporat) dan dengan PROFIL KLIEN kalau ada.
+8) Tidak membagikan alamat/lokasi kantor dan tidak menyanggupi/menjanjikan secara sepihak janji temu, kunjungan, antar/jemput/ambil barang, atau waktu tertentu atas nama Tetra (itu urusan admin: bilang admin yang atur + [INFO_ADMIN]).
+7) Meyakinkan secara konsultatif: nilai dikaitkan ke situasi acaranya, keberatan ditanggapi dengan empati + alasan, ada satu langkah berikut yang pas, tanpa mendesak atau upsell tanpa sinyal.
 5) Nada & panjang cocok dengan gaya klien; tidak menyodorkan hal yang belum dia butuhkan; tidak menanyakan ulang hal yang sudah dia sebut; maksimal 2 pertanyaan.
 Baris penanda [..] di akhir draf adalah instruksi sistem (lampiran/kabari admin), bukan teks untuk klien.
 Jawab HANYA JSON: {"lolos": true|false, "masalah": ["<masalah spesifik + cara memperbaikinya>"]}. Lolos kalau tidak ada masalah berarti; jangan rewel soal selera kecil.`;
+// Profil klien V2 yang berkembang per giliran (Rama 11 Nov: "setiap orang berbeda karakter dan kebutuhannya"). Disimpan di
+// catatan kontak (store.simpanProfil), dimuat di setiap giliran sebagai konteks internal; gagal → profil lama dipakai.
+async function perbaruiProfil(profilLama, history, pesan) {
+  const riwayat = history.slice(-16).map((m) => `${m.role === 'user' ? 'KLIEN' : 'TETRA'}: ${String(m.content).slice(0, 400)}`).join('\n');
+  const prompt = `Perbarui PROFIL KLIEN (catatan internal tim CS, tidak dikirim ke klien) berdasarkan percakapan. Tulis ringkas, maks 12 baris, format "Label: isi", hanya yang terlihat dari chat (tulis "belum terlihat" kalau tidak ada; jangan menebak):
+Siapa: (pengantin/keluarga/HRD/panitia/WO/venue/tamu/lainnya)
+Gaya bicara: (formal/santai, singkat/panjang, emosional/rasional, emoji?)
+Acara: (jenis, tanggal, jam, venue, tamu — yang sudah disebut)
+Kebutuhan & motivasi:
+Kekhawatiran/keberatan:
+Sensitivitas harga:
+Pengambil keputusan & proses:
+Urgensi & tahap: (baru tanya / membandingkan / siap mengunci / sudah booking)
+Sinyal: (hal yang menunjukkan minat/ragu)
+Sudah dijawab/ditanya: (supaya tidak diulang)
+Cara melayani yang pas: (1 kalimat)
+
+PROFIL LAMA:\n${profilLama || '(belum ada)'}\n\nRIWAYAT:\n${riwayat || '(belum ada)'}\n\nPESAN TERBARU KLIEN:\n${pesan}`;
+  try {
+    const r = await kirim({ ...PRIMARY, effort: '', timeout: 60000 }, [{ role: 'user', content: prompt }], false);
+    const t = String(r.content || '').trim();
+    return t && t.length < 2500 && !bocorPikiran(t) ? t : profilLama || '';
+  } catch (e) {
+    console.log(`[profil] gagal: ${e.message.slice(0, 100)}`);
+    return profilLama || '';
+  }
+}
+
 async function periksa(endpoint, messages, teks, sumberHarga, pertama, mulai, BATAS) {
   // Rama 11 Nov: "jawaban aman itu langkah terakhir… utamakan jawaban yang benar berdasarkan analisa, cek, fakta". Maks 2 putaran
   // periksa→perbaiki selama anggaran waktu; draf terakhir yang lolos penjaga kode yang dikirim.
@@ -647,7 +698,7 @@ async function panggil(endpoint, history, message, leadContext) {
     : '';
   const messages = [
     { role: 'system', content: v2
-      ? SYSTEM_PROMPT_V2 + strategi() + faq() + pelajaran(true) + contoh.blokPrompt(message, history, leadContext) + konteksWaktu() + konteksLead
+      ? SYSTEM_PROMPT_V2 + strategi() + faq() + pelajaran(true) + contoh.gayaAdmin(message) + contoh.blokPrompt(message, history, leadContext) + konteksWaktu() + konteksLead
       : SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
     { role: 'user', content: message },
@@ -730,6 +781,16 @@ async function panggil(endpoint, history, message, leadContext) {
         tautan = tautanAsing(teks, sumberHarga);
         if (!teks || tautan.length || bocorPikiran(teks)) {
           console.log(`[tautan ${endpoint.model}] masih ada link/alamat tanpa sumber — diteruskan ke admin`);
+          return '[ADMIN_HANDOFF]';
+        }
+      }
+      if (RE_JANJI_TEMU.test(isiKlien(teks))) {
+        console.log(`[janji-temu ${endpoint.model}] lokasi kantor/janji temu sepihak — minta tulis ulang: ${teks.slice(0, 80)}`);
+        teks = await tulisUlang('jangan membagikan alamat/lokasi kantor dan jangan menyanggupi atau menjanjikan janji temu, kunjungan, ' +
+          'antar/jemput/ambil barang, atau waktu tertentu atas nama Tetra. Bilang admin yang mengatur, lalu tambahkan [INFO_ADMIN: <apa yang diminta klien>]. ' +
+          'Hal lain yang klien tanyakan tetap dijawab.');
+        if (!teks || RE_JANJI_TEMU.test(isiKlien(teks)) || bocorPikiran(teks)) {
+          console.log(`[janji-temu ${endpoint.model}] tulis ulang masih bermasalah — diteruskan ke admin`);
           return '[ADMIN_HANDOFF]';
         }
       }
@@ -870,7 +931,7 @@ function alarmModel(jenis, teks) {
 // tanda pisah "—"/"–" di tengah kalimat dan banyak teks tebal. Dirapikan deterministik untuk SEMUA teks buatan model
 // (balasan chat & follow-up lewat getAIResponse, sapaan prospek lewat bot.js). Baris penanda [..] tidak disentuh;
 // rentang angka (11.30–14.00) jadi tanda hubung biasa; bold hanya yang pertama yang dibiarkan.
-function rapikanGaya(teks) {
+function rapikanGaya(teks, maksTebal = 1) {
   let tebal = 0;
   return String(teks || '').split('\n').map((baris) => {
     if (/^\s*\[[A-Z_]+/.test(baris)) return baris;
@@ -879,13 +940,14 @@ function rapikanGaya(teks) {
       .replace(/\s*[–—]\s*$/, '')
       .replace(/\s*[–—]\s*/g, ', ')
       .replace(/,\s*([,.!?])/g, '$1');
-    b = b.replace(/\*([^*\n]+)\*/g, (m, isi) => (tebal++ ? isi : m));
+    b = b.replace(/\*([^*\n]+)\*/g, (m, isi) => (tebal++ < maksTebal ? m : isi));
     return b;
   }).join('\n');
 }
 
 async function getAIResponse(history, message, leadContext) {
-  return rapikanGaya(await jawabAI(history, message, leadContext));
+  // V2: tanpa cetak tebal sama sekali (uji 11 Nov: 66 bold per 100 balasan masih terasa bot).
+  return rapikanGaya(await jawabAI(history, message, leadContext), pakaiV2() ? 0 : 1);
 }
 async function jawabAI(history, message, leadContext) {
   if (cumaMenutup(history, message)) {
@@ -1059,4 +1121,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
