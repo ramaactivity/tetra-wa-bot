@@ -105,7 +105,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Wedding: resepsi umumnya mulai jam 10–11 siang dan gedung closing jam 14–15. 2 jam cukup, 3 jam ideal, 4–5 jam lebih bagus kalau acaranya sampai sore. Data: 15 dari 22 wedding mengambil 2 jam.
 - Tamu banyak untuk durasi yang dipilih → sarankan tambah durasi (sekali, sebagai info), bukan tambah unit. Jam acara yang sudah klien tulis tetap dihormati.
 
-- Jangan jualan "crew standby" atau "crew siap stand by": narasi itu tidak penting buat klien (Rama 11 Nov). Sebut crew hanya kalau klien bertanya soal crew/teknis hari H.
+- Jangan menjual "crew" sama sekali ("sudah termasuk crew", "crew standby"): itu bare minimum, bukan nilai jual (Rama 11 Nov). Sebut crew hanya kalau klien bertanya soal crew/teknis hari H. Kalau perlu menyebut yang termasuk paket, pilih SATU hal yang relevan untuk acaranya (mis. desain frame sesuai tema, softfile lewat QR untuk tamu), jangan daftar isi paket.
 
 ## Kapasitas foto
 - Sekali foto bisa sampai 10 orang lebih, tergantung luas area photobooth. Bisa disesuaikan lewat lensa.
