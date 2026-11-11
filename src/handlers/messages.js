@@ -48,11 +48,12 @@ function konteksKlienLama(jid) {
 }
 const vendorLib = require('../lib/vendor');
 const klienBooking = require('../lib/klienBooking'); // klien sudah booking (Tetra Ops DR-052)
-const { kirimPricelist, mintaPricelist, ASSETS_DIR } = require('../lib/pricelist');
+const { kirimPricelist, mintaPricelist, ASSETS_DIR, GAMBAR_RINGKAS } = require('../lib/pricelist');
+const fs = require('fs');
 const path = require('path');
 const { enrich, classifyTopik } = require('../lib/enrichLead');
 const smart = require('../lib/smartLead');
-const { cleanName } = require('../lib/followupEngine');
+const { cleanName, namaDariChat } = require('../lib/followupEngine');
 const { execSync } = require('child_process');
 
 // Serialisasi pemrosesan per-JID
@@ -80,7 +81,7 @@ function kartuKontak(message) {
 }
 
 // Bot menjanjikan/mengklaim pricelist terkirim, atau klien bilang belum menerima → kirim sekarang (lihat handleBatch).
-const RE_JANJI_FILE = /(sudah|udah|barusan|telah)\s+(aku\s+|kami\s+)?(kirim|terkirim|kukirim|dikirim)|\b(ini|berikut)\s+(aku\s+|kami\s+)?kirim(kan)?|\baku\s+kirim(kan)?\b|terlampir|di (atas|bawah) ya/i;
+const RE_JANJI_FILE = /(sudah|udah|barusan|telah)\s+(aku\s+|kami\s+)?(kirim|terkirim|kukirim|dikirim)|\b(ini|berikut)\s+(aku\s+|kami\s+)?kirim(kan)?|\b(ini|berikut)\s+(pricelist|price ?list|daftar harga|pl)(nya)?\b|\baku\s+kirim(kan)?\b|terlampir|di (atas|bawah) ya/i;
 const RE_BELUM_TERIMA = /\b(gak|ga|gaada|nggak|enggak|tidak|belum|blm)\b.{0,15}\b(ada|masuk|terkirim|muncul|nyampe|sampai|keliatan|kelihatan|kebuka|ke ?kirim)\b|\bmana\b|\bdimana\b|\bdi ?mana\b|kirim(in|kan)? (lagi|ulang)/i;
 const RE_TOPIK_PL = /harga|pricelist|price ?list|\bpl\b|daftar paket/i;
 function janjiPricelist(jawaban, pesanKlien, lampiran, riwayat) {
@@ -109,6 +110,16 @@ function teksPesan(message) {
   return '';
 }
 
+function unikkan(msgs) {
+  const lihat = new Set();
+  return msgs.filter((m) => { const x = teksPesan(m.message).trim(); if (!x || lihat.has(x)) return false; lihat.add(x); return true; });
+}
+function kirimUlang(riwayat, teks) {
+  const u = [...riwayat].reverse().find((p) => p.role === 'user');
+  return !!u && riwayat.at(-1)?.role === 'assistant' && String(u.content).trim() === String(teks).trim() &&
+    Date.now() - (u.t || 0) < 30 * 60e3;
+}
+
 function phoneDigits(msg) {
   const jid = msg.key?.remoteJid || '';
   if (jid.endsWith('@lid')) {
@@ -126,22 +137,16 @@ function isKemitraan(t) {
   return /kemitraan|franchise|transfer knowledge|memulai usaha|membuka peluang|open kolaborasi|menawarkan kesempatan|proposal sponsor|tim sponsorship|sponsorship/i.test(t);
 }
 
-// Purna-jual: pelanggan existing butuh softfile/invoice/bayar/reschedule. Data
-// transaksi dipegang manusia, bukan bot.
 // Form booking template Tetra yang ditempel ulang klien (berisi "kirim bukti transfer", "pelunasan", katalog, promo).
 // Kata di template itu bukan kata klien: jangan ikut memicu jalur kata kunci (Sa'adah 25 Okt: tanya contoh ukuran frame
 // sambil menempel form → kena purna-jual → dilempar ke admin, katalog & ilustrasi ukuran tak terkirim).
 const RE_FORM_TETRA = /untuk booking, mohon dibantu isi form/i;
 
-function isPostSale(t) {
-  return /softfile|soft file|file foto|kwitansi|invoice|nota pembayaran|bayar sisa|sisa dp|reschedule|re.?schedule|kabar duka|meninggal|bukti transfer|pelunasan/i.test(t);
-}
-
 // Produk/jasa di luar pricelist unlimited standar → jangan dikarang, handoff.
 // 360, Magazine Box, Photo Stage tidak di sini lagi: sudah ada di katalog FAQ
 // dan boleh dijawab bot sendiri (keputusan Rama 27 Sep 2026).
 function isSpecialProduct(t) {
-  return /mingle|instant photobooth|instant photo|cetak foto aja|cetak doang|maksimal berapa|printer dnp/i.test(t);
+  return /mingle|instant photobooth|instant photo|cetak foto aja|cetak doang|printer dnp/i.test(t);
 }
 
 // Susun konteks lead untuk di-inject ke AI tiap turn, biar bot "ingat" dan tidak
@@ -216,7 +221,7 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
     lines.push(`Sumber: tombol WhatsApp di website Tetra${info.length ? ` (${info.join('; ')})` : ''}.` +
       (w.kosong ? ' Template dari website terkirim TANPA isian' + (w.terpotong ? ' (pesannya juga terpotong)' : '') + '.' : ''));
   }
-  const nama = w.nama || cleanName(namaWA);
+  const nama = w.nama || namaDariChat(fullText) || cleanName(namaWA);
   if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
   if (!vendor) {
     const tp = tahapPercakapan(jid, det, fullText, pesanBaru);
@@ -253,11 +258,12 @@ async function handoff(sock, msg, alasan, jawabanKlien, teksKlien) {
 
 // Tamu/klien minta foto acara (lib/galeri.js). Mengembalikan true kalau sudah ditangani; false = bukan
 // permintaan foto acara (mis. calon klien minta contoh hasil) → alur biasa lanjut.
-async function layaniGaleri(sock, msg, keys, teks, gambar) {
+// Beberapa pesan terakhir ikut dibaca: nama acara sering di bubble sebelumnya ("wedding dinda rafi" lalu foto cetakan).
+const konteksGaleri = (jid, teks) =>
+  [...getRiwayat(jid).slice(-4).map((x) => `${x.role === 'user' ? 'PENGIRIM' : 'TETRA'}: ${x.content}`), `PENGIRIM: ${teks}`].join('\n');
+async function layaniGaleri(sock, msg, keys, teks, gambar, sudahDibaca = null) {
   const jid = msg.key.remoteJid;
-  // Beberapa pesan terakhir ikut dibaca: nama acara sering di bubble sebelumnya ("wedding dinda rafi" lalu foto cetakan).
-  const konteks = [...getRiwayat(jid).slice(-4).map((x) => `${x.role === 'user' ? 'PENGIRIM' : 'TETRA'}: ${x.content}`), `PENGIRIM: ${teks}`].join('\n');
-  const p = await ekstrakGaleri(konteks, gambar).catch((e) => { console.error('[galeri] ekstrak gagal:', e.message); return null; });
+  const p = sudahDibaca || await ekstrakGaleri(konteksGaleri(jid, teks), gambar).catch((e) => { console.error('[galeri] ekstrak gagal:', e.message); return null; });
   const sudahDitanya = Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS;
   if (!p || !(p.minta_foto_acara || p.cetakan_photobooth || (sudahDitanya && p.nama))) return false;
   const hasil = await galeri.cariDariPetunjuk(p);
@@ -310,6 +316,8 @@ const { LAMPIRAN, kirimLampiran } = require('../lib/lampiran');
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
 // pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
 const RE_BAYAR = /\b(dp|down ?payment|transfer|tf|trf|bukti|bayar|pembayaran|lunas|pelunasan)\b/i;
+// Nama berkas dokumen yang berbau bukti bayar (dokumen tidak bisa dibaca isinya).
+const RE_DOK_BAYAR = /bukti|transfer|\btf\b|struk|mutasi|kwitansi|kuitansi|invoice|pembayaran|receipt/i;
 // Admin mengonfirmasi DP manual → mulai tahap booking juga.
 const RE_DP_ADMIN = /\b(dp|down ?payment|pembayaran|transfer)(nya)?\b[^\n]{0,40}\b(diterima|terima|masuk|terverifikasi|dikonfirmasi|konfirmasi|aman)\b/i;
 
@@ -387,6 +395,14 @@ const ASSIST_MAKS_MS = 12 * 3600 * 1000;   // pesan lebih tua dari ini: jangan t
 const assistDinilai = new Map();           // jid -> t pesan klien terakhir yang sudah dinilai
 let jalankanAssist = null;                 // diisi registerMessageHandler (butuh socket aktif)
 setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error('[assist]', e.message)), 5 * 60 * 1000).unref();
+
+// Mode assist hanya untuk chat urusan klien Tetra. Pemasok, vendor operasional, atau obrolan pribadi yang sedang
+// dipegang admin tetap diam (audit Nov …2792: assist menjawab pemasok kertas DNP atas nama admin, menyanggupi
+// "dikirim siang ini", lalu mengarang alamat & link share lok — admin: "bot wa saya error").
+const RE_URUSAN_KLIEN = /photo ?booth|\bbooth\b|acara|event|wedding|nikah|resepsi|lamaran|ulang tahun|ultah|wisuda|gathering|tanggal|\btgl\b|paket|harga|pricelist|\bpl\b|booking|\bdp\b|pelunasan|frame|backdrop|cetak|softfile|galeri|360|magazine|photo ?stage|snapbook|sleeve|crew|venue/i;
+function urusanKlien(riwayat) {
+  return riwayat.some((p) => p.role === 'user' && RE_URUSAN_KLIEN.test(String(p.content)));
+}
 
 const KONTEKS_ASSIST = (menit) =>
   `\n\nMODE AMBIL ALIH: chat ini sedang dipegang admin, tapi pesan terbaru klien belum dibalas admin selama ${menit} menit. ` +
@@ -548,6 +564,7 @@ function registerMessageHandler(sock) {
       const tAkhir = baru.at(-1).t;
       if (umur < ASSIST_MENIT * 60e3 || now - tAkhir > ASSIST_MAKS_MS || assistDinilai.get(jid) === tAkhir) continue;
       assistDinilai.set(jid, tAkhir);
+      if (!urusanKlien(riw)) { console.log(`[assist] ${jid.split('@')[0]}: bukan urusan klien (pemasok/pribadi) — bot diam`); continue; }
       const num = await nomor(jid);
       await runSerial(jid, () => assistSatu(jid, num, riw.slice(0, i), baru, Math.round(umur / 60e3)));
     }
@@ -599,10 +616,18 @@ function registerMessageHandler(sock) {
     let bolehBalas = false; // false = error apa pun tidak memicu balasan darurat (mis. kontak di-pause)
     const mulaiProses = Date.now();
     try {
-      originalText = msgs.map((m) => teksPesan(m.message)).filter(Boolean).join('\n');
+      // Bubble yang isinya sama persis (form website terkirim dua kali) diproses sekali dan tidak pernah dikomentari
+      // (audit Nov: "Pesan Eva masuk dua kali, nggak masalah — aku catat satu ya" di 9% balasan pertama).
+      const unik = unikkan(msgs);
+      originalText = unik.map((m) => teksPesan(m.message)).join('\n');
       if (!originalText || jid === 'status@broadcast' || jid.endsWith('@g.us')) return;
 
       await pastikanRiwayat(jid);
+      // Isi yang sama dikirim ulang ≤30 menit setelah sudah kita balas: cukup dicatat, tidak dibalas lagi.
+      if (kirimUlang(getRiwayat(jid), originalText)) {
+        console.log(`[dobel] ${jid.split('@')[0]}: pesan sama dikirim ulang, sudah dibalas — tidak dibalas lagi`);
+        return;
+      }
 
       // [Auto-database logging] — tiap bubble tetap dicatat sendiri-sendiri
       for (const m of msgs) {
@@ -651,7 +676,7 @@ function registerMessageHandler(sock) {
       bolehBalas = true;
 
       // Teks untuk jalur kata kunci: tanpa bubble form template Tetra. AI tetap menerima originalText utuh.
-      const t = msgs.map((m) => teksPesan(m.message)).filter((x) => x && !RE_FORM_TETRA.test(x)).join('\n').toLowerCase();
+      const t = unik.map((m) => teksPesan(m.message)).filter((x) => !RE_FORM_TETRA.test(x)).join('\n').toLowerCase();
       const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
       const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan / klien menurut segmen
       const fullText = fullUserText(jid, originalText);
@@ -668,7 +693,19 @@ function registerMessageHandler(sock) {
       }
       if (/\[kirim (gambar|dokumen)/.test(t)) {
         const media = msgs.filter((m) => /\[kirim (gambar|dokumen)/.test(teksPesan(m.message)));
-        const soalBayar = RE_BAYAR.test(t) ||
+        // Gambar dibaca dulu (model vision): bukti bayar? cetakan photobooth? isinya apa? Satu panggilan dipakai bersama.
+        const gbr = media.find((m) => m.message?.imageMessage);
+        let gambarB64 = null;
+        let lihat = null;
+        if (gbr && !booking.aktif(jid)) {
+          const buf = await downloadMediaMessage(gbr, 'buffer', {}).catch((e) => { console.error('[gambar] unduh gagal:', e.message); return null; });
+          if (buf) {
+            gambarB64 = buf.toString('base64');
+            lihat = await ekstrakGaleri(konteksGaleri(jid, originalText), gambarB64).catch((e) => { console.error('[gambar] baca gagal:', e.message); return null; });
+          }
+        }
+        const namaDok = media.filter((m) => !m.message?.imageMessage).map((m) => teksPesan(m.message)).join(' ');
+        const soalBayar = RE_BAYAR.test(t) || !!lihat?.bukti_bayar || RE_DOK_BAYAR.test(namaDok) ||
           getRiwayat(jid).slice(-6).some((p) => p.role === 'user' && RE_BAYAR.test(p.content));
         // Tahap booking: file (desain pilihan, grand design, bukti pelunasan) diteruskan
         // ke admin, bot tetap melayani.
@@ -694,14 +731,11 @@ function registerMessageHandler(sock) {
           return;
         }
         // Foto cetakan photobooth (tamu minta softfile): baca nama & tanggal di frame, kirim link galeri tamu.
-        const gbr = media.find((m) => m.message?.imageMessage);
-        if (gbr) {
-          const buf = await downloadMediaMessage(gbr, 'buffer', {}).catch((e) => { console.error('[galeri] unduh gambar gagal:', e.message); return null; });
-          if (buf && await layaniGaleri(sock, msg, keys, originalText, buf.toString('base64'))) return;
-        }
-        await handoff(sock, msg, 'Klien kirim gambar/dokumen (cek: bukti transfer?)',
-          'Udah masuk Kak, aku cek dulu ke admin ya. Nanti dibalas di sini.', originalText);
-        return;
+        if (lihat && await layaniGaleri(sock, msg, keys, originalText, gambarB64, lihat)) return;
+        // Selain bukti bayar & foto acara (screenshot keluhan, referensi desain, dokumen): AI yang menanggapi, dengan isi
+        // gambar dari pembaca gambar. Audit Nov: semua gambar dulu dibalas baku "Udah masuk Kak, aku cek dulu ke admin" —
+        // screenshot keluhan dashboard (…4373) diperlakukan seperti bukti transfer, dan bisa dibaca "DP sudah diterima".
+        originalText = originalText.replace(/\[kirim gambar\]/g, `[kirim gambar: ${lihat?.isi || 'isinya tidak terbaca sistem'}]`);
       }
 
       // ── 0b. Minta foto/softfile/link galeri acara → link galeri tamu (bukan handoff purna-jual) ──
@@ -714,12 +748,10 @@ function registerMessageHandler(sock) {
         return;
       }
 
-      // ── 2. Purna-jual → handoff admin ──
-      if (!lead && isPostSale(t)) {
-        await handoff(sock, msg, 'Purna-jual (softfile/invoice/bayar/reschedule)',
-          'Yang ini datanya dipegang admin, Kak. Aku terusin dulu ya, nanti dibalas di sini.', originalText);
-        return;
-      }
+      // ── 2. (dihapus Nov 2026) Rute kata kunci purna-jual. Softfile, rekening & cara pelunasan, harga durasi dijawab AI
+      // dari FAQ; invoice/kwitansi, reschedule, komplain, kabar duka ditangani AI lewat [ADMIN_HANDOFF]/[PERUBAHAN] dengan
+      // kalimat yang menyebut halnya. Audit Nov: kalimat baku "Yang ini datanya dipegang admin" dikirim ke calon klien yang
+      // tanya softfile/harga 6 jam (…9512 menunggu admin 25 jam, …2152 tak terjawab) dan ke klien yang tanya rekening.
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
       if (!lead && isSpecialProduct(t)) {
@@ -735,23 +767,14 @@ function registerMessageHandler(sock) {
         return;
       }
 
-      // ── 4. Pricelist / form website → lampiran PL kalau detail lengkap atau
-      // klien minta langsung. Kalimatnya tetap dari AI (dulu template gate/B2B
-      // yang terasa bot dan salah sasaran), jadi aturan gaya berlaku sama.
-      // Lampiran dikirim SETELAH balasan teks: sapaan dulu, baru file.
-      // Gerbang (keputusan Rama 1 Okt): PL hanya setelah kebutuhan tergali (jenis, tanggal,
-      // lokasi), atau klien menolak memberi detail, atau minta PL lagi setelah ditanya.
-      const detPL = smart.parseLeadDetails(fullText);
-      const bolehPL = !!lead || smart.missingFields(detPL).length === 0 || smart.wantsDirectPL(originalText) ||
-        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'user' && mintaPricelist(p.content))) ||
-        // Aturan 1 Okt: minta PL lagi SETELAH ditanya detail = boleh (Ranti 8 Okt ditahan padahal sudah ditanya).
-        (mintaPricelist(originalText) && getRiwayat(jid).some((p) => p.role === 'assistant' && /\?/.test(String(p.content))));
+      // ── 4. Pricelist: klien yang memintanya diberi; selain itu lewat penanda [KIRIM: pricelist] dari AI (lihat pengiriman
+      // di bawah). Kalimatnya tetap dari AI, jadi aturan gaya berlaku sama.
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
       // Form website TIDAK lagi memicu lampiran otomatis (22 Okt, usulan CS Mintet 13 + hasil E3: rekomendasi teks
       // saja lebih baik; teks + gambar = dobel). Lampiran lewat permintaan klien atau penanda [KIRIM: pricelist] dari AI.
       // Rama 22 Okt: klien yang MEMINTA pricelist diberi (audit: 8 klien yang PL-nya ditahan semuanya hilang;
-      // Bryant minta 3x). Gerbang kualifikasi lama (bolehPL) tetap dipakai untuk penanda [KIRIM] tanpa permintaan.
+      // Bryant minta 3x).
       const mintaPL = mintaPricelist(originalText.replace(/\(halaman[^)]*\)/gi, '')); // "(halaman Pricelist)" bukan permintaan
       if (mintaPL) kirimPL = true;
       if (lead) kirimPL = mintaPricelist(originalText); // lead minta PL: PL publik lengkap (Rama 7 Okt)
@@ -830,28 +853,24 @@ function registerMessageHandler(sock) {
         return;
       }
 
+      // Pricelist: klien memintanya, AI menandai [KIRIM: pricelist], atau kalimat AI menjanjikan/mengklaim file.
+      // Ucapan = tindakan (Ranti 8 Okt; audit Nov …9166 "Ini pricelist-nya" tanpa file karena gerbang bolehPL), jadi
+      // penanda AI selalu dihormati. Gambar harga ikut di pesan yang SAMA dengan kalimat harganya (audit Nov: 10 chat
+      // menerima harga dan gambar sebagai dua bubble terpisah).
+      const sudahPL = getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'));
+      const pakaiPL = (kirimPL && plKlienLama) || (lampiran.includes('pricelist') && !sudahPL) ||
+        janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid));
+      const satuPesan = pakaiPL && !!aiResponse && aiResponse.length <= 1000 && fs.existsSync(path.join(ASSETS_DIR, GAMBAR_RINGKAS));
       tambahRiwayat(jid, 'user', originalText);
       if (aiResponse) {
         tambahRiwayat(jid, 'assistant', aiResponse);
-        await sendReply(sock, jid, keys, { name: 'ai-reply', file: '' }, aiResponse);
+        await sendReply(sock, jid, keys, { name: 'ai-reply', file: satuPesan ? path.join('assets', GAMBAR_RINGKAS) : '' }, aiResponse);
         if (lead?.nomor) {
-          const pl = kirimPL || lampiran.includes('pricelist') ? ' [+ pricelist]' : '';
+          const pl = pakaiPL ? ' [+ pricelist]' : '';
           supa.catatJawabanProspek(lead.nomor, aiResponse + pl).catch((e) => console.error('[prospek] gagal catat jawaban:', e.message));
         }
       }
-      if (kirimPL && plKlienLama) await kirimPricelist(sock, jid, 'auto-pricelist', { pdf: plDenganPdf || !!lead });
-      // Pricelist selalu lewat kirimPricelist: gambar Unlimited Photobooth dulu
-      // (yang dicari kebanyakan klien), lalu PDF lengkap. Sekali per percakapan.
-      if (lampiran.includes('pricelist') && !kirimPL && (bolehPL || mintaPL) && plKlienLama &&
-          !getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'))) {
-        await kirimPricelist(sock, jid, 'ai-pricelist', { pdf: plDenganPdf || !!lead });
-      }
-      // Ucapan dan tindakan harus sama (insiden Ranti 8 Okt: bot 3x bilang pricelist "sudah terkirim"
-      // padahal gerbang menahan file; klien kesal). Bot menjanjikan/mengklaim pricelist, atau klien bilang
-      // belum menerimanya → file dikirim sekarang, gerbang "gali dulu" tidak berlaku lagi.
-      if (janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid))) {
-        await kirimPricelist(sock, jid, 'janji-pricelist', { pdf: plDenganPdf || !!lead });
-      }
+      if (pakaiPL) await kirimPricelist(sock, jid, kirimPL ? 'auto-pricelist' : 'ai-pricelist', { pdf: plDenganPdf || !!lead, tanpaGambar: satuPesan });
       await kirimLampiran(sock, jid, lampiran, 'customer');
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
@@ -1033,4 +1052,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };

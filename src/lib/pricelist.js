@@ -38,11 +38,12 @@ function mintaPricelist(teks) {
 // Mengembalikan { idGambar, idPdf }.
 // Default cukup GAMBAR (keputusan Rama 1 Okt: teks + gambar + PDF = dobel, klien kabur).
 // PDF lengkap hanya kalau `pdf` (klien minta layanan lain/semua paket, atau perintah manual admin).
-async function kirimPricelist(sock, jid, label = 'pricelist', { pdf: denganPdf = false } = {}) {
-  let idGambar = '';
+// `tanpaGambar`: gambar sudah terkirim sebagai keterangan balasan AI (satu pesan: harga + gambar, audit Nov: dulu dua bubble).
+async function kirimPricelist(sock, jid, label = 'pricelist', { pdf: denganPdf = false, tanpaGambar = false } = {}) {
+  let idGambar = tanpaGambar ? 'bersama-balasan' : '';
 
   const pathGambar = path.join(ASSETS_DIR, GAMBAR_RINGKAS);
-  if (fs.existsSync(pathGambar)) {
+  if (!tanpaGambar && fs.existsSync(pathGambar)) {
     const img = await sendDocument(sock, jid, pathGambar, CAPTION_GAMBAR);
     rememberBotMsg(img);
     deliveryLog.track(img, `${label}-gambar`);

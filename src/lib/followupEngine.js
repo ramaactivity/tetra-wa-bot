@@ -70,6 +70,14 @@ function cleanName(raw) {
   return s;
 }
 
+// Nama yang klien tulis sendiri (isian "Nama: …" di form website/booking) menang atas nama profil WA, yang sering
+// panggilan lain atau nama orang lain (audit Nov: form "Nama: rara" dipanggil "Kak hilwa", "Eva" jadi "Kak Eca").
+function namaDariChat(teks) {
+  const semua = [...String(teks || '').matchAll(/(?:^|\n)\s*[-•*]?\s*nama(?:\s+(?:lengkap|pemesan|klien|kakak|pic))?\s*[:：]\s*([^\n,;]{2,30})/gi)];
+  for (const m of semua.reverse()) { const n = cleanName(m[1].trim()); if (n) return n; }
+  return null;
+}
+
 // ── Baca konteks utuh sebelum follow-up ─────────────────────────────────────
 // Insiden 27–28 Sep 2026: follow-up hanya membaca 8 pesan klien dari Supabase
 // (dipotong 160 huruf). Balasan admin dan pesan selama pause tidak terbaca, jadi
@@ -247,7 +255,7 @@ async function runFollowupCycle(sock) {
     const hariDiam = Math.round((now - (botAkhir?.t || now)) / 864e5);
     const tanyaBooking = pesan.some((p) => p.role === 'user' && RE_SOAL_BOOKING.test(p.content));
     const jamKlien = Math.round((now - (pesan.filter((p) => p.role === 'user').at(-1)?.t || now)) / 36e5);
-    const panggilan = cleanName(last.name) || 'Kak';
+    const panggilan = namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n')) || cleanName(last.name) || 'Kak';
     const leadContext = `Panggilan klien: ${panggilan}\n` +
       `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pesan terakhir klien ${jamKlien} jam lalu (jangan tulis "tadi" kalau lebih dari 6 jam); pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
       `dia ${tanyaBooking ? 'SUDAH' : 'BELUM'} pernah bertanya soal booking/DP.\n` +
@@ -498,4 +506,4 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName };
+module.exports = { start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
