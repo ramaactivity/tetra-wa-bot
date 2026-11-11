@@ -65,4 +65,16 @@ async function kirimLampiran(sock, jid, daftar, jalur) {
   return terkirimKini;
 }
 
-module.exports = { LAMPIRAN, kunci, kirimLampiran };
+// Rama 11 Nov (wajib, di kode): bot yang MENANYAKAN pilihan format cetak / warna backdrop basic selalu menyertakan
+// ilustrasinya. kirimLampiran tetap melewati file yang sudah pernah terkirim di percakapan ini.
+function lampiranOtomatis(teks) {
+  let t = String(teks);
+  const isi = t.replace(/\[[A-Z_]+[^\]]*\]/g, '');
+  const ajak = /\?|mau yang mana|pilih|silahkan|silakan/i.test(isi);
+  const fmt = new Set((isi.match(/\b(2R|4R|photostrip|polaroid)\b/gi) || []).map((x) => x.toLowerCase().replace('photostrip', '2r')));
+  if (ajak && fmt.size >= 2 && !/\[KIRIM:\s*format\]/i.test(t)) t += '\n[KIRIM: format]';
+  if (/backdrop/i.test(isi) && /(warna|pilih|mau yang mana)[^.!\n]*\?|\?[^.!\n]*warna/i.test(isi) && !/custom|desain sendiri/i.test(isi) && !/\[KIRIM:\s*backdrop\]/i.test(t)) t += '\n[KIRIM: backdrop]';
+  return t;
+}
+
+module.exports = { LAMPIRAN, kunci, kirimLampiran, lampiranOtomatis };

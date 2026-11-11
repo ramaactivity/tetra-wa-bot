@@ -213,7 +213,7 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   const lines = [`Persona: ${persona} (${smart.segmentLabel(seg.segment)})`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
-  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan yang paling menentukan dulu, maksimal 2 hal dalam satu pesan.`);
+  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan dulu satu-dua hal yang paling membantu kamu menyarankan paket, maksimal 2 dalam satu pesan.`);
   else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
   const w = smart.parseWebsite(pesanBaru);
   if (w.dariWebsite || w.halaman) {
@@ -312,7 +312,7 @@ const RE_KLAIM = new RegExp(
 const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|\bubah|ganti|batal|cancel|booking|durasi|paket|extend|tambah (jam|unit)/i;
 const KALIMAT_AMAN = 'Oke Kak, aku sampaikan ke admin dulu ya biar dicek jadwalnya. Nanti admin yang kabarin di sini.';
 
-const { LAMPIRAN, kirimLampiran } = require('../lib/lampiran');
+const { LAMPIRAN, kirimLampiran, lampiranOtomatis } = require('../lib/lampiran');
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
 // pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
@@ -493,8 +493,8 @@ function registerMessageHandler(sock) {
     const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
     await perbaruiBooking(jid, null, false);
-    // Rama 22 Okt: di awal boleh kirim form (terisi sebagian); kalau klien malas mengisi, bot menggali bertahap
-    // (konteksAI + pengingat, maks 2 per pesan); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
+    // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
+    // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
     await booking.kirimTeks(sock, jid, b.lengkap ? pembuka : booking.teksForm(b, pembuka), 'form-booking→customer');
     if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid);
     await booking.kirimKonfirmasi(sock, jid);
@@ -833,6 +833,7 @@ function registerMessageHandler(sock) {
       // bot tetap melayani. Penanda dibuang sebelum dikirim ke klien.
       const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
+      aiResponse = lampiranOtomatis(aiResponse);
       const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
         .filter((k) => LAMPIRAN[k] || k === 'pricelist');
       aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim()
@@ -880,7 +881,8 @@ function registerMessageHandler(sock) {
       const sudahPL = getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'));
       const pakaiPL = (kirimPL && plKlienLama) || (lampiran.includes('pricelist') && !sudahPL) ||
         janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid));
-      const satuPesan = pakaiPL && !!aiResponse && aiResponse.length <= 1000 && fs.existsSync(path.join(ASSETS_DIR, GAMBAR_RINGKAS));
+      // Rama 11 Nov: teks pengantar dulu, gambar pricelist tepat di bawahnya (bukan gambar ber-caption di atas teks).
+      const satuPesan = false;
       tambahRiwayat(jid, 'user', originalText);
       if (aiResponse) {
         tambahRiwayat(jid, 'assistant', aiResponse);

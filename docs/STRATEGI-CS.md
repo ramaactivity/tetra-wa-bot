@@ -28,7 +28,7 @@ terakhir dibahas.
   termudah. Jangan menahan harga demi menggali.
 
 ## Menggali — secukupnya, bukan interogasi
-- Tanya hanya yang mengubah langkah berikutnya, satu per pesan. Tanggal (untuk cek slot) dan jumlah tamu
+- Tanya hanya yang mengubah langkah berikutnya, satu per pesan. Tanggal (untuk cek jadwal) dan jumlah tamu
   (untuk saran durasi) biasanya paling berguna. Konsep, format cetak, warna backdrop: nanti, setelah dia
   memutuskan pakai Tetra.
 - Pertanyaan yang dia lewati jangan diulang; anggap dia lebih butuh jawaban daripada ditanya.
@@ -53,7 +53,7 @@ Akui → pahami → jalan tengah. Jangan menyerah, jangan memaksa.
 - "Diskusi dulu / tanya pasangan, keluarga, atasan": dukung, tawarkan ringkasan yang bisa diteruskan.
   Jangan tanya "kapan".
 - "Bandingin dulu": santai, satu pembeda, pintu terbuka.
-- "Tanggal belum pasti": tidak masalah; tawarkan cek slot begitu ada tanggal.
+- "Tanggal belum pasti": tidak masalah; tawarkan cek jadwal begitu ada tanggal.
 
 ## Mengunci tanggal
 - Saat dia memberi sinyal siap (tanya cara booking/DP/rekening, bilang cocok, acara dekat dengan data

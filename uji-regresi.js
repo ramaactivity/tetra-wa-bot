@@ -67,6 +67,64 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     const lama = [{ role: 'assistant', content: '(admin) siap kak', t: now - 3 * 3600e3 }];
     assert.ok(!msgs._adminMasihPegang(lama, [{ role: 'user', content: 'oke kak', t: now - 25 * 60e3 }], now));
   });
+  await kasus('frasa kaku Rama ditangkap & instruksi V2 tidak memuatnya (docs/FRASA-KAKU.md)', () => {
+    assert.ok(ai.daftarFrasaKaku().includes('crew standby') && ai.daftarFrasaKaku().includes('paling menentukan'));
+    assert.deepStrictEqual(ai.frasaKaku('Sudah termasuk cetak sepuasnya dan crew standby ya Kak'), ['crew standby']);
+    assert.deepStrictEqual(ai.frasaKaku('Durasi yang dipilih paling menentukan, Kak'), ['paling menentukan']);
+    assert.deepStrictEqual(ai.frasaKaku('Bisa Kak, buat 150 tamu 3 jam pas. Acaranya mulai jam berapa?'), []);
+    for (const f of ['aku cekkan slotnya dulu ya', 'Siap Kak, aku kirim pricelist-nya ya', 'Untuk 25 Oktober jadwalnya masih kosong ya', 'Halo Kak, aku dari tim Tetra'])
+      assert.ok(ai.frasaKaku(f).length, f);
+    assert.deepStrictEqual(ai.frasaKaku('Masih available nih Kak, mau aku bantu proses bookingnya?'), []);
+    assert.deepStrictEqual(ai.frasaKaku('Silahkan Kak, berikut pricelistnya ya'), []);
+    for (const f of ['Maaf ya kak kejadian begini.', 'Mohon maaf atas ketidaknyamanannya Kak', 'Maaf atas kejadian ini'])
+      assert.ok(ai.frasaKaku(f).length, f);
+    assert.deepStrictEqual(ai.frasaKaku('Maaf ya Kak. Aku teruskan ke tim buat dicetak ulang, masing-masing 2 pcs ya.'), []);
+    // Instruksi (di luar contoh yang dikutip "...") tidak boleh memakai frasa kaku: kata instruksi bocor ke balasan.
+    const instruksi = ai._SYSTEM_PROMPT_V2.replace(/"[^"]*"/g, '').toLowerCase();
+    assert.deepStrictEqual(ai.daftarFrasaKaku().filter((f) => instruksi.includes(f)), []);
+  });
+  await kasus('pricelist: daftar harga di teks ditolak penjaga, gambar tanpa caption (Rama 11 Nov)', () => {
+    assert.ok(ai.masalahGaya('Siap Kak. 2 jam Rp 2.000.000, 3 jam Rp 2.500.000.\n[KIRIM: pricelist]').length);
+    assert.deepStrictEqual(ai.masalahGaya('Silahkan Kak, berikut pricelistnya ya. Acaranya kapan?\n[KIRIM: pricelist]'), []);
+    assert.strictEqual(require('./src/lib/pricelist').CAPTION_GAMBAR, '');
+  });
+  await kasus('isi lampiran tidak diulang di teks: skema rekanan & format (Rama 11 Nov, Royal Organizer)', () => {
+    const royal = 'Boleh Kak. Jadi skema rekanannya ada dua: komisi, klien bayar harga publish ke kami, komisi 10% kami transfer ke Royal Organizer setelah acara selesai; atau potongan langsung, Kakak pegang kliennya dan bebas jual berapa pun, ke kami cukup bayar harga publish dikurangi 10%. Aku kirim gambar skemanya ya, biar lebih kebayang.\n[KIRIM: skema]';
+    assert.ok(ai.masalahGaya(royal).length && ai.frasaKaku(royal).length);
+    assert.deepStrictEqual(ai.masalahGaya('Boleh Kak, silahkan berikut skema rekanannya ya. Kalau ada yang kurang jelas, silahkan ditanyakan ya Kak\n[KIRIM: skema]'), []);
+    assert.ok(ai.masalahGaya('2R itu 5 x 15 cm, 4R 10 x 15 cm, Polaroid 7,5 x 10 cm.\n[KIRIM: format]').length);
+    const sleeve = 'Soal desainnya biar jelas: cetakan fotonya sudah menyatu dengan desain frame sesuai tema acara, itu termasuk di paket. Terus tamu juga dapat sleeve, tapi yang termasuk itu sleeve basic hitam atau putih, jadi desainnya basic, bukan desain klien. Kalau sleeve-nya mau pakai desain/branding klien sendiri, itu add-on Custom Sleeve Rp 1.500.000 untuk 1.000 lembar.';
+    assert.ok(ai.masalahGaya(sleeve).length, 'penjelasan sleeve panjang tanpa ilustrasi harus ditolak');
+    assert.deepStrictEqual(ai.masalahGaya('Silahkan Kak, berikut gambaran cetakan foto dan sleeve-nya ya. Kalau ada yang kurang jelas silahkan ditanyakan\n[KIRIM: sleeve]'), []);
+  });
+  await kasus('data acara setelah DP: form lengkap langsung, bukan dicicil (Rama 11 Nov)', () => {
+    const booking = require('./src/lib/booking');
+    const f = booking.teksForm({ data: { tanggal: '22 November', paket: 'Unlimited 8 jam' }, jenis: 'wedding' }, '');
+    assert.match(f, /tolong dibantu untuk melengkapi form berikut/i, f);
+    assert.match(f, /Tanggal Event: 22 November/, f);
+    assert.deepStrictEqual(ai.frasaKaku(f), [], f);
+    assert.ok(ai.frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
+  });
+  await kasus('basa-basi Rama 11 Nov ditangkap penjaga kode, jawaban beralasan lolos', () => {
+    for (const x of ['Untuk 200-300 tamu, 3 jam memang pas.', 'dan durasi 3 jam memang sudah cukup untuk 200-300 tamu di resepsi.',
+      'Untuk 200-300 tamu, 3 jam sudah cukup kok.', 'Harganya Rp 2.500.000, sudah termasuk cetak sepuasnya dan crew.',
+      'Untuk 3 jam itu paketnya Rp 2.500.000, sudah termasuk cetak sepuasnya, frame custom sesuai tema acara, crew, dan transport se-Jabodetabek.',
+      'Cibubur masih masuk Jabodetabek jadi tidak ada biaya tambahan, sudah termasuk dalam harga.'])
+      assert.ok(ai.basaBasi(x).length, x);
+    assert.deepStrictEqual(ai.basaBasi('Cibubur masih free transport ya Kak.'), []);
+    assert.deepStrictEqual(ai.basaBasi('Dengan 300 tamu, 3 jam bikin semua tamu kebagian foto tanpa antre lama.'), []);
+    assert.deepStrictEqual(ai.basaBasi('Cukup Kak, soalnya 1 jam bisa melayani 100+ tamu, jadi 3 jam sudah pas buat 300 tamu.', '3 jam cukup ga buat 300 tamu?'), []);
+    assert.ok(ai.frasaKaku('Paham, Kak. Tanggal 19 Desember sendiri masih kosong di jam itu.').length >= 2);
+  });
+  await kasus('pertanyaan pindah ke baris baru; tanya format/backdrop → ilustrasi otomatis', () => {
+    assert.strictEqual(ai.pisahPertanyaan('Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya. Lokasi acaranya di mana?'),
+      'Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya.\n\nLokasi acaranya di mana?');
+    assert.strictEqual(ai.pisahPertanyaan('Siap Kak. Tanggal berapa?'), 'Siap Kak. Tanggal berapa?');
+    const { lampiranOtomatis } = require('./src/lib/lampiran');
+    assert.match(lampiranOtomatis('Dua hal yang perlu kami pastikan dulu: format cetaknya mau yang mana (2R photostrip, 4R, atau Polaroid), dan apakah pajak perlu dicantumkan di penawaran? Kalau perlu, harganya di-gross up 2,5%.'), /\[KIRIM: format\]/);
+    assert.match(lampiranOtomatis('Backdrop basic-nya mau warna apa Kak?'), /\[KIRIM: backdrop\]/);
+    assert.doesNotMatch(lampiranOtomatis('Cetaknya 4R ya Kak.'), /KIRIM/);
+  });
   await kasus('link & alamat karangan ditangkap (…2792)', () => {
     assert.ok(ai.tautanAsing('share lok https://maps.app.goo.gl/w132t81yQ9kZ7dLLA', ai._sumberHarga()).length);
     assert.ok(ai.tautanAsing('Kawasan Niaga Citra Indah Blok A1 Sentul ya mas', ai._sumberHarga()).length);
@@ -144,9 +202,23 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
       assert.ok(isi.length <= 420, `${isi.length} karakter: ${isi}`);
       assert.ok((isi.match(/Rp ?\d/g) || []).length <= 1, isi);
     });
+    await kasus('tanya beda 2R/4R/Polaroid → [KIRIM: format] + teks pendek (Rama 11 Nov: ilustrasi > teks panjang)', async () => {
+      const r = await tanya([], 'kak bedanya 2R, 4R sama polaroid apa ya? segede apa?', SAPA);
+      assert.match(r, /\[KIRIM:\s*format\]/i, r);
+      const isi = r.replace(/\[[^\]]*\]/g, '').trim();
+      assert.ok(isi.length <= 300 && (isi.match(/\d+(?:,\d+)?\s*[×x]\s*\d+/g) || []).length <= 1, isi);
+    });
+    await kasus('tanya cetakan & frame/sleeve → [KIRIM: sleeve] + teks pendek (Rama 11 Nov)', async () => {
+      const r = await tanya([], 'Ka biar ga miskom, jadi printed foto sendiri sama frame fotonya sendiri bener kan? masing2 ada desainnya?', 'TAHAP PERCAKAPAN: GALI. Baca klien dari riwayat.');
+      assert.match(r, /\[KIRIM:\s*sleeve\]/i, r);
+      assert.ok(r.replace(/\[[^\]]*\]/g, '').trim().length <= 300, r);
+    });
     await kasus('minta PL → penanda [KIRIM: pricelist] (file ikut terkirim)', async () => {
       const r = await tanya([], 'Malam kak\nMau liat pl nya bisa?', SAPA);
       assert.match(r, /\[KIRIM:\s*pricelist\]/i, r);
+      const isi = r.replace(/\[[^\]]*\]/g, '');
+      assert.ok((isi.match(/Rp ?\d/g) || []).length <= 1, `daftar harga di teks: ${isi}`);
+      assert.deepStrictEqual(ai.frasaKaku(isi), [], isi);
     });
   }
 

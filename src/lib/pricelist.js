@@ -16,7 +16,9 @@ const GAMBAR_RINGKAS = 'UNLIMITED PHOTOBOOTH.jpg';
 // Caption dibuat minimal: file-nya yang "bicara", kalimat penjualan ditangani AI
 // (auto-pricelist) atau admin (send-pdf). Jangan tanya tanggal di caption — AI
 // sudah tanya dengan kail yang lebih natural.
-const CAPTION_GAMBAR = 'Paket unlimited cetak — harga all-in 📸';
+// Rama 11 Nov: kalimat pengantar ditulis AI di pesan sebelumnya ("Silahkan Kak, berikut pricelistnya ya"), gambarnya
+// muncul tepat di bawahnya tanpa caption tambahan.
+const CAPTION_GAMBAR = '';
 
 const PDF_LENGKAP = 'PRICELIST TETRA PHOTOBOOTH.pdf';
 const CAPTION_PDF = 'Pricelist lengkap Tetra Photobooth.';
@@ -64,6 +66,7 @@ async function kirimPricelist(sock, jid, label = 'pricelist', { pdf: denganPdf =
 }
 
 module.exports = {
+  CAPTION_GAMBAR,
   kirimPricelist,
   mintaPricelist,
   ASSETS_DIR,

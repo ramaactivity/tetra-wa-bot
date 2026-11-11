@@ -154,7 +154,7 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     `- jawab keraguan yang tersirat (diam setelah dapat harga = mungkin soal harga: tegaskan sudah all-in tanpa biaya tambahan, ` +
     `buka pintu untuk patokan budget; paket/opsi yang lebih murah HANYA kalau dia pernah menyinggung budget atau mahal);\n` +
     `- beri harga kalau dia pernah minta dan belum dapat angkanya;\n` +
-    `- keputusannya di orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan, tanpa pertanyaan;\n` +
+    `- yang memutuskan orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan, tanpa pertanyaan;\n` +
     `- kantor/instansi/sekolah: tawarkan penawaran resmi untuk diajukan;\n` +
     `- berhenti di tahap booking: ringankan prosesnya (lewat chat juga bisa, aku bantu);\n` +
     `- beri jalan keluar yang sopan ("kalau belum butuh sekarang, santai aja");\n` +
@@ -167,7 +167,7 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     `kecuali dia sendiri sudah bertanya soal booking.\n` +
     `- JANGAN mengarang detail yang tidak ada di transkrip atau system prompt: jenis acara, kategori, siapa pengambil keputusan, ` +
     `kapasitas/angka per jam, jumlah orang per foto. Hitungan harus benar. Minta maaf hanya kalau memang Tetra yang telat atau salah.\n` +
-    `- Jangan mengaku sudah melakukan sesuatu, jangan bilang slot masih aman/tersedia, jangan janji promo/diskon. Harga dan fakta hanya ` +
+    `- Jangan mengaku sudah melakukan sesuatu, jangan bilang jadwal masih aman/tersedia, jangan janji promo/diskon. Harga dan fakta hanya ` +
     `dari transkrip dan system prompt; kalau ada info Tetra yang keliru dan relevan di transkrip, luruskan dengan jujur.\n` +
     `- Panggil "${panggilan}"${panggilan === 'Kak' ? '' : ' atau "Kak" saja'}; jangan pakai nama lain.\n` +
     `- Link galeri hanya kalau dia ragu soal hasil atau minta contoh dan belum pernah dikirim, dengan arahan apa yang dilihat.\n` +
@@ -463,7 +463,7 @@ async function followupBooking(sock, paused, sudahTerkirim) {
     const k = booking.kurang(b).map((x) => x.label);
     const prompt =
       `Tulis SATU pesan WhatsApp singkat (maks 4 baris) untuk klien yang SUDAH DP, mengingatkan dengan ramah ` +
-      `data acara yang masih kurang: ${k.join(', ')}. Tanyakan maks 2 yang paling penting dengan kalimat biasa (bukan daftar), bilang boleh dicicil. ` +
+      `data acara yang masih kurang: ${k.join(', ')}. Minta yang masih kosong saja dalam satu kalimat singkat, tanpa penjelasan panjang (Rama 11 Nov). ` +
       (sisaHari !== null ? `Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi. ` : '') +
       `Jangan tawarkan DP atau paket lagi, jangan kirim ulang form lengkap.`;
     let msg;
