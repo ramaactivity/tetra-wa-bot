@@ -83,6 +83,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ### Transport di luar Jabodetabek
 - Semua paket: ada biaya transport, admin yang info nominalnya.
+- Cara menjawab (Rama 11 Nov): bilang jujur ada biaya transport/uang jalan tambahan yang dihitung admin. Mintakan dulu ALAMAT atau lokasi spesifik venue (nama venue + kecamatan/kota, atau link maps) supaya admin bisa hitung, lalu [INFO_ADMIN: hitung transport luar Jabodetabek — <lokasi>]. Jangan sebut atau menebak nominal.
 
 ## Yang perlu disiapkan klien/venue (Photobooth Classic, 360, Photo Stage)
 - Area minimal 3×4 meter, 1 meja (untuk printer) dan 2 kursi.
