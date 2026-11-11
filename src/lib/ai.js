@@ -35,7 +35,7 @@ function strategi() {
 // 22 Okt (usulan CS Mintet 20): kata biasa "DP/bayar/diskon" tidak lagi membuang baris — dulu 7 dari 32 pelajaran penting
 // ("jangan tawarkan DP sebelum paket jelas", seluruh pola [eo_wo]/[venue]) tak pernah sampai ke bot. Yang dibuang: angka
 // (lewat angkaRupiah + persen), rekening/bank, link, dan kalimat yang MEMBERI keringanan ("kasih diskon", "boleh gratis").
-const RE_PELAJARAN_BAHAYA = /rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|\d+\s*%|persen|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas|(?<!\b(?:jangan|tidak|tak|dilarang|bukan|belum)\s+(?:\p{L}+\s+)?)\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)/iu;
+const RE_PELAJARAN_BAHAYA = /\b(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s*(?:ratus|puluh|belas)?\s*(?:ribu|juta)\b|rekening|\brek\b|\b(bca|bni|bri|mandiri)\b|\d+\s*%|persen|https?:|www\.|wa\.me|\d{6,}|abaikan|ignore|lupakan|system prompt|aturan di atas|(?<!\b(?:jangan|tidak|tak|dilarang|bukan|belum)\s+(?:\p{L}+\s+)?)\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)/iu;
 const PELAJARAN_FILE = () => process.env.PELAJARAN_FILE ||
   path.join(process.env.HOME || '/home/ubuntu', '.hermes/profiles/tetra-wa-bot/skills/cs-mintet-pelajaran/SKILL.md');
 // Fakta dari balasan admin (dipelajari CS Mintet otomatis): baris
@@ -265,7 +265,7 @@ ATURAN ANTI-HALUSINASI — TIDAK BOLEH DILANGGAR:
 - Jawab MAKSUD pesan TERAKHIR klien. Topik baru jangan dijawab dengan topik lama: minta unduh/softfile foto acara ≠ pricelist, tanya lowongan kerja ≠ cek tanggal kosong, komplain ≠ jualan.
 - Kontak yang memperkenalkan diri sebagai WO/EO/venue/vendor dan menawarkan atau tertarik kerja sama rekanan (bukan menyewa untuk acaranya sendiri): jelaskan skema rekanan resmi singkat (sama dengan sistem Tetra Ops, rekanan memilih per acara): KOMISI — klien bayar harga publish ke Tetra, komisi 10% ditransfer ke rekanan setelah acaranya selesai; atau POTONGAN LANGSUNG — rekanan pegang klien dan bebas menjual ke klien dengan harga berapa pun, ke Tetra cukup bayar harga publish dikurangi 10%. Komisi/potongan tidak pernah terlihat klien — dengan [KIRIM: skema], dan ceritakan dasbor rekanan (acara klien mereka tertaut otomatis, daftar perlu tindakan, tagihan/komisi). Kalau dia tertarik atau ingin melihat dasbornya: bilang kamu kirimkan link dasbornya, lalu di baris paling akhir tulis [UNDANG_VENDOR: <nama usaha> | <wo/eo/venue/vendor> | <nama orang yang sedang chat> | <kota kalau tahu>] — sistem membuat akun dan menempelkan link; JANGAN tulis link sendiri. Nama orangnya belum tahu → tanya dulu. Sekali per percakapan. Minta syarat khusus/angka lain → [INFO_ADMIN].
 - Pertanyaan di luar sewa photobooth yang jawabannya tidak ada di sini (lowongan kerja/magang, dll): jangan mengarang. Bilang nanti tim yang kabari, lalu [INFO_ADMIN: <topiknya>].
-- Kamu TIDAK BISA melihat gambar/dokumen/voice note (jangan menebak isinya; kalau perlu tanya singkat maksudnya) dan TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
+- Gambar dari klien dibaca sistem dulu: "[kirim gambar: <isi>]" adalah isinya (tanggapi isinya, jangan menambah detail di luar itu). Isi dokumen ("[kirim dokumen: nama]") dan voice note tidak bisa kamu buka: tanggapi dari nama file & konteks, kalau perlu dibaca admin bilang begitu + [INFO_ADMIN: cek dokumen <nama>]. Kamu TIDAK BISA mengecek rekening. JANGAN PERNAH bilang DP/pembayaran sudah masuk, sudah diterima, atau slot sudah resmi/pasti diamankan. Kalau klien bilang sudah transfer, minta kirim foto bukti transfernya; konfirmasi pembayaran selalu dari admin.
 - Riset harga / benchmark / survei vendor: jawab rate card standar apa adanya (harga + yang termasuk). Jangan tanya skema kerja sama, bagi hasil, atau sponsor.
 
 BUKAN CALON KLIEN — balas persis "[DIAM]" (tanpa teks lain) kalau pesannya bukan obrolan dengan Tetra soal jasa photobooth: ucapan selamat/doa/broadcast ke banyak orang, auto-reply bot lain, promosi vendor, pesan salah kirim. Termasuk usaha lain (bakery, catering, dekor, MUA, WO) yang mengirim ucapan selamat untuk pengantin/klien mereka atau portofolio acara: itu broadcast, BUKAN permintaan photobooth, walaupun menyebut pernikahan/tanggal/kota. Jangan tanya tanggal acaranya. Kalau usaha lain terang-terangan mengajak kenalan/kerja sama, ikuti bagian VENDOR / REKANAN (calon rekanan baru). Kalau ragu, balas biasa.
@@ -283,7 +283,7 @@ LAMPIRAN — tambahkan di baris paling akhir (tidak terlihat klien), SEKALI per 
 - "[KIRIM: profil]" kalau calon klien kantor/instansi/sekolah/kampus minta company profile/compro/profil Tetra (mis. untuk pengajuan ke atasan): PDF profil 1 halaman edisi korporat (contoh cetakan acara kantor, layanan + harga mulai, yang termasuk, alur quotation). Teksmu cukup satu kalimat pengantar. Klien pernikahan/pribadi yang minta profil → pricelist + galeri https://tetraphoto.com/galeri saja.
 - "[KIRIM: rekanan]" kalau WO/EO/venue/vendor minta company profile/compro atau penjelasan kerja sama tertulis: PDF edisi rekanan (dua cara kerja sama + contoh angka + cara daftar). Kalau sudah kirim ini, tidak perlu [KIRIM: skema] lagi.
 - "[KIRIM: skema]" kalau kamu menjelaskan skema/tawaran kerja sama rekanan (komisi 10% atau potongan 10%) ke WO/EO/venue/vendor: satu gambar ilustrasi dua skema + contoh angka. Teksmu tetap singkat (gambar yang menjelaskan detailnya).
-- "[KIRIM: pricelist]" sesuai aturan HARGA & PRICELIST di atas (klien menyebut PL/pricelist/daftar harga). Yang terkirim: satu gambar harga Unlimited Photobooth (PDF lengkap ikut hanya kalau klien minta semua layanan/360/Magazine/Photo Stage/PDF). Jangan ulang isinya di chat.
+- "[KIRIM: pricelist]" sesuai aturan HARGA & PRICELIST di atas (klien menyebut PL/pricelist/daftar harga). Yang terkirim: satu gambar harga Unlimited Photobooth, menempel di pesanmu sebagai keterangannya (PDF lengkap ikut hanya kalau klien minta semua layanan/360/Magazine/Photo Stage/PDF). Jangan ulang isinya di chat, dan jangan bilang isinya lengkap/ada 360/Photo Stage/add-on kecuali klien minta yang lengkap.
 - JANGAN kirim link halaman website (tetraphoto.com/pricelist) untuk harga; klien di HP jadi bingung. Kalau klien minta link unduhan, beri link file langsung: https://tetraphoto.com/pricelist-tetra-photobooth-2026.pdf (langsung tersimpan saat diklik).
 Jangan pakai penanda ini kalau di riwayat file yang sama sudah pernah dikirim.
 
@@ -403,7 +403,9 @@ const RE_KLAIM_AKSI = new RegExp([
   '\\b(aku|kami|tim\\s+kami)\\s+(akan\\s+|nanti\\s+|segera\\s+)?(kirim(kan|in)?|hubungi)\\b[^.\\n?]{0,30}\\be-?mail\\b',
   '\\b(di)?antar(kan|in)?\\s+ke\\s+(kantor|alamat|rumah|venue)',
 ].join('|'), 'i');
-const RE_JANJI_ADMIN = /\b(?:teruskan|terusin|tanyain|tanyakan|sampaikan|pastiin|pastikan|konfirmasi(?:kan)?|cek(?:in)?|kabarin)\b[^.\n?]{0,25}\b(?:ke|sama|dengan|dari) (?:admin|owner|tim)\b/i;
+// "nanti aku kabari" tanpa menyebut admin juga janji: bot tidak bisa menepatinya sendiri (audit Nov …4324: dijanjikan 3× selama
+// 7 hari tanpa tindak lanjut). Kode menambahkan [INFO_ADMIN] supaya admin dikabari dan janji masuk antrean.
+const RE_JANJI_ADMIN = /\b(?:teruskan|terusin|tanyain|tanyakan|sampaikan|pastiin|pastikan|konfirmasi(?:kan)?|cek(?:in)?|kabarin)\b[^.\n?]{0,25}\b(?:ke|sama|dengan|dari) (?:admin|owner|tim)\b|\bnanti (?:aku|kami) (?:kabari|kabarin|infoin|infokan|kasih kabar)\b/i;
 // Jaring terakhir kalau tulis ulang masih memuat kata terlarang: buang kalimatnya (baris penanda [..] tidak disentuh).
 function buangKataTerlarang(teks) {
   const sisa = teks.split('\n').map((baris) => (baris.trim().startsWith('[') ? baris : baris.split(/(?<=[.!?])\s+/)
@@ -441,6 +443,10 @@ function hargaAsing(teks, sumber) {
     // "5,5 jam" bukan "5 jam", dan harga sesudah durasi lain di baris yang sama ("5,5 jam → ambil 6 Jam Rp 4.000.000")
     // milik durasi itu (salah tangkap 21 Okt: klien Elqi dioper ke admin padahal 6 jam Rp 4.000.000 benar).
     for (const m of baris.matchAll(/(?<![\d.,])(\d+)\s*jam\b([^\n]{0,40})/gi)) {
+      // "4 jam tambahan × Rp 500.000" = harga extend, bukan harga paket 4 jam (salah tangkap Nov: jawaban 12 jam yang benar
+      // — 8 jam + 4 jam extend — ikut ditulis ulang/dioper admin).
+      if (/extend|tambah|per jam|×|\bx\b/i.test(m[2].split(/rp/i)[0]) || /\/\s*jam/i.test(m[2]) ||
+          /extend|tambah/i.test(baris.slice(Math.max(0, m.index - 15), m.index))) continue;
       const resmi = layananLain ? [...(perDurasi[m[1]] || [])] : [tabel[m[1]]];
       const n = angkaRupiah(m[2].split(/\d+(?:[.,]\d+)?\s*jam/i)[0])[0];
       if (!tabel[m[1]] || !n) continue;
@@ -450,6 +456,33 @@ function hargaAsing(teks, sumber) {
     }
   }
   return salah;
+}
+
+// Link & alamat juga harus bersumber (audit Nov …2792: dua link maps karangan + "Kawasan Niaga Citra Indah Blok A1 Sentul").
+// Link: harus tertulis di prompt/FAQ/chat. Alamat: semua kata pentingnya (≥4 huruf) harus ada di sumber, supaya venue
+// dari klien yang ditulis ulang tetap lolos.
+const RE_URL = /https?:\/\/[^\s)\]]+/gi;
+const RE_ALAMAT = /\b(?:[Jj]l\.?|[Jj]ln\.?|[Jj]alan|[Bb]lok|[Kk]awasan|[Kk]omplek|[Kk]ompleks|[Rr]uko|[Gg]ang)\s+[A-Z0-9][^\n,.;]{2,40}/g; // nama tempat berhuruf kapital
+function tautanAsing(teks, sumber) {
+  const src = String(sumber).toLowerCase();
+  const out = [];
+  for (const u of String(teks).match(RE_URL) || []) {
+    const x = u.replace(/[.,!?]+$/, '').replace(/\/$/, '');
+    if (!src.includes(x.toLowerCase())) out.push(x);
+  }
+  for (const a of isiKlien(String(teks)).match(RE_ALAMAT) || []) {
+    const kata = a.toLowerCase().split(/[^a-z0-9]+/).slice(1).filter((w) => w.length >= 4);
+    if (kata.length && !kata.every((w) => src.includes(w))) out.push(a.trim());
+  }
+  return out;
+}
+// Durasi di atas paket terpanjang (8 jam) dihitung 8 jam + extend Rp 500.000/jam atau paket 13 jam (FAQ). Audit Nov …2553:
+// klien butuh 12 jam dijawab "paket 8 jam Rp 5.000.000" — nominalnya ada di tabel, jadi penjaga harga meloloskannya.
+function durasiKurang(teks, pesanKlien) {
+  const jam = [...String(pesanKlien).matchAll(/(\d{1,2})\s*jam/gi)].map((m) => Number(m[1]));
+  const n = jam.length ? Math.max(...jam) : 0;
+  if (n <= 8 || n > 24) return 0;
+  return /\bRp\b/i.test(teks) && !/extend|tambah(?:an)?\s*(?:durasi|jam)|per jam|13 jam/i.test(teks) ? n : 0;
 }
 
 // Log pemakaian AI per panggilan (token, alat) → data/llm-usage.jsonl, untuk hitung
@@ -552,6 +585,31 @@ async function panggil(endpoint, history, message, leadContext) {
           return /VENDOR REKANAN/.test(leadContext || '')
             ? 'Bentar ya, harganya aku pastiin dulu ke admin hehe.\n[INFO_ADMIN: harga untuk vendor perlu dicek admin]'
             : '[ADMIN_HANDOFF]';
+        }
+      }
+      const tulisUlang = async (koreksi) => {
+        messages.push({ role: 'assistant', content: teks }, { role: 'user', content: `KOREKSI SISTEM: ${koreksi} Tulis HANYA pesan final untuk klien.` });
+        return ((await kirim(endpoint, messages, false)).content || '').trim();
+      };
+      let tautan = tautanAsing(teks, sumberHarga);
+      if (tautan.length) {
+        console.log(`[tautan ${endpoint.model}] link/alamat tanpa sumber ${tautan.join(' | ')} — minta tulis ulang`);
+        teks = await tulisUlang(`link/alamat ${tautan.map((x) => `"${x}"`).join(', ')} tidak ada di info resmi maupun chat. ` +
+          'Jangan menulis link atau alamat yang tidak tertulis di sana; kalau klien butuh lokasi/alamat yang tidak kamu tahu, bilang admin yang kirim dan tambahkan [INFO_ADMIN: kirim alamat/lokasi].');
+        tautan = tautanAsing(teks, sumberHarga);
+        if (!teks || tautan.length || bocorPikiran(teks)) {
+          console.log(`[tautan ${endpoint.model}] masih ada link/alamat tanpa sumber — diteruskan ke admin`);
+          return '[ADMIN_HANDOFF]';
+        }
+      }
+      const jamPanjang = durasiKurang(teks, message);
+      if (jamPanjang) {
+        console.log(`[durasi ${endpoint.model}] klien butuh ${jamPanjang} jam tapi harga tanpa extend — minta tulis ulang: ${teks.slice(0, 100)}`);
+        teks = await tulisUlang(`klien butuh ${jamPanjang} jam, lebih panjang dari paket 8 jam. Hitung sesuai FAQ "Extend & durasi di atas 8 jam": ` +
+          'paket 8 jam + Rp 500.000 per jam tambahan, atau tawarkan paket 13 jam Rp 7.500.000 (2R). Jangan menawarkan paket 8 jam saja untuk durasi itu.');
+        if (!teks || durasiKurang(teks, message) || hargaAsing(teks, sumberHarga).length || bocorPikiran(teks)) {
+          console.log(`[durasi ${endpoint.model}] tulis ulang masih salah — diteruskan ke admin`);
+          return '[ADMIN_HANDOFF]';
         }
       }
       // Janji "aku teruskan ke admin" tanpa penanda = admin tidak pernah tahu, klien menunggu selamanya (uji 14 Okt:
@@ -660,6 +718,14 @@ function cumaMenutup(history, message) {
   return akhir?.role === 'assistant' && !String(akhir.content).includes('?') &&
     RE_PENUTUP.test(String(message).trim());
 }
+// Alarm ke Telegram CS Mintet kalau model utama/cadangan gagal, maks 1×/jam per jenis. Audit Nov: saldo Sumopod habis 6 Nov
+// dan klien dijawab model darurat 5 hari tanpa ada yang tahu.
+const alarmTerakhir = {};
+function alarmModel(jenis, teks) {
+  if (Date.now() - (alarmTerakhir[jenis] || 0) < 3600e3) return;
+  alarmTerakhir[jenis] = Date.now();
+  require('./notify').kirimTelegram(teks).catch((e) => console.error('[alarm] Telegram:', e.message));
+}
 async function getAIResponse(history, message, leadContext) {
   if (cumaMenutup(history, message)) {
     console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
@@ -677,6 +743,7 @@ async function getAIResponse(history, message, leadContext) {
     return jawab;
   } catch (e) {
     console.error(`[ai] ${PRIMARY.model} gagal: ${e.message}`);
+    alarmModel('utama', `⚠️ Bot WA: model utama ${PRIMARY.model} gagal (${e.message.slice(0, 160)}). Balasan klien sementara pakai cadangan. Kalau "ExceededBudget": saldo Sumopod habis.`);
     // Cadangan pertama Gemini di Sumopod: 15 Okt DeepSeek kena 403 dari hulunya 3× dan balasan klien langsung jatuh
     // ke flash-lite 9Router (model paling lemah). Hulu beda = biasanya tetap hidup.
     if (CADANGAN.model !== PRIMARY.model) {
@@ -685,6 +752,7 @@ async function getAIResponse(history, message, leadContext) {
     }
     if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
     console.log('[ai] mencoba lewat 9Router...');
+    alarmModel('darurat', `🚨 Bot WA: model utama DAN cadangan gagal — klien sekarang dijawab model darurat ${FALLBACK.model} (mutu rendah). Cek saldo/kuota Sumopod.`);
     return panggil(FALLBACK, history, message, leadContext);
   }
 }
@@ -808,10 +876,13 @@ async function ekstrakGaleri(teks, gambarB64) {
   const messages = [
     { role: 'system', content:
       'Kamu membantu CS Tetra Photobooth. Kembalikan HANYA objek JSON tanpa teks lain:\n' +
-      '{"minta_foto_acara": true|false, "cetakan_photobooth": true|false, "nama": "…"|null, "tanggal": "YYYY-MM-DD"|null}\n' +
+      '{"minta_foto_acara": true|false, "cetakan_photobooth": true|false, "bukti_bayar": true|false, "isi": "…", "nama": "…"|null, "tanggal": "YYYY-MM-DD"|null}\n' +
       '- minta_foto_acara: pengirim meminta foto/softfile/link galeri dari acara yang SUDAH/SEDANG berlangsung (tamu atau klien). ' +
       'Calon klien yang minta CONTOH hasil, pricelist, atau tanya harga = false.\n' +
       '- cetakan_photobooth: gambar adalah foto hasil cetak photobooth (strip/frame berisi foto dan nama acara). Bukti transfer, screenshot, desain = false.\n' +
+      '- bukti_bayar: gambar adalah bukti transfer/struk/mutasi/pembayaran. Selain itu false.\n' +
+      '- isi: satu kalimat apa isi gambarnya secara faktual (mis. "screenshot dashboard booking dengan pesan error", "foto backdrop bunga putih", ' +
+      '"desain frame warna navy"). Tanpa gambar → "".\n' +
       '- nama: nama orang/acara/perusahaan yang disebut di pesan atau tercetak di frame, HANYA kata namanya (buang "the wedding of", "wedding", "birthday", "&", "dan"). ' +
       'Contoh: "THE WEDDING OF Dinda & Rafi" → "Dinda Rafi". Tidak ada → null.\n' +
       `- tanggal: tanggal acara. Hari ini ${hariIni}. "10.10.26" = 2026-10-10 (format tanggal Indonesia: hari.bulan.tahun). ` +
@@ -827,4 +898,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
