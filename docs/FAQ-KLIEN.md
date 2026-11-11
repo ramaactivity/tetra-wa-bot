@@ -148,7 +148,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 - Backdrop basic kain (sudah termasuk), 6 warna: White (putih), Red (merah), Silver, Gold (gold glitter), Emerald Green (hijau emerald), Blue (biru). Hitam sudah tidak ada.
 - Gold glitter = backdrop basic, gratis (Rama 22 Okt).
 - Ada PDF contoh foto tiap warna backdrop basic; kirim saat klien bertanya (lihat LAMPIRAN).
-- Bot hanya membahas backdrop basic. Backdrop Tetra sifatnya compliment untuk klien yang tidak menyediakan sendiri; klien pakai backdrop/dekor sendiri → harga paket tetap sama. Permintaan backdrop di luar basic (custom, tema khusus, warna lain, Luxury): jangan sebut harga apa pun dan jangan bahas Luxury; tetap jawab pertanyaannya dulu: bilang bisa, dan detail serta harganya nanti admin yang info di chat ini; boleh sebut juga bahwa backdrop basic gratis tetap tersedia. Kalau klien mengirim referensi dekor/tema, terima dan bilang diteruskan ke admin untuk dihitung; kalau acaranya butuh penawaran resmi, kumpulkan sekalian nama acara, tanggal, jam, venue, dan kepada siapa penawaran ditujukan supaya admin tidak menggali ulang. Lalu [INFO_ADMIN: minta backdrop custom — <ringkas>] (Rama 11 Nov; usulan CS Mintet #37).
+- Backdrop, jawab dengan jelas dan tidak ambigu (Rama 11 Nov): yang GRATIS dari Tetra hanya backdrop basic kain polos. Backdrop custom/bertema/di luar basic = ADA BIAYA TAMBAHAN; sebut terus terang ada biaya tambahannya, nominal & detailnya admin yang info (jangan sebut angka, jangan bahas Luxury), lalu [INFO_ADMIN: minta backdrop custom — <ringkas>]. Klien pakai backdrop/dekor sendiri → boleh, harga paket tetap sama. Jangan mencampur ketiga hal ini dalam satu kalimat yang membingungkan; jawab yang dia tanya saja.
 - Klien boleh pakai backdrop dekorasi acaranya sendiri.
 
 ## Promo & diskon
@@ -183,7 +183,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Setelah DP
 - Booking lewat booking.tetraphoto.com: invoice & kuitansi ada di dashboard (menu Dokumen); data acara dan desain frame diisi di dashboard. Bot cukup mengarahkan dan membantu menjelaskan menu yang dimaksud; jangan menanyakan data acara satu per satu di chat.
-- Booking lewat chat (cadangan): setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin; klien melengkapi data acara di chat (boleh dicicil) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
+- Booking lewat chat (cadangan): setelah admin memverifikasi transfer, klien menerima invoice PDF dari admin; klien melengkapi form data acara yang dikirim bot (yang masih kosong diminta dalam satu kalimat) dan memilih frame dari katalog PDF. Desain frame custom GRATIS: cukup kirim brief atau contoh desain.
 - Batal setelah DP: DP hangus sebagai cancellation fee (Rp 500.000).
 - Batal setelah pelunasan: >14 hari sebelum acara pelunasan kembali penuh; 14–3 hari sebelum acara kembali 50%; <3 hari tidak ada pengembalian (masih boleh ajukan reschedule). DP tetap ditahan.
 - Reschedule: diajukan paling lambat 30 hari sebelum acara dan hanya kalau tanggal baru tersedia; seluruh pembayaran pindah tanpa biaya pembatalan, selisih harga paket disesuaikan.
