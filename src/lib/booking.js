@@ -28,7 +28,8 @@ const FIELD = [
   ['jam', 'Jam photobooth', true],
   ['lokasi', 'Lokasi / venue', true],
   ['maps', 'Link Google Maps', false],
-  ['paket', 'Paket', true],
+  // Rama 11 Nov: nama layanan wajib tertulis (Photobooth / Videobooth 360 / Photo Stage / Magazine Box) + durasi, supaya tidak rancu.
+  ['paket', 'Paket (nama layanan + durasi, mis. Photobooth Unlimited 3 jam)', true],
   // Event multi-unit (2–3 booth di satu acara). Kosong = 1 unit; tidak ditanyakan.
   ['jumlah_unit', 'Jumlah unit', false],
   ['jumlah_tamu', 'Perkiraan jumlah tamu', false],
@@ -38,7 +39,11 @@ const FIELD = [
   ['ukuran_frame', 'Ukuran frame', true],
   ['orientasi', 'Orientasi frame', false],
   ['desain_frame', 'Desain frame', true],
-  ['teks_frame', 'Teks di frame', false],
+  // Rama 11 Nov: teks frame dipisah. Nama di frame = inisial/nama panggilan yang dicetak (bukan nama lengkap di atas).
+  ['nama_frame', 'Nama/inisial yang dicetak di frame (bukan nama lengkap, mis. D & R)', false],
+  ['tanggal_frame', 'Tanggal yang dicetak di frame', false],
+  ['hashtag', 'Hashtag acara', false],
+  ['teks_frame', 'Teks lain di frame', false],
   ['backdrop', 'Backdrop', true],
   ['catatan', 'Catatan lain', false],
 ];
@@ -99,7 +104,8 @@ function teksForm(b, pembuka) {
     baris(w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
     baris('Tanggal Event', d.tanggal),
     baris('Jam Photobooth', d.jam),
-    baris('Lokasi Event (+ link Google Maps)', [d.lokasi, d.maps].filter(Boolean).join(' ')),
+    baris('Lokasi Event', d.lokasi),
+    baris('Link Google Maps', d.maps),
     baris('Paket yang Dipilih', d.paket),
     ...(teksUnit(d) ? [baris('Jumlah Unit', teksUnit(d))] : []),
     baris('Perkiraan Jumlah Tamu', d.jumlah_tamu),
@@ -107,12 +113,14 @@ function teksForm(b, pembuka) {
     baris(w ? 'Instagram Pengantin' : 'Instagram Acara (opsional)', d.instagram),
     '',
     '2. Frame Foto',
-    baris('Ukuran Frame', d.ukuran_frame || '2R / 4R / Polaroid'),
+    baris('Ukuran Frame', d.ukuran_frame || '2R / 4R / Polaroid (lihat gambar perbandingan ukurannya di bawah)'),
     baris('Desain', d.desain_frame || 'pilih dari katalog di bawah, atau custom'),
-    baris('Teks di Frame (nama, tanggal, hashtag)', d.teks_frame),
+    baris('Nama / Inisial di Frame', d.nama_frame),
+    baris('Tanggal di Frame', d.tanggal_frame),
+    baris('Hashtag', d.hashtag),
     '',
     '3. Backdrop',
-    baris('Backdrop', d.backdrop || 'basic Tetra (White/Red/Silver/Gold/Emerald Green/Blue) atau dari klien'),
+    baris('Backdrop', d.backdrop || 'pilih warna backdrop basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri'),
   ].join('\n');
 }
 

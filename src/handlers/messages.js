@@ -213,7 +213,7 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   const lines = [`Persona: ${persona} (${smart.segmentLabel(seg.segment)})`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
-  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — tanyakan dulu satu-dua hal yang paling membantu kamu menyarankan paket, maksimal 2 dalam satu pesan.`);
+  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — urutan bertanya ala Rama: acara apa & tanggalnya (boleh sekalian kota) → setelah dijawab, nama venue-nya (kalau belum ada venue, kotanya) → baru jam acara bila perlu. Maksimal 2 hal dalam satu pesan.`);
   else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
   const w = smart.parseWebsite(pesanBaru);
   if (w.dariWebsite || w.halaman) {
@@ -496,6 +496,9 @@ function registerMessageHandler(sock) {
     // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
     // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
     await booking.kirimTeks(sock, jid, b.lengkap ? pembuka : booking.teksForm(b, pembuka), 'form-booking→customer');
+    // Form menanyakan ukuran frame & backdrop → ilustrasi format + pilihan backdrop basic wajib ikut (Rama 11 Nov); yang sudah pernah dikirim dilewati.
+    const ilustrasiForm = [!b.data.ukuran_frame && 'format', !b.data.backdrop && 'backdrop'].filter(Boolean);
+    if (!b.lengkap && ilustrasiForm.length) await kirimLampiran(sock, jid, ilustrasiForm, 'form-booking→customer').catch((e) => console.error('[booking] ilustrasi form:', e.message));
     if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid);
     await booking.kirimKonfirmasi(sock, jid);
     await booking.laporAdmin(sock, jid, judulAdmin);

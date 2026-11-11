@@ -50,3 +50,19 @@ Setiap kali Rama menandai frasa baru, cukup tambah satu baris di sini (tidak per
 - paham kok  # varian "Paham, Kak" (replay 11 Nov)
 - cekin  # Rama 11 Nov: varian "cekkan/cekin slotnya"
 - sudah termasuk di dalam paket  # penegas (replay 11 Nov)
+- segitu  # Rama 11 Nov: "kata segitu terlalu non formal" (jam segitu) → "untuk jam tersebut" / sopan tapi tidak kaku
+- jadi aman buat  # basa-basi penegas (uji 11 Nov: "masih available ya Kak, jadi aman buat nikahannya")
+- dengan kak siapa di  # Rama 11 Nov: "Oh iya, ini dengan Kak siapa di Royal Organizer?" → cukup "oh iya, ini dengan Kak siapa?"
+- leluasa foto  # Rama 11 Nov: "Untuk 250 tamu, durasi 3 jam bikin tamu leluasa foto…" → narasi jelek & basa-basi
+- tanpa antre  # Rama 11 Nov: klaim basa-basi ("tanpa antre panjang", "tanpa buru-buru antre")
+- tanpa buru-buru  # Rama 11 Nov: klaim basa-basi
+- kebagian foto  # klaim manfaat durasi yang ditolak Rama 11 Nov
+- bawa pulang cetakan  # klaim manfaat durasi yang ditolak Rama 11 Nov
+- paham kok kak  # Rama 11 Nov: pembuka jawaban "mahal" yang ditolak
+- semisal mau opsi yang lebih hemat  # Rama 11 Nov: jangan buru-buru tawarkan paket lebih murah
+- penawaran  # Rama 11 Nov: istilah ke klien "quotation", bukan "penawaran"
+- memang nggak murah  # Rama 11 Nov (jawaban "mahal"): jangan membenarkan mahal; buka dengan keyakinan kualitas ("insyaallah kualitasnya nggak akan mengecewakan…")
+- memang tidak murah  # idem
+- memang agak mahal  # idem
+- mahal  # Rama 11 Nov: jangan pernah mengucapkan kata mahal/murah; fokus tunjukkan kualitas (+ galeri)
+- murah  # idem
