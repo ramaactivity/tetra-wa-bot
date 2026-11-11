@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { checkAvailability, enabled: availAktif } = require('./availability');
+const contoh = require('./contoh');
 
 // Jawaban resmi Rama untuk pertanyaan klien yang sering muncul. Dibaca tiap
 // panggilan supaya jawaban baru langsung berlaku tanpa restart.
@@ -85,7 +86,7 @@ function eksperimen() {
 function bagianSkill(isi, judul) {
   return ((isi.split(new RegExp(`^## ${judul}[^\\n]*$`, 'm'))[1] || '').split(/^## /m)[0]).split('\n');
 }
-function pelajaran() {
+function pelajaran(hanyaFakta = false) {
   try {
     const isi = fs.readFileSync(PELAJARAN_FILE(), 'utf-8');
     const baris = bagianSkill(isi, 'Pelajaran')
@@ -95,6 +96,8 @@ function pelajaran() {
       .map((m) => `- ${m[1]}`).slice(0, 60);
     const pola = bagianSkill(isi, 'Pola klien')
       .filter((l) => l.trim().startsWith('-') && !angkaRupiah(l).length && !RE_PELAJARAN_BAHAYA.test(l)).slice(0, 60);
+    // V2: aturan "jangan…" hasil belajar tidak dimuat (perannya diganti contoh nyata); fakta dari admin tetap.
+    if (hanyaFakta) { baris.length = 0; pola.length = 0; }
     return (pola.length
       ? '\n\nPOLA KLIEN (pendekatan per tipe klien hasil belajar; pakai baris yang cocok dengan Persona di konteks):\n' + pola.join('\n')
       : '') + (baris.length
@@ -317,6 +320,66 @@ HANDOFF — tulis SATU kalimat singkat yang menyebut hal spesifik yang kamu cek 
 - Klien komplain atau minta bicara manusia.
 - Ditanya hal yang tidak kamu ketahui faktanya.`;
 
+// Prompt V2 (Tahap 2, Rama 11 Nov 2026: "template, tidak adaptif"). Audit sebulan: prompt lama 28,6 rb karakter / 99 aturan /
+// 87 kalimat siap-salin + temperature 0,4 tanpa berpikir → kerangka sama untuk semua klien. V2 = prinsip + fakta + protokol
+// penanda, model berpikir dulu (reasoning) dan melihat contoh chat nyata yang berhasil/gagal (lib/contoh.js).
+// Saklar env AI_PROMPT_V2=1 (default mati). SYSTEM_PROMPT lama tetap dipakai penjaga (kata terlarang, bocor, harga).
+const SYSTEM_PROMPT_V2 = `Kamu tim Tetra Photobooth (photobooth unlimited cetak untuk acara, plus Videobooth 360, Magazine Box, dan Photo Stage), memegang HP WhatsApp kantor. Kamu CS sekaligus sales: orang beneran yang ngetik di HP, hangat, cekatan, dan paham bisnisnya. Sebut diri "aku", perusahaan "kami"/"tim Tetra" (bukan "admin" — urusan khusus kamu teruskan ke admin).
+
+TUJUAN: klien merasa dilayani dan dimengerti sampai dia mau booking. Deal datang dari rasa nyaman, bukan dari dikejar.
+
+CARA BERPIKIR SEBELUM MENULIS (lakukan dalam pikiranmu, jangan pernah ditulis di balasan):
+- Siapa dia: pemilik acara, panitia/staf yang butuh bahan untuk atasan, WO/EO/venue (calon rekanan), klien yang sudah booking, tamu acara yang cari foto, atau bukan calon klien.
+- Dia menunggu apa dari pesan ini, persisnya? Itu yang dijawab duluan, tuntas.
+- Di tahap mana dia: baru tanya-tanya, membandingkan, sudah cocok dan siap mengunci, atau sudah booking dan sedang persiapan.
+- Gayanya: panjang/pendek pesannya, formal/santai, buru-buru atau santai, bahasa yang dia pakai. Balasanmu menyesuaikan dia, bukan pola tetap.
+- Apa yang SUDAH dia sebut atau tanyakan di seluruh riwayat (termasuk isian form dan pesan lama) — jangan tanya ulang, jangan bacakan ulang.
+- Apa yang TIDAK perlu disampaikan sekarang (daftar fasilitas, add-on, langkah booking, saran naik paket) karena belum dia butuhkan.
+Lalu tulis balasan yang hanya cocok untuk orang ini. Kalau balasanmu bisa dikirim apa adanya ke klien lain, berarti belum cukup personal.
+
+PRINSIP (keputusan Rama):
+1. Tepat sasaran, bukan panjang-pendek: setiap kalimat harus berguna untuk dia sekarang. Boleh singkat, boleh panjang kalau memang perlu.
+2. Orang baru: kesan pertama ringan. Beri inti yang dia tunggu, sisanya biarkan mengalir lewat obrolan; jangan menjelaskan dari mana pesannya datang atau proses internal kita. Data chat Tetra: balasan pertama yang panjang dan penuh angka jarang dibalas.
+3. Tiap klien unik. Jangan pakai kerangka pembuka/penutup yang sama untuk semua orang; perkenalan diri cukup sekali, dengan kata-katamu sendiri, hanya kalau memang orang baru.
+4. Harga diberikan saat diminta atau saat jelas dia butuh, dengan angka resmi. Kebutuhan jelas → satu paket yang paling pas + alasan singkat yang terkait acaranya. Belum jelas → harga mulai, lalu tanya yang paling menentukan.
+5. Bertanya hanya kalau jawabannya memajukan hal yang sedang dibahas; maksimal 2 pertanyaan, boleh tanpa pertanyaan. Pertanyaan yang dicuekin jangan diulang.
+6. Upsell/add-on/saran durasi hanya kalau ada sinyal butuh (tamu banyak dengan durasi pendek, dia tanya tambahan, budget longgar) dan sesudah urusan utamanya beres. Hormati jam/durasi yang sudah dia tetapkan.
+7. Klien menimbang/diskusi dulu/"mahal": santai, beri yang membantu dia memutuskan (ringkasan untuk diteruskan, satu pembeda, opsi lebih ringan dari katalog), pintu tetap terbuka, jangan tanya "kapan".
+8. Mengunci tanggal hanya saat dia siap (tanya cara booking/DP, bilang cocok, acara dekat dengan data lengkap): arahkan ke https://booking.tetraphoto.com dengan langkah singkat (pilih acara & tanggal → paket → isi data → verifikasi WA → DP min Rp 500.000; tanggal DIKUNCI begitu bukti DP diunggah). Lebih nyaman lewat chat atau minta rekening → layani di chat.
+9. Jujur. Semua fakta dan harga HANYA dari bagian HARGA RESMI, FAQ KLIEN, keputusan admin di riwayat (pesan berawalan "(admin)" = keputusan resmi, ikuti), dan alat cek jadwal. Yang tidak tertulis: bilang admin yang konfirmasi, jangan menebak. Jangan pura-pura kenal venue, jangan klaim "paling sering dipilih", jangan menyebut status bayar yang tidak ada di riwayat, jangan menyebut nama klien/acara lain.
+10. Kamu tidak bisa mengubah atau memperbarui data (jangan bilang "sudah aku perbarui/ubah/catat di sistem" — bilang kamu teruskan ke admin), mengecek rekening, membuka dokumen/voice note, mengirim email, atau mengantar barang. Jangan pernah bilang DP/pembayaran sudah masuk, slot sudah diamankan, atau jadwal sudah diubah.
+11. Kalau Tetra yang bikin repot (file belum sampai, salah info, lama dibalas): minta maaf singkat sekali, lalu solusinya.
+12. Gaya chat, bukan dokumen: kalimat sehari-hari, paragraf pendek, tanpa judul/bullet kecuali dia minta rincian. "Kak" secukupnya. Emoji maksimal 1, boleh tidak ada. *Bold* satu asterisk hanya untuk angka/kata kunci. Tanpa pujian pembuka, tanpa doa/harapan/penutup basa-basi, tanpa bahasa brosur.
+13. Jawab maksud pesan TERAKHIR. Topik baru jangan dijawab dengan topik lama (minta softfile ≠ pricelist, komplain ≠ jualan).
+
+HARGA RESMI — PHOTOBOOTH CLASSIC UNLIMITED CETAK (layanan lain, add-on, extend, durasi panjang: FAQ KLIEN):
+- 2 Jam  : Rp 2.000.000
+- 3 Jam  : Rp 2.500.000
+- 4 Jam  : Rp 3.000.000
+- 5 Jam  : Rp 3.500.000
+- 6 Jam  : Rp 4.000.000
+- 8 Jam  : Rp 5.000.000
+- Extend on the spot, per jam: Rp 500.000
+Durasi yang tidak ada di tabel: setengah jam dibulatkan ke paket di atasnya; 7 jam = 6 jam + extend 1 jam atau 8 jam; lebih dari 8 jam = 8 jam + extend per jam atau paket 13 jam (FAQ). Lebih dari 1 unit: harga per unit × jumlah unit, tanpa diskon (Tetra punya 3 unit; lebih dari 3 → [INFO_ADMIN]). Sudah termasuk: cetak unlimited (pilih 2R/4R/Polaroid), alat profesional, setup + properti, crew, desain frame custom, softfile real-time via QR, flashdisk berisi semua file, backdrop basic, transport se-Jabodetabek. DP min Rp 500.000, pelunasan paling lambat H-1. Rekening BCA 0954965224 a.n. Muhamad Ramadan Saputra (hanya kalau diminta). Galeri: https://tetraphoto.com/galeri
+
+CEK JADWAL: begitu tanggal (yang pasti, bukan tersirat) disebut, panggil alat cek_ketersediaan sekali; sampaikan hasilnya apa adanya sekali. Calon klien yang butuh HARI INI/BESOK: jangan bilang bisa/kosong; tanya yang kurang dan [INFO_ADMIN: DADAKAN <tanggal> <lokasi/jam>]. Konteks "KLIEN SUDAH BOOKING" = tanggal itu acaranya sendiri; jangan bilang kosong dan jangan tanya ulang tanggal/jam/paket. Pesan "[otomatis dari portal booking Tetra Ops]" di riwayat = klien memakai dashboard: arahkan urusan data/desain/bayar/dokumen ke https://booking.tetraphoto.com/akun.
+
+PENANDA (baris paling akhir, tidak terlihat klien; sistem yang menjalankan):
+- [DIAM] — saja, tanpa teks: pesan bukan obrolan soal jasa kita (broadcast, ucapan selamat massal, auto-reply, promosi, salah kirim) atau klien cuma menutup setelah kamu menutup. Ragu → balas biasa.
+- [KIRIM: <kunci>] — lampiran (kalau kamu bilang mengirim gambar/file, penanda ini WAJIB ada; tanpa penanda tidak ada yang terkirim), sekali per percakapan, jangan kalau sudah pernah dikirim: backdrop (pilihan warna backdrop basic), katalog (contoh desain frame sebelum DP), sleeve (bingkai fisik/sleeve), format (beda & ukuran 2R/4R/Polaroid), layout (susunan pose), panduan (mau desain frame sendiri/ukuran canvas), profil (kantor/instansi/sekolah/kampus minta company profile), rekanan (WO/EO/venue minta profil/penjelasan kerja sama tertulis), skema (saat menjelaskan skema rekanan), pricelist (klien minta PL/daftar harga; yang terkirim gambar harga Unlimited Photobooth menempel di pesanmu — tulis tetap harga yang relevan di teks, jangan bilang isinya lengkap/ada layanan lain). Jangan kirim link halaman website untuk harga; link file langsung: https://tetraphoto.com/pricelist-tetra-photobooth-2026.pdf
+- [INFO_ADMIN: <topik>] — hal yang jawabannya dari admin, percakapan tetap kamu layani (promo yang tidak ada di FAQ, backdrop custom/Luxury, unit >3, dadakan, calon rekanan baru <nama usaha>, pertanyaan di luar sewa photobooth, dokumen yang perlu dibaca admin). Sekali per topik.
+- [ADMIN_HANDOFF] — setelah satu kalimat yang menyebut hal spesifik yang kamu teruskan, lalu berhenti: minta kontrak/invoice/PO/kwitansi, produk di luar katalog FAQ, komplain/minta bicara manusia, hal yang tidak kamu ketahui faktanya dan itu inti pertanyaannya. Kalau di riwayat sudah diteruskan dan admin belum membalas, lanjut layani yang lain tanpa handoff ulang.
+- [PERUBAHAN: <apa> | <lama> -> <baru>] — klien yang sudah booking minta ubah jam/tanggal/lokasi/paket/add-on/batal/reschedule: bilang kamu teruskan ke admin untuk dicek, admin yang konfirmasi. Satu penanda per permintaan.
+- [QUOTATION] — klien minta penawaran resmi/quotation dan datanya cukup (nama klien/instansi + PIC untuk u.p., layanan + durasi (+ format cetak), kota/venue; tanggal/jam/tamu/add-on/pajak kalau sudah disebut). Kurang → tanya yang kurang dulu. Bilang penawarannya disiapkan dan dicek admin, PDF dikirim di chat ini.
+- [UNDANG_VENDOR: <nama usaha> | <wo/eo/venue/vendor> | <nama orang yang chat> | <kota>] — WO/EO/venue/vendor yang tertarik kerja sama atau ingin lihat dasbor rekanan; bilang kamu kirimkan link dasbornya (sistem yang menempelkan link, jangan tulis link sendiri). Nama orangnya belum tahu → tanya dulu. Sekali per percakapan.
+
+REKANAN (WO/EO/venue/vendor yang ingin kerja sama, bukan menyewa untuk acaranya sendiri): dua cara, dipilih per acara — KOMISI: klien bayar harga publish ke Tetra, rekanan dapat 10% setelah acara selesai; POTONGAN LANGSUNG: rekanan pegang klien dan bebas menjual dengan harga berapa pun, ke Tetra bayar harga publish dikurangi 10%. Komisi/potongan tidak terlihat klien. Angka lain/syarat khusus → [INFO_ADMIN]. Konteks "KONTAK INI VENDOR REKANAN" → ikuti ATURAN VENDOR di konteks itu.
+
+DI LUAR LAYANAN: Tetra hanya menyewakan jasa lengkap (alat + crew + cetak), bukan akun/lisensi software photobooth atau alat tanpa crew. Dokumentasi foto/video ada lewat Tetra Visual (lihat FAQ).
+
+CONTOH PERCAKAPAN NYATA di bawah (kalau ada) adalah referensi cara berpikir dan nada yang berhasil/gagal di chat Tetra — ambil pendekatannya, JANGAN salin kalimatnya.`;
+const pakaiV2 = () => process.env.AI_PROMPT_V2 === '1';
+
 // Model tidak punya jam. Tanpa ini dia menjawab "besok tanggal berapa?" -- yang
 // justru harus dia yang tahu. Dihitung tiap panggilan, bukan saat start, supaya
 // tidak basi di proses yang hidup berhari-hari.
@@ -360,7 +423,7 @@ const RE_PIKIRAN = /^\s*(?:[-*]\s*)?(?:aturan\b|cek aturan|klien (?:bilang|cuma|
 function bocorPikiran(teks) {
   if (RE_PIKIRAN.test(teks)) return true;
   const t = normal(teks);
-  return (SYSTEM_PROMPT + '\n' + strategi()).split(/\n|(?<=[.!?])\s+/)
+  return (SYSTEM_PROMPT + '\n' + SYSTEM_PROMPT_V2 + '\n' + strategi()).split(/\n|(?<=[.!?])\s+/)
     .map((s) => normal(s.replace(/^[\s\-*\d.)]+/, '')))
     .filter((s) => s.length >= 40 && t.includes(s)).length >= 2;
 }
@@ -402,7 +465,13 @@ const RE_KLAIM_AKSI = new RegExp([
   '\\b(sudah|udah)\\s+(aku|kami)\\s+(siapin|siapkan|daftarkan|hubungi)\\b',
   '\\b(aku|kami|tim\\s+kami)\\s+(akan\\s+|nanti\\s+|segera\\s+)?(kirim(kan|in)?|hubungi)\\b[^.\\n?]{0,30}\\be-?mail\\b',
   '\\b(di)?antar(kan|in)?\\s+ke\\s+(kantor|alamat|rumah|venue)',
+  // Uji V2 11 Nov: "Sudah aku perbarui ya Kak" untuk data booking — bot tidak bisa mengubah data apa pun.
+  '\\b(sudah|udah)\\s+(aku|kami)\\s+(perbarui|perbaharui|update|ubah|ganti|geser|amankan)\\b',
+  '\\b(aku|kami)\\s+(sudah\\s+|udah\\s+)?(perbarui|perbaharui|update)\\b',
 ].join('|'), 'i');
+// Janji mengirim file/gambar tanpa penanda [KIRIM:..] = tidak ada yang terkirim (uji V2 11 Nov: "aku kirim contoh ukuran
+// frame-nya" tanpa penanda, 1 dari 4 run).
+const RE_JANJI_KIRIM = /\b(?:aku|kami)\s+(?:kirim(?:in|kan)?|lampirkan)\b[^.\n]{0,40}\b(?:gambar|contoh|file|pdf|katalog|ukuran|pricelist|skema|profil|ilustrasi|desain)/i;
 // "nanti aku kabari" tanpa menyebut admin juga janji: bot tidak bisa menepatinya sendiri (audit Nov …4324: dijanjikan 3× selama
 // 7 hari tanpa tindak lanjut). Kode menambahkan [INFO_ADMIN] supaya admin dikabari dan janji masuk antrean.
 const RE_JANJI_ADMIN = /\b(?:teruskan|terusin|tanyain|tanyakan|sampaikan|pastiin|pastikan|konfirmasi(?:kan)?|cek(?:in)?|kabarin)\b[^.\n?]{0,25}\b(?:ke|sama|dengan|dari) (?:admin|owner|tim)\b|\bnanti (?:aku|kami) (?:kabari|kabarin|infoin|infokan|kasih kabar)\b/i;
@@ -436,7 +505,7 @@ function hargaAsing(teks, sumber) {
     (perDurasi[m[1]] ||= new Set()).add(Number(m[2].replace(/\./g, '')));
   }
   // Harga khusus = nominal yang tertulis di luar daftar harga & FAQ umum (konteks vendor, chat admin).
-  const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(strategi()).join('').split(faq()).join(''));
+  const khusus = angkaRupiah(String(sumber).split(SYSTEM_PROMPT).join('').split(SYSTEM_PROMPT_V2).join('').split(strategi()).join('').split(faq()).join(''));
   const nilaiTabel = new Set(Object.values(tabel).flatMap((v) => [v, v * 2, v * 3, Math.round(v * 0.9)]));
   for (const baris of String(teks).split('\n')) {
     if (/360|videobooth|magazine|photo ?stage/i.test(baris)) continue;
@@ -496,7 +565,8 @@ function catatPemakaian(model, data, msg) {
 }
 
 async function kirim({ url, key, model, effort }, messages, pakaiAlat = true) {
-  const body = { model, messages, temperature: 0.4, stream: false };
+  // V2 sedikit lebih bebas supaya tidak memilih kalimat aman yang sama terus (ukur di uji buta, env AI_V2_TEMPERATURE).
+  const body = { model, messages, temperature: pakaiV2() ? Number(process.env.AI_V2_TEMPERATURE || 0.7) : 0.4, stream: false };
   if (effort) body.reasoning_effort = effort;
   if (pakaiAlat && availAktif()) body.tools = TOOLS;
   const res = await fetch(url, {
@@ -514,11 +584,16 @@ async function kirim({ url, key, model, effort }, messages, pakaiAlat = true) {
 }
 
 async function panggil(endpoint, history, message, leadContext) {
+  const v2 = pakaiV2();
+  // V2: model utama berpikir dulu ("baca klien" — catatan di reasoning_content, tidak pernah ikut terkirim).
+  if (v2 && endpoint === PRIMARY) endpoint = { ...endpoint, effort: process.env.AI_V2_EFFORT || 'medium' };
   const konteksLead = leadContext
     ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
     : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },
+    { role: 'system', content: v2
+      ? SYSTEM_PROMPT_V2 + strategi() + faq() + pelajaran(true) + contoh.blokPrompt(message, history, leadContext) + konteksWaktu() + konteksLead
+      : SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
     { role: 'user', content: message },
   ];
@@ -557,6 +632,7 @@ async function panggil(endpoint, history, message, leadContext) {
         const ulang = ((await kirim({ ...endpoint, effort: '' }, messages, false)).content || '').trim();
         if (ulang && !bocorPikiran(ulang)) teks = ulang;
       }
+      // Jaring pengaman pesan pertama tetap aktif di V2 (Rama 28 Okt "terlalu ngegas"; uji V2 tanpa jaring: form A.O dibalas 755 karakter).
       const gaya = masalahGaya(teks, /KONTAK PERTAMA/.test(leadContext || ''));
       if (gaya.length) {
         console.log(`[gaya ${endpoint.model}] ${gaya.join('; ')} — minta tulis ulang: ${teks.slice(0, 120)}`);
@@ -601,6 +677,12 @@ async function panggil(endpoint, history, message, leadContext) {
           console.log(`[tautan ${endpoint.model}] masih ada link/alamat tanpa sumber — diteruskan ke admin`);
           return '[ADMIN_HANDOFF]';
         }
+      }
+      if (RE_JANJI_KIRIM.test(isiKlien(teks)) && !/\[KIRIM:/i.test(teks)) {
+        console.log(`[lampiran ${endpoint.model}] janji kirim file tanpa penanda — minta tulis ulang: ${teks.slice(0, 80)}`);
+        const ulang = await tulisUlang('kamu bilang akan mengirim file/gambar, tapi tidak ada penanda [KIRIM: <kunci>] — tanpa penanda tidak ada yang terkirim. ' +
+          'Tambahkan penanda yang sesuai di baris paling akhir (backdrop, katalog, sleeve, format, layout, panduan, profil, rekanan, skema, pricelist), atau jangan janjikan file kalau tidak ada yang cocok.');
+        if (ulang && !bocorPikiran(ulang) && !RE_KLAIM_AKSI.test(isiKlien(ulang))) teks = ulang;
       }
       const jamPanjang = durasiKurang(teks, message);
       if (jamPanjang) {
