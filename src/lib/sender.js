@@ -40,16 +40,20 @@ async function sendReply(sock, jid, msgKey, rule, replyText) {
 // Kirim satu berkas (gambar atau dokumen) ke jid. Dipakai oleh sendReply dan oleh
 // perintah `send-pdf:` di command poller, supaya aturan mimetype/caption cuma ada
 // di satu tempat.
+// Rama 12 Nov: teks TIDAK ditempel ke berkas (caption). Kalau ada teks, dikirim sebagai bubble terpisah dulu, lalu berkasnya.
 async function sendDocument(sock, jid, filePath, caption) {
   const ext = path.extname(filePath).toLowerCase();
+  if (String(caption || '').trim()) {
+    rememberBotMsg(await sock.sendMessage(jid, { text: String(caption).trim() }));
+    await delay(1500);
+  }
   if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-    return sock.sendMessage(jid, { image: { url: filePath }, caption });
+    return sock.sendMessage(jid, { image: { url: filePath } });
   }
   return sock.sendMessage(jid, {
     document: { url: filePath },
     fileName: path.basename(filePath),
     mimetype: ext === '.pdf' ? 'application/pdf' : 'application/octet-stream',
-    caption,
   });
 }
 

@@ -390,12 +390,13 @@ setInterval(() => periksaGagalBuka().catch((e) => console.error('[gagal-dekripsi
 // tidak dibalas admin >= ASSIST_MENIT: bot menilai sendiri. Pertanyaan sederhana
 // yang jawabannya pasti ada di info resmi -> bot jawab; hal krusial -> tetap diam.
 // Pola dari TGO (auto_fallback_to_ai), tanpa mengubah pause admin.
-const ASSIST_MENIT = Number(process.env.ASSIST_MENIT) || 30;
+// Rama 12 Nov: pertanyaan faktual sederhana ditunggu 2–5 menit; admin diam → bot yang jawab.
+const ASSIST_MENIT = Number(process.env.ASSIST_MENIT) || 3;
 const ASSIST_MAKS_MS = 12 * 3600 * 1000;   // pesan lebih tua dari ini: jangan tiba-tiba dijawab
 // ponytail: status "sudah dinilai" di memori; restart = dinilai ulang sekali, aman karena AI bisa [DIAM] lagi.
 const assistDinilai = new Map();           // jid -> t pesan klien terakhir yang sudah dinilai
 let jalankanAssist = null;                 // diisi registerMessageHandler (butuh socket aktif)
-setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error('[assist]', e.message)), 5 * 60 * 1000).unref();
+setInterval(() => jalankanAssist && jalankanAssist().catch((e) => console.error('[assist]', e.message)), 60 * 1000).unref();
 
 // Mode assist hanya untuk chat urusan klien Tetra. Pemasok, vendor operasional, atau obrolan pribadi yang sedang
 // dipegang admin tetap diam (audit Nov …2792: assist menjawab pemasok kertas DNP atas nama admin, menyanggupi
@@ -424,7 +425,7 @@ const KONTEKS_ASSIST = (menit) =>
   'diskon/promo/harga khusus/negosiasi, pembayaran atau konfirmasi DP/pelunasan, perubahan/batal/reschedule booking, komplain, ' +
   'hal yang sedang dibahas atau dijanjikan admin, hal yang tadi diteruskan ke admin, atau kamu tidak yakin jawabannya. ' +
   'Kalau pesannya tidak perlu dijawab (ok, makasih, ucapan, stiker), balas persis [DIAM]. ' +
-  'Jangan pakai [ADMIN_HANDOFF], [QUOTATION], [PERUBAHAN], atau [KIRIM]. ' +
+  'Jangan pakai [ADMIN_HANDOFF], [QUOTATION], atau [PERUBAHAN]. Lampiran resmi boleh lewat [KIRIM: pricelist/backdrop/format/…] seperti biasa. ' +
   'Kalau menjawab: jangan perkenalkan diri, jawab langsung dan singkat; boleh bilang bagian lain tetap admin yang lanjutkan.';
 
 function registerMessageHandler(sock) {
@@ -613,6 +614,7 @@ function registerMessageHandler(sock) {
     if (sulit) return kabari(sulit[2] || sulit[1].toLowerCase());
     if (/\[DIAM\]/i.test(jawab)) { console.log(`[assist] ${nama}: tidak perlu dijawab`); return; }
     const info = (jawab.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
+    const lampiran = require('../lib/lampiran').kunci(lampiranOtomatis(jawab));
     jawab = jawab.replace(/\[(INFO_ADMIN|KIRIM)[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
     if (!jawab || /\[/.test(jawab) || RE_KLAIM.test(jawab)) {
       console.log(`[assist] ${nama}: balasan tidak aman, tidak dikirim: ${jawab.slice(0, 120)}`);
@@ -625,6 +627,8 @@ function registerMessageHandler(sock) {
     }
     tambahRiwayat(jid, 'assistant', jawab);
     await sendReply(sock, jid, [], { name: 'assist' }, jawab);
+    if (lampiran.includes('pricelist')) await kirimPricelist(sock, jid, 'assist').catch((e) => console.error('[assist] pricelist:', e.message));
+    await kirimLampiran(sock, jid, lampiran.filter((k) => k !== 'pricelist'), 'assist').catch((e) => console.error('[assist] lampiran:', e.message));
     if (info) await notifyAdmin(sock, num, { name: 'INFO' }, getRiwayat(jid), info).catch(() => {});
     console.log(`[assist] ${nama}: dijawab bot setelah admin diam ${menit} menit`);
   };

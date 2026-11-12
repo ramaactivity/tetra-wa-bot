@@ -21,7 +21,7 @@ const GAMBAR_RINGKAS = 'UNLIMITED PHOTOBOOTH.jpg';
 const CAPTION_GAMBAR = '';
 
 const PDF_LENGKAP = 'PRICELIST TETRA PHOTOBOOTH.pdf';
-const CAPTION_PDF = 'Pricelist lengkap Tetra Photobooth.';
+const CAPTION_PDF = ''; // Rama 12 Nov: teks tidak ditempel ke berkas
 
 // Sengaja sempit: hanya permintaan pricelist yang gamblang. Kata seperti "harga"
 // atau "berapa" saja tidak cukup — "DP berapa?" lebih pas dijawab AI daripada

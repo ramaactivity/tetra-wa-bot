@@ -56,7 +56,7 @@ async function kirimLampiran(sock, jid, daftar, jalur) {
     // Hanya catatan pengiriman file yang dicek, bukan kalimat obrolan ("ini panduan ukurannya").
     const terkirim = getRiwayat(jid).flatMap((p) => String(p.content).match(/\[kirim (PDF|dokumen:)[^\]]*\]/gi) || []);
     if (terkirim.some((c) => c.includes(tanda) || l.pernah.test(c))) continue;
-    const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), l.caption);
+    const sent = await sendDocument(sock, jid, path.join(ASSETS_DIR, l.file), '');
     rememberBotMsg(sent);
     deliveryLog.track(sent, `${k}→${jalur}`);
     tambahRiwayat(jid, 'assistant', `${tanda}\n${l.caption}`);
