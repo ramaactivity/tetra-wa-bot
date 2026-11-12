@@ -612,6 +612,16 @@ function startCommandPoller() {
         } else if (c.command.startsWith('send-portal:')) {
           const hasil = await kirimPortal(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-lampiran:')) {
+          // Format: send-lampiran:<nomor | jid @lid>:<kunci LAMPIRAN, mis. backdrop/format>. Admin/Claude atas perintah Rama.
+          const [, raw, kunci] = c.command.split(':');
+          const jid = /@(lid|s\.whatsapp\.net)$/.test(raw || '') ? raw : `${String(raw || '').replace(/\D/g, '')}@s.whatsapp.net`;
+          if (!/^\d{8,16}@(lid|s\.whatsapp\.net)$/.test(jid)) await supa.markCommand(c.id, 'error', `Tujuan tidak wajar: "${raw}"`);
+          else if (!currentSock || !isConnected) await supa.markCommand(c.id, 'error', 'socket belum siap');
+          else {
+            const terkirim = await require('./lib/lampiran').kirimLampiran(currentSock, jid, [String(kunci || '').toLowerCase()], 'perintah');
+            await supa.markCommand(c.id, terkirim.length ? 'done' : 'error', terkirim.length ? `${terkirim} terkirim ke ${jid}` : `tidak terkirim (kunci tak dikenal atau sudah pernah dikirim): ${kunci}`);
+          }
         } else if (c.command.startsWith('send-text:')) {
           const hasil = await kirimTeks(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
