@@ -123,7 +123,7 @@ const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|keseruan|berkesan|mome
 // membahas topik yang sama dengan pertanyaan terakhir kita yang tidak dijawab.
 const RE_TUNDA = /diskusi|dirundingkan|dibicarakan|tanya(in)?\s+(dulu|ke|sama)|info(in)?\s+ke|nanti\s+(aku|saya|ku|kami)?\s*(kabari|kabarin|hubungi|info)|kabar(i|in)\s+(lagi|nanti)|pikir(-pikir)?\s+dulu|dulu\s+ya\b/i;
 const RE_SOAL_BOOKING = /\bdp\b|booking|\bbook\b|transfer|rekening|cara\s+(pesan|bayar|booking)|bayar(nya)?\s+(ke|gimana)/i;
-const RE_DESAK = /\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil/i;
+const RE_DESAK = /\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|potongan|diskon|harga\s+khusus/i;
 const TOPIK_TANYA = { tanggal: /tanggal|tgl|kapan/i, jam: /jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)/i,
   lokasi: /lokasi|venue|di\s?mana|daerah|kota/i, tamu: /tamu|undangan|berapa\s+orang/i, format: /2R|4R|polaroid|format/i };
 function ulangTanya(lama, baru) {
@@ -165,13 +165,15 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     `- Pertanyaan opsional. Kalau ada, satu saja dan bisa dijawab satu kata/angka atau pilihan A/B atas hal yang memang sedang dia timbang.\n` +
     `- JANGAN ajak DP/kunci/amankan tanggal, kirim link booking atau rekening, atau urgensi ("biar nggak bentrok", "keburu") ` +
     `kecuali dia sendiri sudah bertanya soal booking.\n` +
+    `- JANGAN menyebut atau menawarkan potongan/diskon/harga khusus apa pun, walaupun dia tampak menimbang harga — itu hanya ` +
+    `boleh keluar sebagai balasan langsung saat dia sendiri keberatan (FAQ: senjata terakhir, sekali, bukan di awal).\n` +
     `- JANGAN mengarang detail yang tidak ada di transkrip atau system prompt: jenis acara, kategori, siapa pengambil keputusan, ` +
     `kapasitas/angka per jam, jumlah orang per foto. Hitungan harus benar. Minta maaf hanya kalau memang Tetra yang telat atau salah.\n` +
     `- Jangan mengaku sudah melakukan sesuatu, jangan bilang jadwal masih aman/tersedia, jangan janji promo/diskon. Harga dan fakta hanya ` +
     `dari transkrip dan system prompt; kalau ada info Tetra yang keliru dan relevan di transkrip, luruskan dengan jujur.\n` +
     `- Panggil "${panggilan}"${panggilan === 'Kak' ? '' : ' atau "Kak" saja'}; jangan pakai nama lain.\n` +
     `- Link galeri hanya kalau dia ragu soal hasil atau minta contoh dan belum pernah dikirim, dengan arahan apa yang dilihat.\n` +
-    `- Gaya chat orang asli, tanpa bullet, emoji maks 1; panjang sesuai isinya. Kata terlarang di system prompt tetap berlaku ` +
+    `- Gaya chat orang asli, tanpa bullet, emoji maks 1; MAKSIMAL 3 baris (follow-up 13 Nov yang 4–5 baris dibalas admin, bukan klien). Kata terlarang di system prompt tetap berlaku ` +
     `(termasuk "follow up", "sekadar mengingatkan"). Keputusan/ucapan ADMIN di transkrip = keputusan resmi.\n` +
     `Balas persis [DIAM] kalau dia sudah batal/bukan calon klien, bilang belum ada rencana, admin sedang menangani, ` +
     `acaranya sudah lewat, atau kamu tidak punya hal baru yang berguna.`;
