@@ -54,6 +54,30 @@ function konteksHandoffLama(jid) {
 }
 
 const wajibHermes = () => process.env.AI_OTAK === 'hermes';
+// Voice note → teks lewat mesin STT Hermes (skrip profil cs-wa: tools.transcription_tools.transcribe_audio).
+const csWaHome = () => require('path').join(process.env.HOME || '/home/ubuntu', '.hermes', 'profiles', 'cs-wa');
+function pythonHermes() {
+  const dir = path.join(process.env.HOME || '/home/ubuntu', '.hermes', 'tools');
+  const py = (fs.existsSync(dir) ? fs.readdirSync(dir) : []).filter((d) => d.startsWith('python-3')).sort().map((d) => path.join(dir, d, 'bin', 'python3'));
+  return py.find((f) => fs.existsSync(f)) || 'python3';
+}
+async function dengarVoiceNote(m) {
+  const buf = await downloadMediaMessage(m, 'buffer', {});
+  if (!buf?.length) return null;
+  const dir = path.join(csWaHome(), 'cache', 'wa-suara');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`);
+  fs.writeFileSync(file, buf, { mode: 0o600 });
+  try {
+    const { stdout } = await require('util').promisify(require('child_process').execFile)(
+      pythonHermes(), [path.join(csWaHome(), 'scripts', 'transkrip.py'), file],
+      { env: { ...process.env, HERMES_HOME: csWaHome() }, timeout: 180000, maxBuffer: 1 << 20 });
+    const r = JSON.parse(String(stdout).trim().split('\n').pop());
+    return r.success && String(r.transcript || '').trim() ? String(r.transcript).trim() : null;
+  } finally {
+    try { fs.unlinkSync(file); } catch { /* sudah terhapus */ }
+  }
+}
 
 function konteksKlienLama(jid) {
   const k = klienLamaCtx.get(jid);
@@ -748,14 +772,26 @@ function registerMessageHandler(sock) {
       bolehBalas = true;
 
       // Teks untuk jalur kata kunci: tanpa bubble form template Tetra. AI tetap menerima originalText utuh.
-      const t = unik.map((m) => teksPesan(m.message)).filter((x) => !RE_FORM_TETRA.test(x)).join('\n').toLowerCase();
+      let t = unik.map((m) => teksPesan(m.message)).filter((x) => !RE_FORM_TETRA.test(x)).join('\n').toLowerCase();
       const vendor = await vendorLib.cari(phoneDigits(msg)); // rekanan: gaya & harga khusus
       const lead = !klienLamaCtx.has(jid) && getProspek(jid); // lead sales: mode rekanan / klien menurut segmen
-      const fullText = fullUserText(jid, originalText);
+      let fullText = fullUserText(jid, originalText);
 
       // ── 0. Media: voice note tak bisa diputar; gambar/dokumen (sering bukti
       // transfer) hanya admin yang boleh menilai. 24 Sep bot sempat bilang
       // "DP sudah masuk" padahal tidak bisa melihat gambar maupun rekening.
+      // Telinga Hermes (Rama 16 Nov: "pastikan 100% dihandle, dibaca, dibalas oleh hermes"): voice note ditranskrip mesin STT
+      // Hermes (Whisper lokal, profil cs-wa), lalu dijawab cs-wa seperti pesan ketik. Gagal → minta diketik (ditulis Hermes).
+      if (t.trim() === '[kirim voice note]' && wajibHermes()) {
+        const vn = msgs.find((m) => m.message?.audioMessage);
+        const isi = vn ? await dengarVoiceNote(vn).catch((e) => { console.error('[voice] transkripsi gagal:', e.message); return null; }) : null;
+        if (isi) {
+          console.log(`[voice] ${jid.split('@')[0]}: "${isi.slice(0, 120)}"`);
+          originalText = `[voice note, isinya: "${isi}"]`;
+          t = originalText.toLowerCase();
+          fullText = fullUserText(jid, originalText);
+        }
+      }
       if (t.trim() === '[kirim voice note]') {
         const minta = wajibHermes()
           ? await aiLib.kalimatHermes('Klien mengirim voice note. Sistem belum bisa memutar voice note; minta dia mengetik pesannya.', { history: getRiwayat(jid) })
