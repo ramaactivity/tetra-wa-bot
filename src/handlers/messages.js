@@ -55,9 +55,12 @@ function konteksHandoffLama(jid) {
 
 const wajibHermes = () => process.env.AI_OTAK === 'hermes';
 // Pengantar rekap & katalog ditulis Hermes (dipanggil hanya kalau memang dikirim); data rekap/file tetap dari sistem.
-const pembukaRekap = (jid) => (wajibHermes() ? () => require('../lib/ai').kalimatHermes(
-  'Data acara klien sudah lengkap. Sistem menempelkan rekap datanya tepat sesudah pesanmu. Minta dia mengecek; kalau sudah benar cukup balas oke, kalau ada yang salah langsung koreksi di chat.',
-  { history: require('../lib/store').getRiwayat(jid) }) : null);
+const pembukaRekap = (jid) => (wajibHermes() ? (b) => {
+  const baris = require('../lib/booking').barisRekap(b);
+  return require('../lib/ai').susunHermes(
+    `Data acara wajib klien sudah lengkap. Susun REKAP (skill form-booking) dengan nilai persis:\n${baris.map((x) => `- ${x.label}: ${x.nilai}`).join('\n')}`,
+    { history: require('../lib/store').getRiwayat(jid), wajibAda: baris.map((x) => x.nilai) });
+} : null);
 const pembukaKatalog = (jid) => (wajibHermes() ? () => require('../lib/ai').kalimatHermes(
   'Sistem mengirim katalog desain frame (PDF) tepat sesudah pesanmu. Dia bisa pilih dari katalog (screenshot atau sebut halamannya), atau desain custom gratis dengan kirim brief/contoh.',
   { history: require('../lib/store').getRiwayat(jid) }) : null);
@@ -574,7 +577,19 @@ function registerMessageHandler(sock) {
     await perbaruiBooking(jid, null, false);
     // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
     // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
-    const teksAwal = b.lengkap ? pembuka : booking.teksForm(b, pembuka);
+    let teksAwal = b.lengkap ? pembuka : booking.teksForm(b, pembuka);
+    // Wajib Hermes (Rama 16 Nov "gua mau"): form disusun Hermes (skill form-booking); penjaga memastikan semua label & nilai
+    // asli ada persis. Gagal → form data sistem (isian dipakai admin untuk input Tetra Ops).
+    if (!b.lengkap && wajibHermes()) {
+      const baris = booking.barisForm(b);
+      const isian = baris.map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
+      const form = await aiLib.susunHermes(
+        `Susun form data acara (skill form-booking) untuk acara ${booking.isWedding(b) ? 'wedding' : 'non-wedding'}. Nilai yang sudah diketahui:\n${isian}\n` +
+        (pembuka ? 'Pembuka sudah dikirim di atas form, jadi mulai langsung dengan form-nya (boleh satu kalimat singkat minta dilengkapi).' : 'Mulai dengan satu kalimat pembuka minta dilengkapi.'),
+        { history: getRiwayat(jid), wajibAda: [...baris.map((x) => x.label), ...baris.filter((x) => x.asli).map((x) => x.asli)] });
+      if (form) teksAwal = pembuka ? `${pembuka}\n\n${form}` : form;
+      else console.log(`[form] ${jid.split('@')[0]}: Hermes gagal menyusun form utuh — pakai form data sistem`);
+    }
     if (teksAwal) await booking.kirimTeks(sock, jid, teksAwal, 'form-booking→customer');
     // Form menanyakan ukuran frame & backdrop → ilustrasi format + pilihan backdrop basic wajib ikut (Rama 11 Nov); yang sudah pernah dikirim dilewati.
     const ilustrasiForm = [!b.data.ukuran_frame && 'format', !b.data.backdrop && 'backdrop'].filter(Boolean);

@@ -92,42 +92,51 @@ const isWedding = (b) => /wedding|nikah|pengantin|resepsi|akad|lamaran|engagemen
 
 // Form untuk klien, format form admin Tetra (Rama 11 Nov: "langsung aja: kaka tolong dibantu untuk melengkapi form berikut yaa",
 // bukan ditanya dicicil). Yang sudah diketahui langsung terisi supaya klien tinggal cek.
-function teksForm(b, pembuka) {
+// Satu sumber baris form: dipakai form data sistem (teksForm) DAN penjaga form susunan Hermes (semua label + nilai asli wajib ada).
+function barisForm(b) {
   const w = isWedding(b);
   const d = b.data;
-  const baris = (label, v) => `- ${label}: ${v || ''}`.trimEnd();
+  const r = (bagian, label, asli, petunjuk = '') => ({ bagian, label, asli: asli ? String(asli) : '', nilai: asli ? String(asli) : petunjuk });
+  return [
+    r(1, w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
+    r(1, 'Tanggal Event', d.tanggal),
+    r(1, 'Jam Photobooth', d.jam),
+    r(1, 'Lokasi Event', d.lokasi),
+    r(1, 'Link Google Maps', d.maps),
+    r(1, 'Paket yang Dipilih', d.paket),
+    ...(teksUnit(d) ? [r(1, 'Jumlah Unit', teksUnit(d))] : []),
+    r(1, 'Perkiraan Jumlah Tamu', d.jumlah_tamu),
+    r(1, 'No. Kontak PIC / WO di hari H', d.pic || d.kontak_wo),
+    r(1, w ? 'Instagram Pengantin' : 'Instagram Acara (opsional)', d.instagram),
+    r(2, 'Ukuran Frame', d.ukuran_frame, '2R / 4R / Polaroid (lihat gambar perbandingan ukurannya di bawah)'),
+    r(2, 'Desain', d.desain_frame, 'pilih dari katalog di bawah, atau custom'),
+    r(2, 'Nama / Inisial di Frame', d.nama_frame),
+    r(2, 'Tanggal di Frame', d.tanggal_frame),
+    r(2, 'Hashtag', d.hashtag),
+    r(3, 'Backdrop', d.backdrop, 'pilih warna backdrop basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri'),
+  ];
+}
+
+function teksForm(b, pembuka) {
+  const baris = barisForm(b);
+  const bagian = (n) => baris.filter((x) => x.bagian === n).map((x) => `- ${x.label}: ${x.nilai}`.trimEnd());
   return [
     ...(pembuka ? [pembuka, ''] : []),
     // Wajib Hermes (Rama 16 Nov): permintaan mengisi form sudah ada di pembuka tulisan Hermes.
     ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Kak, tolong dibantu untuk melengkapi form berikut yaa.', '']),
-    '1. Data Event',
-    baris(w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
-    baris('Tanggal Event', d.tanggal),
-    baris('Jam Photobooth', d.jam),
-    baris('Lokasi Event', d.lokasi),
-    baris('Link Google Maps', d.maps),
-    baris('Paket yang Dipilih', d.paket),
-    ...(teksUnit(d) ? [baris('Jumlah Unit', teksUnit(d))] : []),
-    baris('Perkiraan Jumlah Tamu', d.jumlah_tamu),
-    baris('No. Kontak PIC / WO di hari H', d.pic || d.kontak_wo),
-    baris(w ? 'Instagram Pengantin' : 'Instagram Acara (opsional)', d.instagram),
-    '',
-    '2. Frame Foto',
-    baris('Ukuran Frame', d.ukuran_frame || '2R / 4R / Polaroid (lihat gambar perbandingan ukurannya di bawah)'),
-    baris('Desain', d.desain_frame || 'pilih dari katalog di bawah, atau custom'),
-    baris('Nama / Inisial di Frame', d.nama_frame),
-    baris('Tanggal di Frame', d.tanggal_frame),
-    baris('Hashtag', d.hashtag),
-    '',
-    '3. Backdrop',
-    baris('Backdrop', d.backdrop || 'pilih warna backdrop basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri'),
+    '1. Data Event', ...bagian(1), '',
+    '2. Frame Foto', ...bagian(2), '',
+    '3. Backdrop', ...bagian(3),
   ].join('\n');
 }
 
 // Setelah data wajib lengkap (dari form atau chat), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
+function barisRekap(b) {
+  return FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
+    .map(([k, label]) => ({ label, nilai: String(k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]) }));
+}
 function teksKonfirmasi(b, pembuka = null) {
-  const isi = FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
-    .map(([k, label]) => `• ${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]}`);
+  const isi = barisRekap(b).map((x) => `• ${x.label}: ${x.nilai}`);
   if (pembuka) return [pembuka, '', ...isi].join('\n');
   return ['Ini rekap data acaranya ya Kak, tolong dicek lagi:', '', ...isi, '',
     'Kalau sudah benar, balas "oke" ya. Kalau ada yang salah atau mau diubah, langsung koreksi di sini aja.'].join('\n');
@@ -139,8 +148,9 @@ async function kirimKonfirmasi(sock, jid, buatPembuka = null) {
   if (!b || !b.lengkap || b.dikonfirmasi) return false;
   b.dikonfirmasi = Date.now();
   simpan();
-  const pembuka = buatPembuka ? await buatPembuka().catch(() => null) : null;
-  await kirimTeks(sock, jid, teksKonfirmasi(b, pembuka), 'rekap-booking→customer');
+  // buatPembuka (wajib Hermes) mengembalikan rekap utuh susunan Hermes; gagal → rekap data sistem.
+  const teksH = buatPembuka ? await buatPembuka(b).catch(() => null) : null;
+  await kirimTeks(sock, jid, teksH || teksKonfirmasi(b), 'rekap-booking→customer');
   return true;
 }
 const CAPTION_KATALOG =
@@ -264,6 +274,7 @@ function konteksAI(jid) {
 const riwayatUntukEkstrak = (jid) => getRiwayat(jid).slice(-16);
 
 module.exports = {
+  barisForm, barisRekap, isWedding,
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
   teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap, sinkronOps,
   semua: () => semua, simpan,

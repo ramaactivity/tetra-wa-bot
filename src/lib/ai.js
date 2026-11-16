@@ -213,7 +213,8 @@ async function kirimHermes(endpoint, messages) {
   try {
     const ev = await (await fetch(`${url}/runs/${run_id}/events`, { headers: H, signal: AbortSignal.timeout(10000) })).text();
     jadwalTersedia = /cek_ketersediaan[\s\S]{0,400}?bisa_terima_booking\\*"\s*:\s*true/.test(ev);
-    if (!endpoint.tugas && !endpoint.situasi) {
+    // Putaran tulis ulang (KOREKSI SISTEM) tidak perlu membaca ulang skill: draf & koreksinya sudah di konteks.
+    if (!endpoint.tugas && !endpoint.situasi && !/^KOREKSI SISTEM/.test(String(akhir?.content || ''))) {
       const terlewat = ['faq-tetra', 'cara-balas-wa', 'cs-mintet-pelajaran'].filter((k) => !new RegExp(`"tool": "skill_view", "preview": "${k}`).test(ev));
       if (terlewat.length) console.log(`[hermes] ${run_id} skill terlewat: ${terlewat.join(', ')}`);
     }
@@ -259,6 +260,37 @@ async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadConte
     } catch (e) { console.error(`[hermes-situasi] gagal (percobaan ${coba}): ${e.message}`); }
   }
   return cadangan;
+}
+
+// Pesan terstruktur (form data acara, rekap) disusun Hermes dengan format skill form-booking (Rama 16 Nov: "gua mau").
+// Penjaga: SEMUA string di wajibAda (label form + nilai asli) harus ada persis; gagal tiga kali → null (pemanggil memakai
+// versi data sistem, karena isian ini dipakai admin untuk input booking di Tetra Ops).
+const HERMES_SUSUN = 'CARA KERJA (dari sistem bot WA Tetra): sistem meminta kamu menyusun pesan WhatsApp untuk klien sesuai SITUASI di bawah ' +
+  'dengan suaramu (SOUL). Baca skill form-booking dengan skill_view dan ikuti formatnya persis. Nilai dari sistem diisi persis, ' +
+  'jangan diubah atau ditebak. Tanpa harga, tanpa janji tambahan, tanpa penanda [..]. Balas HANYA pesannya.';
+async function susunHermes(situasi, { history = [], wajibAda = [] } = {}) {
+  if (!pakaiHermes()) return null;
+  const norm = (x) => rapikanGaya(String(x), 0).toLowerCase().replace(/\s+/g, ' ').trim();
+  const messages = [
+    { role: 'system', content: HERMES_SUSUN + konteksWaktu() + `\n\nSITUASI DARI SISTEM: ${situasi}` },
+    ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
+    { role: 'user', content: '(sistem meminta pesan ini; tidak ada pesan baru dari klien)' },
+  ];
+  for (let coba = 1; coba <= 3; coba++) {
+    try {
+      const r = await kirimHermes({ ...HERMES, situasi: true }, messages);
+      const t = rapikanGaya(r.content, 0).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
+      const nt = norm(t);
+      const hilang = wajibAda.filter((w) => w && !nt.includes(norm(w)));
+      const kaku = frasaKaku(t);
+      if (t && !RE_KLAIM_AKSI.test(t) && !bocorPikiran(t) && !hilang.length && !kaku.length) return t;
+      console.log(`[hermes-susun] ditolak (percobaan ${coba}): hilang ${hilang.length ? hilang.join(' | ').slice(0, 160) : '-'}; kaku ${kaku.join(', ') || '-'}`);
+      messages.push({ role: 'assistant', content: t }, { role: 'user', content: 'KOREKSI SISTEM: ' +
+        (hilang.length ? `baris/nilai ini hilang atau berubah, wajib ditulis persis: ${hilang.map((h) => `"${h}"`).join(', ')}. ` : '') +
+        (kaku.length ? `hapus frasa kaku "${kaku.join('", "')}". ` : '') + 'Tulis ulang pesannya utuh. Balas HANYA pesannya.' });
+    } catch (e) { console.error(`[hermes-susun] gagal (percobaan ${coba}): ${e.message}`); }
+  }
+  return null;
 }
 
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
@@ -542,7 +574,14 @@ const RE_AJAK_GRUP = /\b(?:tambah\w*|masuk\w*|add|undang\w*|gabung|ikut\w*)\b[^.
 const RE_JANJI_KABARI = /\b(?:nanti|ntar)\b[^.?!\n]{0,40}\b(?:aku|tim|admin|kami)\b[^.?!\n]{0,25}\b(?:kabar(?:i|in)|infoin|informasikan|hubungi)\b|\b(?:tim|admin)\s+(?:yang\s+)?(?:kabar(?:i|in)|infoin)\b/i;
 const RE_MINTA_ULANG = /\b(?:kirim(?:kan)?\s+ulang|dikirim\s+ulang|kirim\s+lagi|(?:belum|tidak|nggak|gak|ga)\s+masuk|belum\s+ke(?:kirim|terima))\b/i;
 // Usulan 73: durasi yang tidak ada di tabel (7 jam) wajib dua jalan: paket 6 jam + extend DAN paket 8 jam.
-const durasiDuaJalan = (teks, pesanKlien) => /\b7\s*jam\b/i.test(String(pesanKlien || '')) && /\b6\s*jam\b/i.test(isiKlien(teks)) && !/\b8\s*jam\b/i.test(isiKlien(teks));
+// Usulan 73 + regresi 16 Nov: 9–13 jam wajib menyebut juga paket 13 jam (FAQ), bukan hanya 8 jam + extend.
+const jamDiminta = (pesanKlien) => Math.max(0, ...[...String(pesanKlien || '').matchAll(/\b(\d{1,2})\s*jam\b/gi)].map((m) => Number(m[1])));
+const durasiDuaJalan = (teks, pesanKlien) => {
+  const isi = isiKlien(teks), j = jamDiminta(pesanKlien);
+  if (j === 7) return /\b6\s*jam\b/i.test(isi) && !/\b8\s*jam\b/i.test(isi);
+  if (j >= 9 && j <= 13) return /\b8\s*jam\b/i.test(isi) && !/\b13\s*jam\b/i.test(isi);
+  return false;
+};
 // Buang kalimat yang memuat pola (jaring terakhir kalau tulis ulang tetap melanggar).
 function buangKalimat(teks, re) {
   return teks.split('\n').map((b) => b.split(/(?<=[.!?])\s+/).filter((k) => !re.test(k)).join(' ')).join('\n')
@@ -995,9 +1034,10 @@ async function panggil(endpoint, history, message, leadContext) {
         if (RE_MINTA_ULANG.test(isiKlien(teks))) teks = buangKalimat(teks, RE_MINTA_ULANG);
       }
       if (durasiDuaJalan(teks, message)) {
-        console.log(`[durasi-7 ${endpoint.model}] 7 jam tanpa opsi paket 8 jam — minta tulis ulang: ${teks.slice(0, 80)}`);
-        const ulang = await tulisUlang('klien butuh 7 jam, yang tidak ada di tabel. Sebut DUA jalan sesuai FAQ "Extend & durasi di atas 8 jam": paket 6 jam + extend 1 jam, ' +
-          'atau paket 8 jam, masing-masing dengan harga dari tabel FAQ. Jangan menghitung angka lain.');
+        console.log(`[durasi ${endpoint.model}] ${jamDiminta(message)} jam tanpa opsi paket kedua — minta tulis ulang: ${teks.slice(0, 80)}`);
+        const ulang = await tulisUlang(jamDiminta(message) === 7
+          ? 'klien butuh 7 jam, yang tidak ada di tabel. Sebut DUA jalan sesuai FAQ "Extend & durasi di atas 8 jam": paket 6 jam + extend 1 jam, atau paket 8 jam, masing-masing dengan harga dari tabel FAQ. Jangan menghitung angka lain.'
+          : `klien butuh ${jamDiminta(message)} jam. Sebut DUA jalan sesuai FAQ: paket 8 jam + extend per jam, ATAU paket 13 jam Rp 7.500.000 (format 2R). Jangan menghitung angka lain.`);
         if (ulang && !bocorPikiran(ulang) && !hargaAsing(ulang, sumberHarga).length) teks = ulang;
       }
       if (RE_AJAK_GRUP.test(String(message)) && !/\[(INFO_ADMIN|ADMIN_HANDOFF|SULIT)/i.test(teks)) {
@@ -1364,4 +1404,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { kalimatHermes, pakaiHermes, RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { susunHermes, kalimatHermes, pakaiHermes, RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };

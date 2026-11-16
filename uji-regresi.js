@@ -69,6 +69,8 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.ok(ai.durasiDuaJalan('Bisa pakai paket 6 jam ditambah extend 1 jam, totalnya Rp 4.500.000.', 'acara 7 jam'));
     assert.ok(!ai.durasiDuaJalan('Bisa 6 jam + extend 1 jam (Rp 4.500.000) atau paket 8 jam Rp 5.000.000.', 'acara 7 jam'));
     assert.ok(!ai.durasiDuaJalan('Paket 6 jam Rp 4.000.000.', 'kalau 6 jam berapa?'));
+    assert.ok(ai.durasiDuaJalan('12 jam 7 juta kak, paket 8 jam 5 juta + extend 4 jam', 'butuh 12 jam kak'), '12 jam tanpa paket 13 jam');
+    assert.ok(!ai.durasiDuaJalan('8 jam + extend 4 jam, atau paket 13 jam Rp 7.500.000', 'butuh 12 jam'));
     assert.ok(!ai.masalahGaya('Halo Kak Jasmin! Buat 7 jam bisa 6 jam Rp 4.000.000 + extend 1 jam Rp 500.000, atau paket 8 jam Rp 5.000.000.', true, 'Durasi: 7 jam').some((m) => /SATU angka/.test(m)));
   });
   await kasus('wajib Hermes: Hermes mati → error bertanda hermes, TIDAK jatuh ke jalur lama (Rama 16 Nov)', async () => {
