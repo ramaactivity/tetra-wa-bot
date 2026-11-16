@@ -38,6 +38,21 @@ function konteksTamu(jid) {
     'Kalau ada kode promo di atas, itu milik nomor ini; sebut saat bahas harga/booking, jangan janjikan lebih dari hadiahnya dan sebut batas berlakunya. ' +
     'Begitu dia siap booking, kirim link booking di atas (kode promonya sudah terisi otomatis). Admin bisa menolak bukti promo belakangan, jadi jangan bilang promonya pasti.';
 }
+// Usulan CS Mintet 67 (Rama 16 Nov "go ahead"): kalimat oper ke owner/tim yang baku dikirim SEKALI per kontak. Dulu rute kata kunci
+// mengirim kalimat identik tiap hari (…1927 panitia kampus 13, 14, 15 Nov) tanpa menyinggung proposal yang dia kirim.
+const KALIMAT_KEMITRAAN = 'Soal kerja sama ini biasanya langsung dibahas sama owner kami, Kak. Aku sampaikan dulu ya, nanti dibalas di sini.';
+const KALIMAT_PRODUK_KHUSUS = 'Yang itu di luar paket unlimited biasa Kak, jadi harga sama jadwalnya beda. Aku tanyain ke tim dulu ya, nanti aku kabarin di sini.';
+const sudahDikirim = (riwayat, kalimat) => riwayat.some((p) => p.role === 'assistant' && String(p.content).includes(kalimat));
+function konteksHandoffLama(jid) {
+  const riw = getRiwayat(jid);
+  const kal = [KALIMAT_KEMITRAAN, KALIMAT_PRODUK_KHUSUS].filter((k) => sudahDikirim(riw, k));
+  if (!kal.length) return '';
+  return `\nSUDAH DITERUSKAN SEBELUMNYA: permintaan klien ini sudah pernah kamu oper ke owner/tim dengan kalimat "${kal.join('" dan "')}". ` +
+    'JANGAN ulang kalimat itu. Akui hal baru yang dia kirim atau tanyakan (proposal, penawaran, pertanyaan lanjutan) dengan menyebut isinya, ' +
+    'bilang masih di meja owner/admin tanpa menjanjikan waktu, lalu satu pertanyaan praktis kalau perlu (mis. tanggal acara, siapa PIC). ' +
+    'Tambahkan [INFO_ADMIN: klien menanyakan lagi soal <topik>].';
+}
+
 function konteksKlienLama(jid) {
   const k = klienLamaCtx.get(jid);
   if (!k) return '';
@@ -768,9 +783,8 @@ function registerMessageHandler(sock) {
       if (!lead && (galeri.RE_MINTA.test(t) || Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS) &&
           !/invoice|kwitansi|nota|bayar|pelunasan|reschedule/i.test(t) && await layaniGaleri(sock, msg, keys, originalText)) return;
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
-      if (!vendor && !lead && isKemitraan(t)) {
-        await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise',
-          'Soal kerja sama ini biasanya langsung dibahas sama owner kami, Kak. Aku sampaikan dulu ya, nanti dibalas di sini.', originalText);
+      if (!vendor && !lead && isKemitraan(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_KEMITRAAN)) {
+        await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise', KALIMAT_KEMITRAAN, originalText);
         return;
       }
 
@@ -780,9 +794,8 @@ function registerMessageHandler(sock) {
       // tanya softfile/harga 6 jam (…9512 menunggu admin 25 jam, …2152 tak terjawab) dan ke klien yang tanya rekening.
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
-      if (!lead && isSpecialProduct(t)) {
-        await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)',
-          'Yang itu di luar paket unlimited biasa Kak, jadi harga sama jadwalnya beda. Aku tanyain ke tim dulu ya, nanti aku kabarin di sini.', originalText);
+      if (!lead && isSpecialProduct(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_PRODUK_KHUSUS)) {
+        await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)', KALIMAT_PRODUK_KHUSUS, originalText);
         return;
       }
 
@@ -816,7 +829,7 @@ function registerMessageHandler(sock) {
       const kBooking = lead || vendor ? '' : await klienBooking.konteks(phoneDigits(msg));
       const kProfil = await profilKlien(jid, originalText);
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
+        kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksHandoffLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
@@ -855,7 +868,7 @@ function registerMessageHandler(sock) {
       if (RE_KLAIM.test(aiResponse)) {
         console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
         const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking +
+          kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksHandoffLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking +
           `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
           'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
           .catch(() => '');
@@ -1081,4 +1094,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _adminMasihPegang: adminMasihPegang, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { _sudahDikirim: sudahDikirim, _KALIMAT_KEMITRAAN: KALIMAT_KEMITRAAN, registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _adminMasihPegang: adminMasihPegang, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };

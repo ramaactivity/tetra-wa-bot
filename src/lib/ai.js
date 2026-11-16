@@ -488,6 +488,29 @@ function basaBasi(isi, pesanKlien = '') {
 function pesanTerakhir(messages) {
   return String([...messages].reverse().find((m) => m.role === 'user')?.content || '').slice(-1500);
 }
+// Usulan CS Mintet 72 (Rama 16 Nov "go ahead"): status tanggal ("masih available") hanya boleh dari hasil alat jadwal di giliran
+// ini. 15 Nov …1015 dan 12 Nov …4133 dapat "masih available" tanpa alat dipanggil.
+const RE_KLAIM_TERSEDIA = /\bmasih\s+(?:available|tersedia|kosong|free|bisa dilayani|bisa kami layani)\b|\b(?:tanggal|jadwal)(?:nya)?\s+(?:itu\s+|tersebut\s+|ini\s+)?(?:masih\s+)?(?:aman|kosong|available|tersedia)\b/i;
+// Usulan 65 & 70: bot tidak ikut grup WA/rapat/tech meeting dan tidak hadir di lokasi; koordinasi lapangan kerja admin
+// (…6996: "Nanti di grup aku koordinasikan langsung sama WO-nya…", "koordinasi teknis… via chat atau telepon").
+const RE_KOORDINASI_LAPANGAN = /\b(?:aku|kami|tim kami|crew kami|tim tetra)\b[^.?!\n]{0,40}\b(?:koordinasi(?:kan)?|hadir|datang|gabung|ikut)\b[^.?!\n]{0,60}\b(?:grup|group|tech(?:nical)?\s*meeting|rapat|meeting|tm)\b|\bdi grup\b[^.?!\n]{0,20}\baku\s+koordinasi|\bkoordinasi teknis\b[^.?!\n]{0,40}\b(?:via|lewat)\s+(?:chat|telepon|telpon|wa|whatsapp)\b/i;
+// Usulan 62: klien tanya satu hal singkat → penutup pertanyaan pilihan/jualan ("Mau tetap 2 jam atau lanjut 3 jam?") membuat
+// klien berhenti (…3958 Maira, …5611, …7846 Said). Mengembalikan kalimat penutup yang bermasalah, '' kalau aman.
+function penutupJualan(teks, pesanKlien = '') {
+  const klien = String(pesanKlien || '').trim();
+  if (!klien || klien.length > 120 || !/\?|\b(berapa|apa|apakah|bisa|ada|gimana|bagaimana|termasuk)\b/i.test(klien)) return '';
+  const akhir = (isiKlien(teks).trim().split(/\n+/).filter(Boolean).at(-1) || '').trim();
+  if (!/\?\s*$/.test(akhir) || !/\batau\b/i.test(akhir)) return '';
+  return /\b(jam|paket|durasi|frame|backdrop|warna|ambil|pakai|lanjut|format|2r|4r|polaroid)\b/i.test(akhir) ? akhir : '';
+}
+// Usulan 65/70: ajakan masuk grup WA bersama WO/venue atau undangan tech meeting = urusan admin; admin wajib tahu walau bot menjawab.
+const RE_AJAK_GRUP = /\b(?:tambah\w*|masuk\w*|add|undang\w*|gabung|ikut\w*)\b[^.?!\n]{0,40}\b(?:grup|group|tech(?:nical)?\s*meeting|rapat|meeting)\b|\btech(?:nical)?\s*meeting\b/i;
+// Buang kalimat yang memuat pola (jaring terakhir kalau tulis ulang tetap melanggar).
+function buangKalimat(teks, re) {
+  return teks.split('\n').map((b) => b.split(/(?<=[.!?])\s+/).filter((k) => !re.test(k)).join(' ')).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function masalahGaya(teks, pertama = false, pesanKlien = '') {
   const isi = isiKlien(teks);
   const t = normal(isi);
@@ -520,6 +543,11 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   if (/\[KIRIM:\s*format\]/i.test(teks) && new Set((isi.match(/\b(2R|4R|polaroid)\b/gi) || []).map((x) => x.toLowerCase())).size >= 2 && isi.length > 250)
     out.push('ilustrasi format sudah dilampirkan: jangan jelaskan tiap format di teks, cukup pengantar singkat + satu pertanyaan');
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
+  if (RE_KOORDINASI_LAPANGAN.test(isi)) out.push('kamu tidak ikut grup WA, rapat, atau tech meeting dan tidak hadir di lokasi: jangan menjanjikan koordinasi/kehadiran ' +
+    'dan jangan menjelaskan proses internal. Jawab satu baris bahwa ajakan/undangannya diteruskan ke admin, lalu tambahkan [INFO_ADMIN: <ajakan klien>]');
+  const penutup = penutupJualan(teks, pesanKlien);
+  if (penutup) out.push(`penutup "${penutup}" adalah pertanyaan pilihan/jualan padahal klien baru tanya satu hal: jawab yang dia tanya lalu berhenti ` +
+    '(boleh tanpa pertanyaan; kalau memang perlu bertanya, hanya tanggal/lokasi yang belum diketahui)');
   // Kecuali KONTAK PERTAMA (Rama 28 Okt "terlalu ngegas"; data 99 kontak pertama: >400 karakter dibalas 41% vs <400 87%,
   // >=2 angka harga 33%): pesan pertama dipaksa ringkas.
   if (pertama && isi.length > 420) out.push(`pesan pertama ke orang baru terlalu panjang (${isi.length} karakter): ringkas jadi 2–4 kalimat (maks ±350 karakter), jawab yang dia tanya saja, buang daftar isi paket, saran naik durasi/paket, dan catatan tambahan; sisakan satu pertanyaan ringan`);
@@ -774,6 +802,7 @@ async function panggil(endpoint, history, message, leadContext) {
   // Maksimal dua putaran: model minta data jadwal -> kita jawab -> model menulis
   // balasan final. Dibatasi supaya satu pesan pelanggan tidak pernah berubah
   // jadi rantai panggilan tak berujung.
+  let jadwalTersedia = false; // usulan 72: true hanya kalau alat jadwal di giliran ini bilang tanggal/jam itu kosong
   for (let putaran = 0; putaran < 2; putaran++) {
     const msg = await kirim(endpoint, messages);
     const panggilanAlat = msg.tool_calls || [];
@@ -851,6 +880,13 @@ async function panggil(endpoint, history, message, leadContext) {
           return '[ADMIN_HANDOFF]';
         }
       }
+      if (!jadwalTersedia && RE_KLAIM_TERSEDIA.test(isiKlien(teks))) {
+        console.log(`[jadwal ${endpoint.model}] klaim tanggal tersedia tanpa hasil alat jadwal — minta tulis ulang: ${teks.slice(0, 100)}`);
+        const ulang = await tulisUlang('kamu menyebut tanggal/jadwal masih tersedia/aman, padahal alat cek_ketersediaan tidak dipanggil atau tidak memastikannya di giliran ini. ' +
+          'Jangan menulis status tanggal sama sekali. Kalau tanggalnya sudah disebut, bilang tanggalnya dicatat dan admin yang konfirmasi jadwalnya, lalu tambahkan [INFO_ADMIN: cek jadwal tanggal yang diminta klien]. Isi lain tetap.');
+        teks = ulang && !bocorPikiran(ulang) ? ulang : teks;
+        if (RE_KLAIM_TERSEDIA.test(isiKlien(teks))) teks = buangKalimat(teks, RE_KLAIM_TERSEDIA);
+      }
       if (RE_JANJI_TEMU.test(isiKlien(teks))) {
         console.log(`[janji-temu ${endpoint.model}] lokasi kantor/janji temu sepihak — minta tulis ulang: ${teks.slice(0, 80)}`);
         teks = await tulisUlang('jangan membagikan alamat/lokasi kantor dan jangan menyanggupi atau menjanjikan janji temu, kunjungan, ' +
@@ -883,8 +919,13 @@ async function panggil(endpoint, history, message, leadContext) {
         console.log(`[janji ${endpoint.model}] janji ke admin tanpa penanda — INFO_ADMIN ditambahkan: ${teks.slice(0, 80)}`);
         teks += `\n[INFO_ADMIN: klien menunggu jawaban admin soal "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 80)}"]`;
       }
+      if (RE_AJAK_GRUP.test(String(message)) && !/\[(INFO_ADMIN|ADMIN_HANDOFF|SULIT)/i.test(teks)) {
+        console.log(`[grup ${endpoint.model}] ajakan grup/tech meeting — INFO_ADMIN ditambahkan`);
+        teks += `\n[INFO_ADMIN: klien mengajak tim Tetra ke grup WA / pertemuan: "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 100)}"]`;
+      }
       if (v2 && endpoint.model === PRIMARY.model && Date.now() - mulai < BATAS - 100000 && isiKlien(teks)) {
         teks = await periksa(endpoint, messages, teks, sumberHarga, /KONTAK PERTAMA/.test(leadContext || ''), mulai, BATAS);
+        if (!jadwalTersedia && RE_KLAIM_TERSEDIA.test(isiKlien(teks))) teks = buangKalimat(teks, RE_KLAIM_TERSEDIA);
       }
       return teks.replace(/^\(admin\)\s*/i, ''); // jangan pernah menyamar jadi pesan admin di riwayat
     }
@@ -928,6 +969,7 @@ async function panggil(endpoint, history, message, leadContext) {
                 'Tambahkan [INFO_ADMIN: klien minta ' + sehari.units_requested + ' unit, sisa ' + sehari.units_free + '].',
             });
           } else if (sehari.available) {
+            jadwalTersedia = true;
             hasil = JSON.stringify({
               status: 'tanggal_masih_tersedia',
               tanggal: arg.date,
@@ -954,6 +996,7 @@ async function panggil(endpoint, history, message, leadContext) {
           const data = await checkAvailability(arg);
           // Minta >1 unit tapi sisa kurang: admin perlu tahu (Tetra cuma punya 3).
           const kurangUnit = data && !data.available && data.units_free > 0;
+          if (data?.available) jadwalTersedia = true;
           hasil = data
             ? JSON.stringify(kurangUnit ? {
                 ...data,
@@ -1203,4 +1246,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };

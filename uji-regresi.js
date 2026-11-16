@@ -24,6 +24,30 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
 
 (async () => {
   // ── Deterministik (tanpa AI) ───────────────────────────────────────────────
+  await kasus('usulan 72: klaim "masih available" dikenali, kalimat biasa tidak (…1015, …4133)', () => {
+    for (const t of ['Tanggal 2 Desember masih available nih Kak Yessi.', 'Untuk 26 Desember masih available ya Kak.', 'Tanggal itu masih kosong seharian.', 'jadwalnya aman kok'])
+      assert.ok(ai.RE_KLAIM_TERSEDIA.test(t), t);
+    for (const t of ['Kalau tanggalnya sudah fix kabari ya Kak.', 'Desainnya masih bisa custom kok.', 'Masih ada yang mau ditanyain Kak?'])
+      assert.ok(!ai.RE_KLAIM_TERSEDIA.test(t), t);
+    assert.strictEqual(ai.buangKalimat('Tanggal 26 Desember masih available ya Kak. Acaranya mulai jam berapa?', ai.RE_KLAIM_TERSEDIA), 'Acaranya mulai jam berapa?');
+  });
+  await kasus('usulan 65 & 70: bot tidak mengaku ikut grup/tech meeting (…6996)', () => {
+    assert.ok(ai.masalahGaya('Boleh Kak, silakan tambahkan. Nanti di grup aku koordinasikan langsung sama WO-nya soal area photobooth, meja-kursi, dan akses loading.').some((m) => /grup WA/.test(m)));
+    assert.ok(ai.masalahGaya('Dari tim Tetra biasanya koordinasi teknis dikoordinasikan langsung via chat atau telepon dengan WO/PIC di lokasi.').some((m) => /grup WA/.test(m)));
+    for (const t of ['Kak izin tambahkan ke grup bareng WO ya🙏', 'kak tech meeting tgl 11 jam 2 di Sasono Mulyo ya', 'boleh undang adminnya ke grup vendor?'])
+      assert.ok(ai.RE_AJAK_GRUP.test(t), t);
+    assert.ok(!ai.RE_AJAK_GRUP.test('Kak frame-nya udah masuk belum?'));
+    assert.deepStrictEqual(ai.masalahGaya('Boleh Kak, undangannya aku teruskan ke admin ya.\n[INFO_ADMIN: klien mengajak ke grup WA bersama WO]'), []);
+  });
+  await kasus('usulan 62: tanya satu harga tidak ditutup pertanyaan pilihan (…3958 Maira, …7846 Said)', () => {
+    assert.ok(ai.masalahGaya('Untuk 2 jam harganya Rp 2.000.000 ya Kak.\n\nMau tetap ambil yang 2 jam atau lanjut yang 3 jam?', false, 'Kalau mau ambil yang 2 jam berapa yaa kira2?').some((m) => /penutup/.test(m)));
+    assert.deepStrictEqual(ai.masalahGaya('Iya betul Kak Said, bahan kain polos.', false, 'Oh, kain polos gt ya?'), []);
+    assert.strictEqual(ai.penutupJualan('Untuk 2 jam Rp 2.000.000 ya Kak.\nAcaranya tanggal berapa Kak?', 'berapa yang 2 jam?'), '');
+  });
+  await kasus('usulan 67: kalimat oper owner yang sama tidak dikirim dua kali (…1927 panitia kampus)', () => {
+    assert.ok(msgs._sudahDikirim([{ role: 'user', content: 'proposal sponsorship' }, { role: 'assistant', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
+    assert.ok(!msgs._sudahDikirim([{ role: 'user', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
+  });
   await kasus('form dobel dalam satu batch diproses sekali (…0933 Eva)', () => {
     const f = 'Halo Tetra Photobooth!\nNama: Eva\nTanggal: 7 November';
     assert.strictEqual(msgs._unikkan([pesan(f), pesan(f), pesan('kak?')]).length, 2);
