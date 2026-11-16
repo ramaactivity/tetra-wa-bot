@@ -10,10 +10,13 @@ const fe = require('./src/lib/followupEngine');
 
 const { tanpaAngka } = prospekWa;
 assert.strictEqual(tanpaAngka('Siap Kak, ini pricelistnya.'), 'Siap Kak, ini pricelistnya.');
+// Keputusan Rama: persen rekanan maksimal 10% (8 Okt) → kalimat dengan persen lain dibuang; harga publish rupiah boleh
+// disebut ke lead (22 Okt; kebenaran nominal dijaga penjaga harga ai.js). Uji lama (semua angka dihapus) basi sejak 22 Okt.
 let t = tanpaAngka('Ini pricelistnya Kak. Untuk rekanan diskon 15% ya.');
-assert(!/10/.test(t) && /harga khusus/.test(t), t);
-t = tanpaAngka('Paket 2 jam jadi Rp 1.800.000 untuk rekanan. Ada harga khusus rekanan yang bisa didiskusikan.');
-assert(!/1\.800/.test(t) && /harga khusus/.test(t), t);
+assert.strictEqual(t, 'Ini pricelistnya Kak.', t);
+assert.strictEqual(tanpaAngka('Rekanan dapat potongan 10% ya Kak.'), 'Rekanan dapat potongan 10% ya Kak.');
+t = tanpaAngka('Paket 2 jam Rp 2.000.000 ya Kak. Ada harga khusus rekanan yang bisa didiskusikan.');
+assert.strictEqual(t, 'Paket 2 jam Rp 2.000.000 ya Kak. Ada harga khusus rekanan yang bisa didiskusikan.', t);
 
 const J = fe._jenisProspek, H = 3600e3, D = 864e5;
 const now = Date.parse('2026-10-07T04:00:00Z'); // Rabu 11.00 WIB
@@ -26,10 +29,12 @@ assert.strictEqual(J([sapa, u('ok', now - 4 * D)], { n: 0 }, now), null, 'lewat 
 assert.strictEqual(J([sapa, u('Boleh PL', now - 6 * D), a('Ini Kak', now - 6 * D)], { n: 0 }, now), 'lanjut');
 assert.strictEqual(J([sapa, u('Boleh PL', now - 2 * D), a('Ini Kak', now - 2 * D)], { n: 0 }, now), null);
 assert.strictEqual(J([sapa, u('Boleh PL', now - 6 * D), a('Ini Kak', now - 6 * D)], { n: 1 }, now), null, 'fu2 baru hari kerja ke-7');
-assert.strictEqual(J([sapa, u('Boleh PL', now - 10 * D), a('Ini Kak', now - 10 * D)], { n: 1 }, now), 'lanjut');
+assert.strictEqual(J([sapa, u('Boleh PL', now - 10 * D), a('Ini Kak', now - 10 * D)], { n: 1 }, now), null, 'maks 1 susulan (Rama 22 Okt, paket perbaikan Bruno)');
 assert.strictEqual(J([sapa, u('Boleh PL', now - 30 * D), a('Ini Kak', now - 30 * D)], { n: 2 }, now), null, 'maks 2x');
 const oto = u('Terima kasih telah menghubungi Maxima. We will reply soon', now - 4 * D);
-assert.strictEqual(J([sapa, oto, a('Kami vendor photobooth, boleh minta kontak PIC?', now - 4 * D)], { n: 0 }, now), 'minta-pic');
+// Audit 22 Okt: balasan kita yang sudah meminta PIC tidak diikuti permintaan PIC kedua.
+assert.strictEqual(J([sapa, oto, a('Kami vendor photobooth, boleh minta kontak PIC?', now - 4 * D)], { n: 0 }, now), null, 'sudah minta PIC');
+assert.strictEqual(J([sapa, oto, a('Siap, makasih infonya ya', now - 4 * D)], { n: 0 }, now), 'minta-pic', 'belum pernah minta PIC');
 assert.strictEqual(J([sapa, oto, a('Kami vendor photobooth, boleh minta kontak PIC?', now - 4 * D)], { n: 1 }, now), null, 'auto-reply: maks 1x');
 assert.strictEqual(J([sapa, u('Boleh PL', now - 6 * D), a('(admin) siap kak', now - 6 * D)], { n: 0 }, now), null, 'dipegang admin');
 assert.strictEqual(J([sapa, u('maaf kami sudah ada vendor photobooth lain', now - H)], { n: 0 }, now), null, 'menolak');

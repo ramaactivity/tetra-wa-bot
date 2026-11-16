@@ -1,7 +1,15 @@
 // Uji alur handler pesan dengan dependensi palsu.
 // JALANKAN DI SALINAN REPO: store.js menulis data/riwayat.json.
+process.env.AI_OTAK = ''; // uji logika alur Node (jalur tanpa Hermes); kasus mode Hermes di bagian akhir
 const assert = require('assert');
 const path = require('path');
+// 16 Nov: uji ini MENULIS data/riwayat.json (store.js). Dijalankan di folder bot live, kontak palsu 628001/628002 masuk ke
+// riwayat klien asli. Tolak berjalan di folder live; pakai salinan: rsync -a --exclude node_modules --exclude auth_info
+// --exclude .git ~/tetra-wa-bot/ /tmp/wa-uji/ && ln -s ~/tetra-wa-bot/node_modules /tmp/wa-uji/ && cd /tmp/wa-uji && node uji-alur.js
+if (path.resolve(process.cwd()) === path.resolve(require('os').homedir(), 'tetra-wa-bot')) {
+  console.error('uji-alur menulis data/: jalankan di SALINAN repo (lihat komentar di atas), bukan di folder bot live.');
+  process.exit(2);
+}
 const { proto } = require('@whiskeysockets/baileys');
 const R = (p) => require.resolve(path.join(process.cwd(), p));
 
@@ -27,6 +35,9 @@ stub('src/lib/deliveryLog.js', { track: () => {} });
 stub('src/lib/notify.js', { notifyAdmin: async (s, f, rule, r, extra) => log.notif.push(`${rule.name}:${extra}`), kirimTelegram: async (t) => log.tg.push(t) });
 stub('src/lib/pricelist.js', { kirimPricelist: async () => log.kirim.push('[PL]'), mintaPricelist: (t) => /pricelist/i.test(t), ASSETS_DIR: '/tmp' });
 stub('src/lib/ai.js', {
+  // Fungsi yang ditambahkan sejak Okt–Nov (baca gambar, mode Hermes, profil V2): jalur tanpa Hermes di uji ini.
+  ekstrakGaleri: async () => ({}), kalimatHermes: async () => null, susunHermes: async () => null,
+  pakaiV2: () => false, perbaruiProfil: async () => null, pakaiHermes: () => false,
   getAIResponse: async (...a) => { if (aiJawab instanceof Error) throw aiJawab; return typeof aiJawab === 'function' ? aiJawab(...a) : aiJawab; },
   ringkasPercakapan: async (lama, pesan) => `RINGKAS ${pesan.length}`,
   ekstrakBooking: async () => ekstrak,
