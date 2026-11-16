@@ -371,7 +371,8 @@ async function kirimInvoice(raw) {
     return { ok: false, pesan: 'pdf_url tidak sah' };
   }
   if (nomor.length < 8 || nomor.length > 15) return { ok: false, pesan: `Nomor tidak wajar: "${p.nomor}"` };
-  if (!pesan || pesan.length > 1500) return { ok: false, pesan: 'pesan kosong / terlalu panjang' };
+  // pesan kosong = owner memilih "PDF saja" di Tetra Ops → hanya file yang dikirim.
+  if (pesan.length > 1500) return { ok: false, pesan: 'pesan terlalu panjang' };
   if (url.origin !== TETRA_OPS_ORIGIN) return { ok: false, pesan: `pdf_url bukan dari ${TETRA_OPS_ORIGIN}` };
   if (!currentSock || !isConnected) return { ok: false, pesan: 'socket belum siap' };
 
@@ -382,19 +383,23 @@ async function kirimInvoice(raw) {
   if (pdf.length > 10 * 1024 * 1024) return { ok: false, pesan: 'PDF > 10 MB' };
 
   const jid = `${nomor}@s.whatsapp.net`;
-  await currentSock.sendPresenceUpdate('composing', jid);
-  await delay(Math.min(8000, 2000 + pesan.length * 20));
-  await currentSock.sendPresenceUpdate('paused', jid);
-  const sentTeks = await currentSock.sendMessage(jid, { text: pesan });
-  rememberBotMsg(sentTeks);
-  deliveryLog.track(sentTeks, 'dokumen→customer');
-  await delay(1500);
+  let sentTeks = null;
+  if (pesan) {
+    await currentSock.sendPresenceUpdate('composing', jid);
+    await delay(Math.min(8000, 2000 + pesan.length * 20));
+    await currentSock.sendPresenceUpdate('paused', jid);
+    sentTeks = await currentSock.sendMessage(jid, { text: pesan });
+    rememberBotMsg(sentTeks);
+    deliveryLog.track(sentTeks, 'dokumen→customer');
+    await delay(1500);
+  }
   const sentPdf = await currentSock.sendMessage(jid, { document: pdf, fileName: namaFile, mimetype: 'application/pdf' });
   rememberBotMsg(sentPdf);
+  if (!sentTeks) deliveryLog.track(sentPdf, 'dokumen→customer');
   // Masuk riwayat supaya AI paham konteksnya kalau klien membalas pengingat ini.
-  store.tambahRiwayat(jid, 'assistant', `${pesan}\n[terlampir: ${namaFile}]`);
-  console.log(`🧾 Dokumen ${namaFile} + pesan terkirim ke ${nomor}`);
-  return { ok: true, pesan: `terkirim ke ${nomor} teks=${sentTeks?.key?.id} pdf=${sentPdf?.key?.id}` };
+  store.tambahRiwayat(jid, 'assistant', `${pesan ? `${pesan}\n` : ''}[terlampir: ${namaFile}]`);
+  console.log(`🧾 Dokumen ${namaFile}${pesan ? ' + pesan' : ' (PDF saja)'} terkirim ke ${nomor}`);
+  return { ok: true, pesan: `terkirim ke ${nomor}${sentTeks ? ` teks=${sentTeks.key?.id}` : ''} pdf=${sentPdf?.key?.id}` };
 }
 // Dari agent Sales (Bruno) lewat Tetra Ops prospek_kirim_wa: sapaan pertama ke
 // prospek. Format: send-text:{"nomor","pesan"}. Rem (kuota 15/hari, jam kerja,
