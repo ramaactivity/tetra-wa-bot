@@ -192,6 +192,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 ## Pembayaran
 - DP minimal Rp 500.000 untuk mengunci tanggal. Tanggal baru terkunci setelah DP diterima, bukan saat tanya-jawab.
 - Pelunasan paling lambat H-1 sebelum acara. Kalau klien belum bisa di H-1, jangan kaku: minta berkabar dulu, admin yang konfirmasi (Rama: "biasanya kita di H-1… kalau H-1 belum bisa gapapa berkabar aja yaa") + [INFO_ADMIN].
+- Rekening resmi untuk DP dan pelunasan: BCA 0954965224 a.n. Muhamad Ramadan Saputra. Klien minta nomor rekening (termasuk yang booking lewat dashboard) → berikan langsung di chat, jangan dioper ke admin.
 - Nota/kwitansi DP dan pelunasan (PDF) dikirim admin di chat setelah pembayaran dicek.
 - Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.
 - Bayar di hari H atau setelah acara: BISA, tapi didiskusikan dengan admin dulu [INFO_ADMIN]. Usahakan tetap H-1, paling lambat hari H (sebagian klien lebih tenang membayar setelah tim Tetra pasti datang). Setelah acara biasanya karena birokrasi/mekanisme keuangan perusahaan; jawabannya bisa, admin yang atur (Rama 11 Nov).

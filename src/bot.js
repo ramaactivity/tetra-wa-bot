@@ -346,10 +346,10 @@ async function startBot() {
 // lalu PDF untuk yang mau lihat lengkapnya. Ubah kalimatnya di sini. Semua
 // berkas wajib berada di dalam folder assets/.
 const GAMBAR_RINGKAS = 'UNLIMITED PHOTOBOOTH.jpg';
-const CAPTION_GAMBAR = 'Ini paket unlimited cetak ya kak, harganya sudah all-in.';
+const CAPTION_GAMBAR = ''; // 16 Nov: tanpa kalimat bawaan ("sudah all-in" frasa terlarang Rama; wajib Hermes)
 
 const DEFAULT_PDF = 'PRICELIST TETRA PHOTOBOOTH.pdf';
-const CAPTION_PDF = 'Kalau mau cek lengkapnya, ada di pricelist ini kak.';
+const CAPTION_PDF = '';
 
 // PDF invoice hanya boleh diunduh dari tetra-ops: baris bot_commands bisa disisipkan
 // siapa pun yang punya akses Supabase, jadi URL asing ditolak.

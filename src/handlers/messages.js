@@ -294,14 +294,35 @@ async function layaniGaleri(sock, msg, keys, teks, gambar, sudahDibaca = null) {
     galeri.ditanya.delete(jid);
     galeri.tanyaTanggal.delete(jid);
     await handoff(sock, msg, `Minta foto/softfile acara: ${k.alasan}`,
-      'Bentar ya Kak, link galerinya aku tanyain ke admin dulu. Nanti aku kabarin di sini 🙏', teks);
+      wajibHermes()
+        ? await aiLib.kalimatHermes('Klien minta foto/softfile acaranya, tapi link galerinya belum bisa dikirim otomatis; sudah diteruskan ke admin untuk dicarikan.',
+          { history: getRiwayat(jid), pesanKlien: teks })
+        : 'Bentar ya Kak, link galerinya aku tanyain ke admin dulu. Nanti aku kabarin di sini 🙏', teks);
     return true;
   }
   if (k.aksi === 'tanya') galeri.ditanya.set(jid, Date.now()); else galeri.ditanya.delete(jid);
   if (k.tanggal) galeri.tanyaTanggal.set(jid, Date.now()); else if (k.aksi !== 'tanya') galeri.tanyaTanggal.delete(jid);
+  let kirimTeks = k.teks;
+  if (wajibHermes()) {
+    const e = k.acara || {};
+    const situasi = k.aksi === 'kirim'
+      ? `Klien/tamu minta foto acara "${e.judul}". Link galerinya ketemu dan ditempel sistem tepat sesudah pesanmu. ` +
+        (e.jumlah ? 'Fotonya sudah bisa diunduh. ' : 'Fotonya masih proses upload, kalau belum muncul buka lagi agak nanti. ') +
+        (e.sampai ? `Link aktif sampai ${e.sampai}. ` : '') + 'Minta maaf singkat karena dia jadi repot mencari.'
+      : k.tanggal
+        ? 'Klien minta foto acara tapi galerinya belum ketemu dari namanya. Tanyakan tanggal acaranya (nama di sistem kadang beda ejaan).'
+        : 'Klien minta foto acara. Tanyakan acara siapa dan tanggal berapa; boleh juga dia kirim foto cetakannya supaya linknya dicarikan.';
+    const t = await aiLib.kalimatHermes(situasi, { history: getRiwayat(jid), pesanKlien: teks });
+    if (k.aksi === 'kirim') kirimTeks = t ? `${t}\n${e.url}` : e.url;
+    else if (t) kirimTeks = t;
+    else {
+      await handoff(sock, msg, 'Minta foto/softfile acara (Hermes gagal menulis pertanyaan)', null, teks);
+      return true;
+    }
+  }
   tambahRiwayat(jid, 'user', teks);
-  tambahRiwayat(jid, 'assistant', k.teks);
-  await sendReply(sock, jid, keys, { name: `galeri-${k.aksi}` }, k.teks);
+  tambahRiwayat(jid, 'assistant', kirimTeks);
+  await sendReply(sock, jid, keys, { name: `galeri-${k.aksi}` }, kirimTeks);
   return true;
 }
 
@@ -520,7 +541,8 @@ function registerMessageHandler(sock) {
     await perbaruiBooking(jid, null, false);
     // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
     // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
-    await booking.kirimTeks(sock, jid, b.lengkap ? pembuka : booking.teksForm(b, pembuka), 'form-booking→customer');
+    const teksAwal = b.lengkap ? pembuka : booking.teksForm(b, pembuka);
+    if (teksAwal) await booking.kirimTeks(sock, jid, teksAwal, 'form-booking→customer');
     // Form menanyakan ukuran frame & backdrop → ilustrasi format + pilihan backdrop basic wajib ikut (Rama 11 Nov); yang sudah pernah dikirim dilewati.
     const ilustrasiForm = [!b.data.ukuran_frame && 'format', !b.data.backdrop && 'backdrop'].filter(Boolean);
     if (!b.lengkap && ilustrasiForm.length) await kirimLampiran(sock, jid, ilustrasiForm, 'form-booking→customer').catch((e) => console.error('[booking] ilustrasi form:', e.message));
@@ -735,7 +757,14 @@ function registerMessageHandler(sock) {
       // transfer) hanya admin yang boleh menilai. 24 Sep bot sempat bilang
       // "DP sudah masuk" padahal tidak bisa melihat gambar maupun rekening.
       if (t.trim() === '[kirim voice note]') {
-        const minta = 'Maaf Kak, voice note belum bisa aku putar di sini. Boleh diketik aja?';
+        const minta = wajibHermes()
+          ? await aiLib.kalimatHermes('Klien mengirim voice note. Sistem belum bisa memutar voice note; minta dia mengetik pesannya.', { history: getRiwayat(jid) })
+          : 'Maaf Kak, voice note belum bisa aku putar di sini. Boleh diketik aja?';
+        if (!minta) {
+          tambahRiwayat(jid, 'user', originalText);
+          await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), 'klien kirim voice note — Hermes gagal menulis balasan, mohon balas manual').catch(() => {});
+          return;
+        }
         tambahRiwayat(jid, 'user', originalText);
         tambahRiwayat(jid, 'assistant', minta);
         await sendReply(sock, jid, keys, { name: 'voice-note' }, minta);
@@ -767,15 +796,23 @@ function registerMessageHandler(sock) {
             const b = booking.get(jid);
             b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
             await perbaruiBooking(jid, null);
-            const ack = 'Oke Kak, udah masuk. Aku terusin ke tim ya.';
-            tambahRiwayat(jid, 'assistant', ack);
-            await sendReply(sock, jid, keys, { name: 'file-booking' }, ack);
+            const ack = wajibHermes()
+              ? await aiLib.kalimatHermes(`Klien mengirim ${soalBayar ? 'bukti bayar/pelunasan' : 'file/gambar'} di tahap booking. Sistem sudah meneruskannya ke tim untuk dicek. Jangan bilang pembayaran sudah diterima.`,
+                { history: getRiwayat(jid), pesanKlien: originalText })
+              : 'Oke Kak, udah masuk. Aku terusin ke tim ya.';
+            if (ack) {
+              tambahRiwayat(jid, 'assistant', ack);
+              await sendReply(sock, jid, keys, { name: 'file-booking' }, ack);
+            }
             await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), soalBayar
               ? 'bukti bayar/pelunasan dikirim klien di tahap booking (lihat pesan yang diteruskan) — cek mutasi'
               : 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
           } else {
             await mulaiBooking(jid, msg, 'bukti-transfer',
-              'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
+              wajibHermes()
+                ? await aiLib.kalimatHermes('Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. Form data acara dikirim sistem sesudah pesanmu.',
+                  { history: getRiwayat(jid), pesanKlien: originalText })
+                : 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
               'Bukti DP masuk — cek mutasi BCA, lalu input booking');
           }
           return;
@@ -884,7 +921,9 @@ function registerMessageHandler(sock) {
           .catch(() => '');
         const bersih = String(ulang).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
         perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || (RE_SOAL_BOOKING.test(originalText) ? `klien: "${originalText.slice(0, 150)}"` : undefined);
-        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih : (RE_SOAL_BOOKING.test(originalText) ? KALIMAT_AMAN : 'Siap Kak, aku bantu cek dulu ya, nanti aku kabari di chat ini.');
+        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih
+          : wajibHermes() ? '[ADMIN_HANDOFF]'
+          : (RE_SOAL_BOOKING.test(originalText) ? KALIMAT_AMAN : 'Siap Kak, aku bantu cek dulu ya, nanti aku kabari di chat ini.');
       }
 
       if (lead) aiResponse = prospekWa.tanpaAngka(aiResponse);
@@ -1060,8 +1099,10 @@ function registerMessageHandler(sock) {
         if (RE_STOP.test(teks)) {
           await supa.stopProspek(nomorProspek, teks).catch((e) => console.error(`[prospek] gagal STOP ${nomorProspek}:`, e.message));
           tambahRiwayat(jid, 'user', teks);
-          const ok = 'Siap Kak, nomor ini nggak akan kami hubungi lagi. Makasih ya 🙏';
-          const sent = await sock.sendMessage(jid, { text: ok }).catch(() => null);
+          const ok = wajibHermes()
+            ? await aiLib.kalimatHermes('Nomor ini minta berhenti dihubungi. Sistem sudah mencatatnya: nomor ini tidak akan dihubungi lagi oleh tim sales.', { pesanKlien: teks })
+            : 'Siap Kak, nomor ini nggak akan kami hubungi lagi. Makasih ya 🙏';
+          const sent = ok ? await sock.sendMessage(jid, { text: ok }).catch(() => null) : null;
           if (sent) { rememberBotMsg(sent); tambahRiwayat(jid, 'assistant', ok); }
           console.log(`[prospek] ${nomorProspek} membalas STOP → jangan_hubungi`);
           continue;

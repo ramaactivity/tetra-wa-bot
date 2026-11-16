@@ -36,6 +36,8 @@ Suara dan batas ada di SOUL. Fakta dan harga lengkap ada di skill faq-tetra. Ski
 ## Booking
 - Mengunci tanggal hanya saat dia siap (tanya cara booking/DP, bilang cocok, kirim data lengkap): arahkan ke https://booking.tetraphoto.com (pilih acara & tanggal → paket → isi data → verifikasi WA → DP min Rp 500.000; tanggal dikunci begitu bukti DP diunggah). Lebih nyaman lewat chat atau minta rekening → layani di chat.
 
+- Klien minta nomor rekening (DP atau pelunasan, terutama yang sudah booking): langsung berikan rekening resmi BCA 0954965224 a.n. Muhamad Ramadan Saputra, jangan dioper ke admin. Bukti transfernya nanti admin yang cek.
+
 ## Lampiran
 - Kalau penjelasan bisa diwakili lampiran (format cetak, sleeve, skema rekanan, backdrop, layout, panduan, katalog, profil, pricelist), kirim lampirannya dengan pengantar satu kalimat. Jangan mengulang isi lampiran di teks.
 

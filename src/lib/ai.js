@@ -174,14 +174,22 @@ const PRIMARY = {
 // Gagal/lewat batas waktu → jatuh ke jalur lama (PRIMARY), klien tetap dibalas.
 const HERMES = { hermes: true, model: 'hermes:cs-wa', timeout: Number(process.env.HERMES_CS_TIMEOUT_MS || 150000) };
 const pakaiHermes = () => process.env.AI_OTAK === 'hermes' && !!process.env.HERMES_CS_KEY;
-const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): sebelum menjawab, baca skill faq-tetra, cara-balas-wa, dan cs-mintet-pelajaran ' +
-  'dengan skill_view (contoh percakapan nyata ada di references/contoh.md skill cs-mintet-pelajaran; buka kalau situasinya butuh contoh). ' +
+// Pekerjaan AI di balik layar (ringkasan chat, baca data booking/quotation, nilai follow-up) juga lewat Hermes (Rama 16 Nov:
+// "full hanya hermes 100%"); wajib Hermes = tanpa cadangan model lain.
+const HERMES_TUGAS = { hermes: true, tugas: true, model: 'hermes:cs-wa', timeout: Number(process.env.HERMES_TUGAS_TIMEOUT_MS || 90000) };
+const epTugas = () => (pakaiHermes() ? HERMES_TUGAS : PRIMARY);
+const bolehCadangan = () => process.env.AI_OTAK !== 'hermes';
+const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): sebelum menjawab, WAJIB panggil skill_view untuk KETIGA skill ini, jangan ada yang dilewati: ' +
+  '(1) faq-tetra = fakta & harga resmi, (2) cara-balas-wa = prosedur & penanda sistem, (3) cs-mintet-pelajaran = pelajaran dari chat nyata ' +
+  '(contoh percakapan ada di references/contoh.md skill itu; buka kalau situasinya butuh contoh). ' +
   'Status tanggal hanya dari alat cek_ketersediaan. Pesan berawalan "(admin)" di riwayat = balasan admin manusia (keputusan resmi). ' +
   'Balas HANYA teks WhatsApp final untuk klien; penanda [..] di baris paling akhir. Pesan "KOREKSI SISTEM" dari sistem: ikuti, lalu tulis ulang pesan final saja.';
 async function kirimHermes(endpoint, messages) {
   const url = process.env.HERMES_CS_URL || 'http://127.0.0.1:8642/p/cs-wa/v1';
   const H = { Authorization: `Bearer ${process.env.HERMES_CS_KEY}`, 'Content-Type': 'application/json' };
-  const sys = messages[0]?.role === 'system' ? messages[0].content : '';
+  const sys = (endpoint.tugas ? 'TUGAS SISTEM (bukan pesan untuk klien): kerjakan persis sesuai instruksi dan format keluaran yang diminta; ' +
+    'jangan menulis kalimat untuk klien dan jangan membaca skill kecuali instruksi memintanya.\n\n' : '') +
+    (messages[0]?.role === 'system' ? messages[0].content : '');
   const percakapan = messages.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.tool_calls)
     .map((m) => ({ role: m.role, content: String(m.content || '') }));
   const akhir = percakapan.pop();
@@ -205,12 +213,41 @@ async function kirimHermes(endpoint, messages) {
   try {
     const ev = await (await fetch(`${url}/runs/${run_id}/events`, { headers: H, signal: AbortSignal.timeout(10000) })).text();
     jadwalTersedia = /cek_ketersediaan[\s\S]{0,400}?bisa_terima_booking\\*"\s*:\s*true/.test(ev);
+    if (!endpoint.tugas && !endpoint.situasi) {
+      const terlewat = ['faq-tetra', 'cara-balas-wa', 'cs-mintet-pelajaran'].filter((k) => !new RegExp(`"tool": "skill_view", "preview": "${k}`).test(ev));
+      if (terlewat.length) console.log(`[hermes] ${run_id} skill terlewat: ${terlewat.join(', ')}`);
+    }
   } catch (e) { console.log(`[hermes] event ${run_id} tidak terbaca: ${e.message}`); }
-  console.log(`[hermes] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}`);
+  console.log(`[hermes${endpoint.tugas ? '-tugas' : ''}] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}`);
   // Penanda lampiran dirapikan ke kunci satu kata ("[KIRIM: format cetak]" → "[KIRIM: format]") supaya semua penjaga
   // lampiran ikut menyala (uji 16 Nov: penjaga "jangan ulang ukuran" tidak menyala karena kuncinya dua kata).
   const content = String(st.output || '').replace(/\[KIRIM:\s*(\w+)[^\]]*\]/gi, '[KIRIM: $1]');
   return { content, tool_calls: [], jadwalTersedia };
+}
+
+// Kalimat untuk situasi sistem (bukti transfer masuk, voice note, link galeri, berhenti dihubungi, dst.) ditulis Hermes,
+// bukan teks tetap Node (Rama 16 Nov: "full hanya hermes 100%"). Node memberi situasi + fakta; data persis (link, isian
+// form) ditempel Node. Mengembalikan null kalau Hermes gagal/tidak dipakai — pemanggil yang memutuskan (wajib Hermes:
+// tanpa kalimat bawaan, admin dikabari).
+const HERMES_SITUASI = 'CARA KERJA (dari sistem bot WA Tetra): sistem meminta SATU pesan pendek (1–2 kalimat) untuk klien sesuai SITUASI ' +
+  'di bawah, dengan suaramu (SOUL). Baca skill hanya kalau butuh fakta. Jangan menambah janji atau klaim di luar situasi, ' +
+  'jangan menulis link, isian form, atau penanda [..] (sistem yang menempelkannya). Balas HANYA pesannya.';
+async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadContext = '' } = {}) {
+  if (process.env.AI_OTAK !== 'hermes' || !process.env.HERMES_CS_KEY) return null;
+  const messages = [
+    { role: 'system', content: HERMES_SITUASI + konteksWaktu() + (leadContext ? `\n\nKONTEKS:\n${leadContext}` : '') + `\n\nSITUASI DARI SISTEM: ${situasi}` },
+    ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
+    { role: 'user', content: pesanKlien || '(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)' },
+  ];
+  for (let coba = 1; coba <= 2; coba++) {
+    try {
+      const r = await kirimHermes({ ...HERMES, situasi: true }, messages);
+      const t = rapikanGaya(r.content, 0).replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+      if (t && !RE_KLAIM_AKSI.test(t) && !bocorPikiran(t) && !hargaAsing(t, SYSTEM_PROMPT_V2 + faq()).length) return t;
+      console.log(`[hermes-situasi] kalimat ditolak penjaga (percobaan ${coba}): ${t.slice(0, 100)}`);
+    } catch (e) { console.error(`[hermes-situasi] gagal (percobaan ${coba}): ${e.message}`); }
+  }
+  return null;
 }
 
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
@@ -716,6 +753,8 @@ Jawab HANYA JSON: {"lolos": true|false, "masalah": ["<masalah spesifik + cara me
 // Profil klien V2 yang berkembang per giliran (Rama 11 Nov: "setiap orang berbeda karakter dan kebutuhannya"). Disimpan di
 // catatan kontak (store.simpanProfil), dimuat di setiap giliran sebagai konteks internal; gagal → profil lama dipakai.
 async function perbaruiProfil(profilLama, history, pesan) {
+  // Mode Hermes: langkah profil terpisah (desain V2 Claude 11 Nov) tidak dipakai; agent cs-wa membaca klien dari riwayat sendiri.
+  if (pakaiHermes()) return null;
   const riwayat = history.slice(-16).map((m) => `${m.role === 'user' ? 'KLIEN' : 'TETRA'}: ${String(m.content).slice(0, 400)}`).join('\n');
   const prompt = `Perbarui PROFIL KLIEN (catatan internal tim CS, tidak dikirim ke klien) berdasarkan percakapan. Tulis ringkas, maks 12 baris, format "Label: isi", hanya yang terlihat dari chat (tulis "belum terlihat" kalau tidak ada; jangan menebak):
 Siapa: (pengantin/keluarga/HRD/panitia/WO/venue/tamu/lainnya)
@@ -1163,9 +1202,9 @@ async function ringkasPercakapan(ringkasanLama, pesan) {
     { role: 'user', content: `CATATAN LAMA:\n${ringkasanLama || '(belum ada)'}\n\nCHAT:\n${teks}` },
   ];
   try {
-    return ((await kirim(PRIMARY, messages, false)).content || '').trim();
+    return ((await kirim(epTugas(), messages, false)).content || '').trim();
   } catch (e) {
-    if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
+    if (!bolehCadangan() || !FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e;
     return ((await kirim(FALLBACK, messages, false)).content || '').trim();
   }
 }
@@ -1191,8 +1230,8 @@ async function ekstrakBooking(dataLama, pesan, field) {
   ];
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
   let raw;
-  try { raw = await ambil(PRIMARY); }
-  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  try { raw = await ambil(epTugas()); }
+  catch (e) { if (!bolehCadangan() || !FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return {};
   try { return JSON.parse(m[0]); } catch { return {}; }
@@ -1219,8 +1258,8 @@ async function ekstrakQuotation(pesan, ringkasan, namaAddon = []) {
   ];
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
   let raw;
-  try { raw = await ambil(PRIMARY); }
-  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  try { raw = await ambil(epTugas()); }
+  catch (e) { if (!bolehCadangan() || !FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('ekstrak quotation: tidak ada JSON');
   return JSON.parse(m[0]);
@@ -1250,8 +1289,8 @@ async function nilaiFollowup(transkrip, ringkasan) {
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
   try {
     let raw;
-    try { raw = await ambil(PRIMARY); }
-    catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+    try { raw = await ambil(epTugas()); }
+    catch (e) { if (!bolehCadangan() || !FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
     const j = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
     return { kirim: j.kirim === true, status: j.status || '?', alasan: j.alasan || '' };
   } catch (e) {
@@ -1284,10 +1323,10 @@ async function ekstrakGaleri(teks, gambarB64) {
   const ambil = async (ep) => (await kirim(ep, messages, false)).content || '';
   let raw;
   try { raw = await ambil(VISION); }
-  catch (e) { if (!FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
+  catch (e) { if (!bolehCadangan() || !FALLBACK.key || !process.env.AI_FALLBACK_BASE_URL) throw e; raw = await ambil(FALLBACK); }
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return {};
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { pakaiHermes, RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { kalimatHermes, pakaiHermes, RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
