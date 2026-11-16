@@ -41,7 +41,7 @@ const LAMPIRAN = {
 
 /** Kunci [KIRIM: x] yang dikenal (pricelist punya jalur sendiri lewat kirimPricelist). */
 function kunci(teks) {
-  return [...new Set([...String(teks || '').matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
+  return [...new Set([...String(teks || '').matchAll(/\[KIRIM:\s*(\w+)[^\]]*\]/gi)].map((m) => m[1].toLowerCase()))]
     .filter((k) => LAMPIRAN[k] || k === 'pricelist');
 }
 

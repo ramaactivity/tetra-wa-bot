@@ -19,14 +19,17 @@ async function notifyAdmin(sock, from, rule, riwayat, extra = '') {
     : rule?.name === 'PERUBAHAN'
     ? '✏️ *Permintaan PERUBAHAN booking — perlu persetujuan admin*\nBot TIDAK mengubah apa pun. Cek jadwal, ubah di Tetra Ops, lalu konfirmasi ke klien.'
     : '🔔 *Handoff ke Admin — Tetra Photobooth*';
+  // Kartu handoff (pola Meta Business Agent, riset 16 Nov): admin langsung tahu siapa, apa yang perlu diputuskan, dan
+  // obrolannya dalam label manusia (Klien/Bot/Admin), tanpa membaca log mentah [USER]/[ASSISTANT].
+  const label = (m) => (m.role === 'user' ? 'Klien' : /^\(admin\)/.test(String(m.content)) ? 'Admin' : 'Bot');
+  const bersih = (t) => String(t || '').replace(/^\(admin\)\s*/, '').replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+  const ringkasan = Array.isArray(riwayat)
+    ? riwayat.slice(-6).filter((m) => bersih(m.content)).map((m) => `${label(m)}: ${bersih(m.content).slice(0, 220)}`).join('\n')
+    : String(riwayat || '');
   let notif = `${judul}\n` +
-    `Pelanggan: wa.me/${num}\n` +
-    `${rule?.name === 'INFO' ? 'Perlu dijawab admin' : 'Alasan'}: ${extra}\n\n` +
-    `*Riwayat Chat (terakhir):*\n`;
-  
-  // Format riwayat (misalnya 3-5 pesan terakhir)
-  const ringkasan = Array.isArray(riwayat) ? riwayat.slice(-5).map(m => `[${m.role.toUpperCase()}] ${m.content}`).join('\n') : riwayat;
-  notif += ringkasan;
+    `Klien: wa.me/${num}\n` +
+    `${rule?.name === 'INFO' ? 'Perlu dijawab admin' : 'Perlu diputuskan'}: ${extra || '-'}\n\n` +
+    `*Obrolan terakhir:*\n${ringkasan}`;
 
   const sent = await sock.sendMessage(adminJid, { text: notif });
   rememberBotMsg(sent);

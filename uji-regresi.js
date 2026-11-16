@@ -69,6 +69,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.ok(ai.durasiDuaJalan('Bisa pakai paket 6 jam ditambah extend 1 jam, totalnya Rp 4.500.000.', 'acara 7 jam'));
     assert.ok(!ai.durasiDuaJalan('Bisa 6 jam + extend 1 jam (Rp 4.500.000) atau paket 8 jam Rp 5.000.000.', 'acara 7 jam'));
     assert.ok(!ai.durasiDuaJalan('Paket 6 jam Rp 4.000.000.', 'kalau 6 jam berapa?'));
+    assert.ok(!ai.masalahGaya('Halo Kak Jasmin! Buat 7 jam bisa 6 jam Rp 4.000.000 + extend 1 jam Rp 500.000, atau paket 8 jam Rp 5.000.000.', true, 'Durasi: 7 jam').some((m) => /SATU angka/.test(m)));
   });
   await kasus('usulan 67: kalimat oper owner yang sama tidak dikirim dua kali (…1927 panitia kampus)', () => {
     assert.ok(msgs._sudahDikirim([{ role: 'user', content: 'proposal sponsorship' }, { role: 'assistant', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
@@ -172,7 +173,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
   });
   await kasus('pertanyaan pindah ke baris baru; tanya format/backdrop → ilustrasi otomatis', () => {
     assert.strictEqual(ai.pisahPertanyaan('Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya. Lokasi acaranya di mana?'),
-      'Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya.\n\nLokasi acaranya di mana?');
+      'Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya.\nLokasi acaranya di mana?'); // 16 Nov: baris baru tanpa baris kosong (admin 1% paragraf berjarak)
     assert.strictEqual(ai.pisahPertanyaan('Siap Kak. Tanggal berapa?'), 'Siap Kak. Tanggal berapa?');
     const { lampiranOtomatis } = require('./src/lib/lampiran');
     assert.match(lampiranOtomatis('Dua hal yang perlu kami pastikan dulu: format cetaknya mau yang mana (2R photostrip, 4R, atau Polaroid), dan apakah pajak perlu dicantumkan di penawaran? Kalau perlu, harganya di-gross up 2,5%.'), /\[KIRIM: format\]/);

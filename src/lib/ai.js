@@ -169,6 +169,47 @@ const PRIMARY = {
 };
 // Uji bayangan (Rama setuju 10 Okt): model murah ikut menulis jawaban untuk chat yang sama, TIDAK dikirim, hanya dicatat
 // di data/bayangan.jsonl untuk dibandingkan seminggu. Kosongkan AI_SHADOW_MODEL untuk mematikan.
+// Otak Hermes (repo HERMES docs/OTAK-BOT-WA-KE-HERMES.md): profil cs-wa lewat Runs API. SOUL = docs/PERSONA-CS.md,
+// skill faq-tetra / cara-balas-wa / cs-mintet-pelajaran, alat jadwal MCP tetra-ops. Node tetap pipa WA + penjaga.
+// Gagal/lewat batas waktu → jatuh ke jalur lama (PRIMARY), klien tetap dibalas.
+const HERMES = { hermes: true, model: 'hermes:cs-wa', timeout: Number(process.env.HERMES_CS_TIMEOUT_MS || 150000) };
+const pakaiHermes = () => process.env.AI_OTAK === 'hermes' && !!process.env.HERMES_CS_KEY;
+const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): sebelum menjawab, baca skill faq-tetra, cara-balas-wa, dan cs-mintet-pelajaran ' +
+  'dengan skill_view (contoh percakapan nyata ada di references/contoh.md skill cs-mintet-pelajaran; buka kalau situasinya butuh contoh). ' +
+  'Status tanggal hanya dari alat cek_ketersediaan. Pesan berawalan "(admin)" di riwayat = balasan admin manusia (keputusan resmi). ' +
+  'Balas HANYA teks WhatsApp final untuk klien; penanda [..] di baris paling akhir. Pesan "KOREKSI SISTEM" dari sistem: ikuti, lalu tulis ulang pesan final saja.';
+async function kirimHermes(endpoint, messages) {
+  const url = process.env.HERMES_CS_URL || 'http://127.0.0.1:8642/p/cs-wa/v1';
+  const H = { Authorization: `Bearer ${process.env.HERMES_CS_KEY}`, 'Content-Type': 'application/json' };
+  const sys = messages[0]?.role === 'system' ? messages[0].content : '';
+  const percakapan = messages.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.tool_calls)
+    .map((m) => ({ role: m.role, content: String(m.content || '') }));
+  const akhir = percakapan.pop();
+  const r = await fetch(`${url}/runs`, { method: 'POST', headers: H, signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ instructions: sys, conversation_history: percakapan, input: akhir?.content || '' }) });
+  if (!r.ok) throw new Error(`hermes runs HTTP ${r.status} ${(await r.text()).slice(0, 160)}`);
+  const { run_id } = await r.json();
+  const batas = Date.now() + endpoint.timeout;
+  let st;
+  while (Date.now() < batas) {
+    await new Promise((ok) => setTimeout(ok, 2000));
+    st = await (await fetch(`${url}/runs/${run_id}`, { headers: H, signal: AbortSignal.timeout(15000) })).json();
+    if (!['started', 'running', 'queued', 'pending'].includes(st.status)) break;
+  }
+  if (st?.status !== 'completed') {
+    fetch(`${url}/runs/${run_id}/stop`, { method: 'POST', headers: H }).catch(() => {});
+    throw new Error(`hermes run ${run_id} ${st?.status || 'tanpa status'}`);
+  }
+  // Status tanggal hanya sah kalau alat jadwal Tetra Ops benar-benar mengembalikan "bisa terima booking" di run ini (usulan 72).
+  let jadwalTersedia = false;
+  try {
+    const ev = await (await fetch(`${url}/runs/${run_id}/events`, { headers: H, signal: AbortSignal.timeout(10000) })).text();
+    jadwalTersedia = /cek_ketersediaan[\s\S]{0,400}?bisa_terima_booking\\*"\s*:\s*true/.test(ev);
+  } catch (e) { console.log(`[hermes] event ${run_id} tidak terbaca: ${e.message}`); }
+  console.log(`[hermes] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}`);
+  return { content: String(st.output || ''), tool_calls: [], jadwalTersedia };
+}
+
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
 const SHADOW_FILE = path.join(__dirname, '..', '..', 'data', 'bayangan.jsonl');
 // Baca foto cetakan (galeri tamu) butuh model yang bisa melihat gambar. DeepSeek V4 Flash tidak bisa (uji 14 Okt:
@@ -345,7 +386,11 @@ HANDOFF — tulis SATU kalimat singkat yang menyebut hal spesifik yang kamu cek 
 // Saklar env AI_PROMPT_V2=1 (default mati). SYSTEM_PROMPT lama tetap dipakai penjaga (kata terlarang, bocor, harga).
 // Persona & aturan V2: satu sumber di docs/PERSONA-CS.md, dibaca juga oleh profil Hermes cs-wa (SOUL.md → symlink ke file ini)
 // supaya bot Node dan otak Hermes tidak punya dua salinan aturan yang menyimpang (rencana docs/OTAK-BOT-WA-KE-HERMES.md di repo HERMES).
-const SYSTEM_PROMPT_V2 = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'PERSONA-CS.md'), 'utf-8').trim();
+// 16 Nov (Rama: "kaku, kerasa AI… gunakan framework dan logic Hermes"): cara Hermes = SOUL berisi suara/kepribadian,
+// prosedur di skill. Jalur Node (cadangan) merakit keduanya sendiri; profil Hermes cs-wa memuat SOUL + skill cara-balas-wa.
+const bacaSkill = (f) => fs.readFileSync(f, 'utf-8').replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+const SYSTEM_PROMPT_V2 = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'PERSONA-CS.md'), 'utf-8').trim() + '\n\n' +
+  bacaSkill(path.join(__dirname, '..', '..', 'hermes-skills', 'cara-balas-wa', 'SKILL.md'));
 const pakaiV2 = () => process.env.AI_PROMPT_V2 === '1';
 
 // Model tidak punya jam. Tanpa ini dia menjawab "besok tanggal berapa?" -- yang
@@ -500,7 +545,8 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   // Kecuali KONTAK PERTAMA (Rama 28 Okt "terlalu ngegas"; data 99 kontak pertama: >400 karakter dibalas 41% vs <400 87%,
   // >=2 angka harga 33%): pesan pertama dipaksa ringkas.
   if (pertama && isi.length > 420) out.push(`pesan pertama ke orang baru terlalu panjang (${isi.length} karakter): ringkas jadi 2–4 kalimat (maks ±350 karakter), jawab yang dia tanya saja, buang daftar isi paket, saran naik durasi/paket, dan catatan tambahan; sisakan satu pertanyaan ringan`);
-  if (pertama && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pesan pertama cukup SATU angka harga (yang paling sesuai pertanyaannya)');
+  // Kecuali 7 jam (usulan 73: dua jalan wajib) — dulu aturan ini menghapus opsi paket 8 jam (uji Hermes 16 Nov, Jasmin).
+  if (pertama && !/\b7\s*jam\b/i.test(String(pesanKlien || '')) && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pesan pertama cukup SATU angka harga (yang paling sesuai pertanyaannya)');
   // Panjang sengaja TIDAK dicek (Rama 22 Okt: "panjang pendek tidak merepresentasikan kualitas"; data: 200–400
   // karakter dibalas 89%, <200 cuma 67%). Ukurannya tepat sasaran — dijaga lewat aturan prompt.
   return out;
@@ -624,7 +670,9 @@ function catatPemakaian(model, data, msg) {
   fs.appendFile(USAGE_FILE, JSON.stringify(baris) + '\n', () => {});
 }
 
-async function kirim({ url, key, model, effort, timeout }, messages, pakaiAlat = true) {
+async function kirim(endpoint, messages, pakaiAlat = true) {
+  if (endpoint.hermes) return kirimHermes(endpoint, messages);
+  const { url, key, model, effort, timeout } = endpoint;
   // V2 sedikit lebih bebas supaya tidak memilih kalimat aman yang sama terus (ukur di uji buta, env AI_V2_TEMPERATURE).
   const body = { model, messages, temperature: pakaiV2() ? Number(process.env.AI_V2_TEMPERATURE || 0.7) : 0.4, stream: false };
   if (effort) body.reasoning_effort = effort;
@@ -741,7 +789,9 @@ async function panggil(endpoint, history, message, leadContext) {
     ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
     : '';
   const messages = [
-    { role: 'system', content: v2
+    { role: 'system', content: endpoint.hermes
+      ? HERMES_CARA + strategi() + konteksWaktu() + konteksLead
+      : v2
       ? SYSTEM_PROMPT_V2 + strategi() + faq() + pelajaran(true) + contoh.gayaAdmin(message) + contoh.blokPrompt(message, history, leadContext) + konteksWaktu() + konteksLead
       : SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },
     ...history, // bentuk OpenAI: { role: 'user' | 'assistant', content }
@@ -754,13 +804,17 @@ async function panggil(endpoint, history, message, leadContext) {
   let jadwalTersedia = false; // usulan 72: true hanya kalau alat jadwal di giliran ini bilang tanggal/jam itu kosong
   for (let putaran = 0; putaran < 2; putaran++) {
     const msg = await kirim(endpoint, messages);
+    if (msg.jadwalTersedia) jadwalTersedia = true;
     const panggilanAlat = msg.tool_calls || [];
     if (!panggilanAlat.length) {
       let teks = (msg.content || '').trim();
       if (!teks) throw new Error('balasan kosong dari model');
       // Sumber harga diambil SEBELUM koreksi: balasan salah yang didorong ke messages tidak boleh ikut jadi "sumber"
       // (dulu nominal karangan yang diulang di tulis ulang jadi lolos).
-      const sumberHarga = messages.map((m) => m.content || '').join('\n');
+      // Jalur Hermes: FAQ, prosedur, dan pelajaran dibaca agent lewat skill (tidak ada di messages) — penjaga harga/link
+      // memakai sumber yang sama, kalau tidak jawaban benar ("6 jam Rp4.000.000") ditolak sebagai karangan (uji 16 Nov).
+      const sumberHarga = messages.map((m) => m.content || '').join('\n') +
+        (endpoint.hermes ? '\n' + SYSTEM_PROMPT_V2 + faq() + pelajaran(false) : '');
       if (bocorPikiran(teks)) {
         console.log(`[bocor ${endpoint.model}] pikiran model ikut di balasan — minta tulis ulang: ${teks.slice(0, 120)}`);
         messages.push({ role: 'assistant', content: teks }, { role: 'user', content:
@@ -1037,7 +1091,7 @@ function pisahPertanyaan(teks) {
   if (i < 0 || !/\?\s*$/.test(baris[i])) return teks;
   const m = baris[i].match(/^(.*[.!])\s+([A-Z][^.!?]*\?)\s*$/);
   if (!m || m[1].trim().length < 40) return teks;
-  baris.splice(i, 1, m[1].trim(), '', m[2].trim());
+  baris.splice(i, 1, m[1].trim(), m[2].trim());
   return baris.join('\n');
 }
 
@@ -1049,6 +1103,13 @@ async function jawabAI(history, message, leadContext) {
   if (cumaMenutup(history, message)) {
     console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
     return '[DIAM]';
+  }
+  if (pakaiHermes()) {
+    try { return await panggil(HERMES, history, message, leadContext); }
+    catch (e) {
+      console.error(`[hermes] gagal, pakai jalur lama: ${e.message}`);
+      alarmModel('hermes', `⚠️ Bot WA: otak Hermes (cs-wa) gagal (${e.message.slice(0, 160)}). Balasan sementara lewat jalur lama.`);
+    }
   }
   try {
     const jawab = await panggil(PRIMARY, history, message, leadContext);
@@ -1218,4 +1279,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { pakaiHermes, RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
