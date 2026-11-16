@@ -74,6 +74,8 @@ function lampiranOtomatis(teks) {
   const fmt = new Set((isi.match(/\b(2R|4R|photostrip|polaroid)\b/gi) || []).map((x) => x.toLowerCase().replace('photostrip', '2r')));
   if (ajak && fmt.size >= 2 && !/\[KIRIM:\s*format\]/i.test(t)) t += '\n[KIRIM: format]';
   if (/backdrop/i.test(isi) && /(warna|pilih|mau yang mana)[^.!\n]*\?|\?[^.!\n]*warna/i.test(isi) && !/custom|desain sendiri/i.test(isi) && !/\[KIRIM:\s*backdrop\]/i.test(t)) t += '\n[KIRIM: backdrop]';
+  // Usulan 64 (Rama 16 Nov): info backdrop basic gratis tanpa pertanyaan memilih tetap disertai contoh fotonya.
+  if (/backdrop basic/i.test(isi) && /compliment|free|gratis/i.test(isi) && !/custom|desain sendiri/i.test(isi) && !/\[KIRIM:\s*backdrop\]/i.test(t)) t += '\n[KIRIM: backdrop]';
   return t;
 }
 

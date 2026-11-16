@@ -44,6 +44,32 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.deepStrictEqual(ai.masalahGaya('Iya betul Kak Said, bahan kain polos.', false, 'Oh, kain polos gt ya?'), []);
     assert.strictEqual(ai.penutupJualan('Untuk 2 jam Rp 2.000.000 ya Kak.\nAcaranya tanggal berapa Kak?', 'berapa yang 2 jam?'), '');
   });
+  await kasus('usulan 61: harga durasi di tabel tidak dijawab "dipegang admin" (…2152 Sandra)', () => {
+    assert.ok(ai.masalahGaya('Yang ini datanya dipegang admin, Kak. Aku terusin dulu ya.', false, 'kalau 6 jam berapa ka udah dapet soft file ka?').some((m) => /tabel FAQ/.test(m)));
+    assert.ok(!ai.masalahGaya('Untuk 6 jam Rp 4.000.000 ya Kak, iya sudah dapat softfile-nya.', false, 'kalau 6 jam berapa ka udah dapet soft file ka?').some((m) => /tabel FAQ/.test(m)));
+  });
+  await kasus('usulan 64: info backdrop basic gratis tanpa pertanyaan memilih, contoh tetap terlampir (…6793 Yessi)', () => {
+    assert.ok(ai.masalahGaya('Untuk backdrop basic kain polos jadi compliment free dari kami ya Kak.\n\nKakak lebih condong ke yang mana?').some((m) => /pertanyaan memilih/.test(m)));
+    const ok = 'Silahkan Kak, berikut pilihan warna backdrop basic yang jadi compliment free dari kami ya.';
+    assert.ok(!ai.masalahGaya(ok).some((m) => /pertanyaan memilih/.test(m)));
+    assert.match(require('./src/lib/lampiran').lampiranOtomatis(ok), /\[KIRIM: backdrop\]/);
+    assert.ok(!ai.masalahGaya('Backdrop basic free dari kami, transport juga gratis Jabodetabek.\nMau pakai format cetak yang mana, Kak? 2R photostrip, 4R, atau Polaroid?').some((m) => /pertanyaan memilih/.test(m)));
+  });
+  await kasus('usulan 69: follow-up maks 2 kalimat + satu pertanyaan penutup (…0832 Nadila)', () => {
+    const { _bentukSalah } = require('./src/lib/followupEngine');
+    assert.ok(_bentukSalah('Buat resepsi wedding biasanya mulai pagi jam 10-11. Harga di pricelist itu sudah termasuk transport dan backdrop basic ya Kak, jadi tidak ada tambahan lagi.'));
+    assert.ok(!_bentukSalah('Kak Nadila, untuk resepsi di Bogor tanggal itu masih bisa kami bantu. Resepsinya rencana mulai jam berapa Kak?'));
+  });
+  await kasus('usulan 71: janji mengabari & minta kirim ulang dikenali (…5386)', () => {
+    for (const t of ['Nanti tim yang kabari jadwal dan biayanya ya Kak.', 'nanti aku kabarin lagi ya kak', 'Tim yang infoin ya Kak.']) assert.ok(ai.RE_JANJI_KABARI.test(t), t);
+    assert.ok(!ai.RE_JANJI_KABARI.test('Kabar baiknya softfile langsung bisa diunduh.'));
+    for (const t of ['Fotonya masih belum masuk ke sini Kak', 'boleh dikirim ulang Kak?']) assert.ok(ai.RE_MINTA_ULANG.test(t), t);
+  });
+  await kasus('usulan 73: 7 jam wajib dua jalan (6 jam + extend dan paket 8 jam) (…1015)', () => {
+    assert.ok(ai.durasiDuaJalan('Bisa pakai paket 6 jam ditambah extend 1 jam, totalnya Rp 4.500.000.', 'acara 7 jam'));
+    assert.ok(!ai.durasiDuaJalan('Bisa 6 jam + extend 1 jam (Rp 4.500.000) atau paket 8 jam Rp 5.000.000.', 'acara 7 jam'));
+    assert.ok(!ai.durasiDuaJalan('Paket 6 jam Rp 4.000.000.', 'kalau 6 jam berapa?'));
+  });
   await kasus('usulan 67: kalimat oper owner yang sama tidak dikirim dua kali (…1927 panitia kampus)', () => {
     assert.ok(msgs._sudahDikirim([{ role: 'user', content: 'proposal sponsorship' }, { role: 'assistant', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
     assert.ok(!msgs._sudahDikirim([{ role: 'user', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));

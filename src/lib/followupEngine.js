@@ -126,6 +126,12 @@ const RE_SOAL_BOOKING = /\bdp\b|booking|\bbook\b|transfer|rekening|cara\s+(pesan
 const RE_DESAK = /\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|potongan|diskon|harga\s+khusus/i;
 const TOPIK_TANYA = { tanggal: /tanggal|tgl|kapan/i, jam: /jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)/i,
   lokasi: /lokasi|venue|di\s?mana|daerah|kota/i, tamu: /tamu|undangan|berapa\s+orang/i, format: /2R|4R|polaroid|format/i };
+// Usulan 69: follow-up calon klien = maks 2 kalimat + satu pertanyaan penutup (…0832 Nadila: dua fakta lama tanpa pertanyaan, tidak dibalas).
+function bentukSalah(m) {
+  const t = String(m || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
+  return t.split(/(?<=[.!?])\s+/).filter(Boolean).length > 3 || !/\?\s*$/.test(t);
+}
+
 function ulangTanya(lama, baru) {
   const qBaru = (String(baru || '').match(/[^.!?\n]*\?/g) || []).join(' ');
   if (!lama || !qBaru) return false;
@@ -151,18 +157,19 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     `Sebelum menulis, baca TRANSKRIP dan FAKTA, tentukan dalam hati: dia sedang memutuskan apa, menunggu apa/siapa, seberapa hangat ` +
     `dan bagaimana nadanya. Pilih SATU langkah yang paling cocok untuk DIA — setiap klien beda, jangan pola yang sama:\n` +
     `- info praktis yang khas acaranya (tip yang berguna, bukan brosur);\n` +
-    `- jawab keraguan yang tersirat (diam setelah dapat harga = mungkin soal harga: tegaskan sudah all-in tanpa biaya tambahan, ` +
-    `buka pintu untuk patokan budget; paket/opsi yang lebih murah HANYA kalau dia pernah menyinggung budget atau mahal);\n` +
+    `- jawab keraguan yang tersirat (diam setelah dapat harga = mungkin soal harga: JANGAN ulang isi paket yang sudah dia terima ` +
+    `(transport, backdrop, unlimited, "sudah termasuk"); buka pintu untuk patokan budget; paket/opsi yang lebih murah HANYA kalau dia pernah menyinggung budget atau mahal);\n` +
     `- beri harga kalau dia pernah minta dan belum dapat angkanya;\n` +
-    `- yang memutuskan orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan, tanpa pertanyaan;\n` +
-    `- kantor/instansi/sekolah: tawarkan penawaran resmi untuk diajukan;\n` +
+    `- yang memutuskan orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan;\n` +
+    `- kantor/instansi/sekolah: tawarkan quotation untuk diajukan;\n` +
     `- berhenti di tahap booking: ringankan prosesnya (lewat chat juga bisa, aku bantu);\n` +
     `- beri jalan keluar yang sopan ("kalau belum butuh sekarang, santai aja");\n` +
     `- atau balas persis [DIAM] kalau tidak ada hal baru yang berguna untuknya.\n` +
     `Aturan:\n` +
     `- Isi harus BARU dibanding pesan Tetra sebelumnya. JANGAN ulang pertanyaan yang sudah dia lewati (lihat FAKTA); kalau info itu ` +
     `memang perlu, beri alasan yang menguntungkan dia atau bilang boleh menyusul.\n` +
-    `- Pertanyaan opsional. Kalau ada, satu saja dan bisa dijawab satu kata/angka atau pilihan A/B atas hal yang memang sedang dia timbang.\n` +
+    `- Usulan CS Mintet 69 (Rama 16 Nov): MAKSIMAL 2 kalimat berisi SATU fakta BARU yang belum pernah dikirim ke dia, lalu SATU pertanyaan penutup ` +
+    `yang paling gampang dijawab (mis. jam acara, warna backdrop yang dia sebut), bukan pertanyaan yang sudah dia lewati. Tidak ada fakta baru = [DIAM].\n` +
     `- JANGAN ajak DP/kunci/amankan tanggal, kirim link booking atau rekening, atau urgensi ("biar nggak bentrok", "keburu") ` +
     `kecuali dia sendiri sudah bertanya soal booking.\n` +
     `- JANGAN menyebut atau menawarkan potongan/diskon/harga khusus apa pun, walaupun dia tampak menimbang harga — itu hanya ` +
@@ -280,7 +287,7 @@ async function runFollowupCycle(sock) {
     }
     // Desakan booking tanpa diminta, atau mengulang pertanyaan yang dicuekin → tulis ulang sekali; masih → tidak dikirim.
     const salah = (m) => typeof m === 'string' && !/\[(DIAM|ADMIN_HANDOFF)\]/.test(m) &&
-      ((!tanyaBooking && RE_DESAK.test(m)) || ulangTanya(tanyaAkhir, m));
+      ((!tanyaBooking && RE_DESAK.test(m)) || ulangTanya(tanyaAkhir, m) || (!vendor && bentukSalah(m)));
     if (salah(msg)) {
       console.log(`[followup] tulis ulang ${jid} (desak/ulang tanya): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
       msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
@@ -508,4 +515,4 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
+module.exports = { _bentukSalah: bentukSalah, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };

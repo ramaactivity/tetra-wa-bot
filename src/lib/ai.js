@@ -505,6 +505,12 @@ function penutupJualan(teks, pesanKlien = '') {
 }
 // Usulan 65/70: ajakan masuk grup WA bersama WO/venue atau undangan tech meeting = urusan admin; admin wajib tahu walau bot menjawab.
 const RE_AJAK_GRUP = /\b(?:tambah\w*|masuk\w*|add|undang\w*|gabung|ikut\w*)\b[^.?!\n]{0,40}\b(?:grup|group|tech(?:nical)?\s*meeting|rapat|meeting)\b|\btech(?:nical)?\s*meeting\b/i;
+// Usulan 71: janji "nanti aku/tim kabari" cukup sekali per kontak (…5386: tiga kali dalam 5 menit), dan jangan bilang file klien
+// belum masuk / minta kirim ulang kalau filenya sudah ada atau sudah pernah diminta.
+const RE_JANJI_KABARI = /\b(?:nanti|ntar)\b[^.?!\n]{0,40}\b(?:aku|tim|admin|kami)\b[^.?!\n]{0,25}\b(?:kabar(?:i|in)|infoin|informasikan|hubungi)\b|\b(?:tim|admin)\s+(?:yang\s+)?(?:kabar(?:i|in)|infoin)\b/i;
+const RE_MINTA_ULANG = /\b(?:kirim(?:kan)?\s+ulang|dikirim\s+ulang|kirim\s+lagi|(?:belum|tidak|nggak|gak|ga)\s+masuk|belum\s+ke(?:kirim|terima))\b/i;
+// Usulan 73: durasi yang tidak ada di tabel (7 jam) wajib dua jalan: paket 6 jam + extend DAN paket 8 jam.
+const durasiDuaJalan = (teks, pesanKlien) => /\b7\s*jam\b/i.test(String(pesanKlien || '')) && /\b6\s*jam\b/i.test(isiKlien(teks)) && !/\b8\s*jam\b/i.test(isiKlien(teks));
 // Buang kalimat yang memuat pola (jaring terakhir kalau tulis ulang tetap melanggar).
 function buangKalimat(teks, re) {
   return teks.split('\n').map((b) => b.split(/(?<=[.!?])\s+/).filter((k) => !re.test(k)).join(' ')).join('\n')
@@ -545,6 +551,13 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   if ((isi.match(/\?/g) || []).length > 2) out.push('maksimal 2 pertanyaan');
   if (RE_KOORDINASI_LAPANGAN.test(isi)) out.push('kamu tidak ikut grup WA, rapat, atau tech meeting dan tidak hadir di lokasi: jangan menjanjikan koordinasi/kehadiran ' +
     'dan jangan menjelaskan proses internal. Jawab satu baris bahwa ajakan/undangannya diteruskan ke admin, lalu tambahkan [INFO_ADMIN: <ajakan klien>]');
+  // Usulan 61: harga durasi di tabel & isi paket (softfile/QR/flashdisk) dijawab langsung, bukan "datanya dipegang admin" (…2152 Sandra).
+  if (/dipegang admin|datanya (?:ada )?di admin/i.test(isi) && /\b[2-68]\s*jam\b|soft ?file|flashdisk|\bqr\b|termasuk/i.test(String(pesanKlien || '')))
+    out.push('harga durasi/isi paket yang dia tanya ada di tabel FAQ: jawab langsung angkanya dan faktanya (mis. "6 jam Rp ..., iya dapat softfile"), jangan bilang datanya dipegang admin');
+  // Usulan 64: info backdrop basic gratis + lampiran berhenti di situ, tanpa pertanyaan memilih warna (…6793 Yessi).
+  const akhirKalimat = (isi.trim().split(/\n+/).filter(Boolean).at(-1) || '').trim();
+  if (/backdrop basic/i.test(isi) && /compliment|free|gratis/i.test(isi) && /\?\s*$/.test(akhirKalimat) && /warna|condong|backdrop/i.test(akhirKalimat))
+    out.push(`setelah info backdrop basic gratis + lampiran, jangan tutup dengan pertanyaan memilih ("${akhirKalimat}"): cukup kalimat itu lalu berhenti`);
   const penutup = penutupJualan(teks, pesanKlien);
   if (penutup) out.push(`penutup "${penutup}" adalah pertanyaan pilihan/jualan padahal klien baru tanya satu hal: jawab yang dia tanya lalu berhenti ` +
     '(boleh tanpa pertanyaan; kalau memang perlu bertanya, hanya tanggal/lokasi yang belum diketahui)');
@@ -919,6 +932,29 @@ async function panggil(endpoint, history, message, leadContext) {
         console.log(`[janji ${endpoint.model}] janji ke admin tanpa penanda — INFO_ADMIN ditambahkan: ${teks.slice(0, 80)}`);
         teks += `\n[INFO_ADMIN: klien menunggu jawaban admin soal "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 80)}"]`;
       }
+      // Jendela 6 balasan bot terakhir: janji untuk urusan lain berminggu-minggu lalu bukan pengulangan (…5386: 3x dalam 5 menit).
+      const balasanDulu = history.filter((m) => m.role === 'assistant' && !/^\(admin\)/i.test(String(m.content))).slice(-6).map((m) => isiKlien(String(m.content)));
+      if (RE_JANJI_KABARI.test(isiKlien(teks)) && balasanDulu.some((b) => RE_JANJI_KABARI.test(b))) {
+        console.log(`[janji-kabari ${endpoint.model}] janji mengabari diulang — minta tulis ulang: ${teks.slice(0, 80)}`);
+        const ulang = await tulisUlang('kamu sudah pernah berjanji akan mengabari di chat ini. Jangan ulang janji itu. Jawab hal yang paling dia tunggu kalau ada di info resmi, ' +
+          'sebut posisinya (masih di admin/tim) dalam satu kalimat, lalu tambahkan [INFO_ADMIN: klien menunggu kabar soal <topik>].');
+        if (ulang && !bocorPikiran(ulang)) teks = ulang;
+        if (RE_JANJI_KABARI.test(isiKlien(teks))) teks = buangKalimat(teks, RE_JANJI_KABARI);
+        if (!/\[INFO_ADMIN/i.test(teks)) teks += `\n[INFO_ADMIN: klien menunggu kabar soal "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 80)}"]`;
+      }
+      if (RE_MINTA_ULANG.test(isiKlien(teks)) && (/\[kirim (gambar|dokumen|video)/i.test(String(message)) || balasanDulu.some((b) => RE_MINTA_ULANG.test(b)))) {
+        console.log(`[kirim-ulang ${endpoint.model}] bilang file belum masuk/minta kirim ulang lagi — minta tulis ulang: ${teks.slice(0, 80)}`);
+        const ulang = await tulisUlang('file/gambar dari klien sudah masuk, atau kamu sudah pernah minta dikirim ulang. Jangan bilang belum masuk dan jangan minta kirim ulang lagi. ' +
+          'Kalau isinya tidak terbaca, minta merek dan tipenya (atau isi pentingnya) dalam satu kalimat, lalu berhenti.');
+        if (ulang && !bocorPikiran(ulang)) teks = ulang;
+        if (RE_MINTA_ULANG.test(isiKlien(teks))) teks = buangKalimat(teks, RE_MINTA_ULANG);
+      }
+      if (durasiDuaJalan(teks, message)) {
+        console.log(`[durasi-7 ${endpoint.model}] 7 jam tanpa opsi paket 8 jam — minta tulis ulang: ${teks.slice(0, 80)}`);
+        const ulang = await tulisUlang('klien butuh 7 jam, yang tidak ada di tabel. Sebut DUA jalan sesuai FAQ "Extend & durasi di atas 8 jam": paket 6 jam + extend 1 jam, ' +
+          'atau paket 8 jam, masing-masing dengan harga dari tabel FAQ. Jangan menghitung angka lain.');
+        if (ulang && !bocorPikiran(ulang) && !hargaAsing(ulang, sumberHarga).length) teks = ulang;
+      }
       if (RE_AJAK_GRUP.test(String(message)) && !/\[(INFO_ADMIN|ADMIN_HANDOFF|SULIT)/i.test(teks)) {
         console.log(`[grup ${endpoint.model}] ajakan grup/tech meeting — INFO_ADMIN ditambahkan`);
         teks += `\n[INFO_ADMIN: klien mengajak tim Tetra ke grup WA / pertemuan: "${String(message).replace(/[[\]\n]+/g, ' ').slice(0, 100)}"]`;
@@ -1246,4 +1282,4 @@ async function ekstrakGaleri(teks, gambarB64) {
   try { return JSON.parse(m[0]); } catch { return {}; }
 }
 
-module.exports = { RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
+module.exports = { RE_JANJI_KABARI, RE_MINTA_ULANG, durasiDuaJalan, RE_AJAK_GRUP, RE_KLAIM_TERSEDIA, RE_KOORDINASI_LAPANGAN, penutupJualan, buangKalimat, masalahGaya, basaBasi, pisahPertanyaan, frasaKaku, daftarFrasaKaku, _SYSTEM_PROMPT_V2: SYSTEM_PROMPT_V2, RE_JANJI_TEMU, perbaruiProfil, pakaiV2, rapikanGaya, faktaBahaya, tautanAsing, durasiKurang, RE_JANJI_ADMIN, RE_PENUTUP, ekstrakGaleri, pelajaran, eksperimen, getAIResponse, ringkasPercakapan, ekstrakBooking, ekstrakQuotation, nilaiFollowup, hargaAsing, _sumberHarga: () => SYSTEM_PROMPT + faq() };
