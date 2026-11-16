@@ -122,6 +122,14 @@ function scheduleReconnect(delayOverride) {
 // satunya jalan yang aman adalah pairing ulang (node pairing.js).
 
 async function startBot() {
+  // Rama 16 Nov: balasan klien wajib lewat Hermes; bot yang menyala tanpa saklar itu harus langsung ketahuan.
+  if (!startBot.cekHermes) {
+    startBot.cekHermes = true;
+    if (process.env.AI_OTAK !== 'hermes' || !process.env.HERMES_CS_KEY) {
+      require('./lib/notify').kirimTelegram('🚨 Bot WA menyala TANPA otak Hermes (AI_OTAK/HERMES_CS_KEY kosong di .env.local) — balasan klien lewat jalur lama. Rama minta wajib Hermes.')
+        .catch((e) => console.error('[hermes] alarm saklar gagal:', e.message));
+    } else console.log('[hermes] otak balasan klien: Hermes cs-wa (wajib, tanpa jalur lama)');
+  }
   // Kunci belum-terdaftar yang sudah pernah dipakai meminta kode pairing, kalau
   // dipakai lagi, ditolak WhatsApp: 401 "Connection Failure" {reason:401,location:rva}
   // dalam 1-3 detik (23 Sep 2026: 71x berturut-turut). Karena kunci belum-terdaftar

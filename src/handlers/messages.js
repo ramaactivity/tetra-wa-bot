@@ -53,6 +53,8 @@ function konteksHandoffLama(jid) {
     'Tambahkan [INFO_ADMIN: klien menanyakan lagi soal <topik>].';
 }
 
+const wajibHermes = () => process.env.AI_OTAK === 'hermes';
+
 function konteksKlienLama(jid) {
   const k = klienLamaCtx.get(jid);
   if (!k) return '';
@@ -266,8 +268,11 @@ function fullUserText(jid, originalText) {
 async function handoff(sock, msg, alasan, jawabanKlien, teksKlien) {
   const jid = msg.key.remoteJid;
   tambahRiwayat(jid, 'user', teksKlien);
-  tambahRiwayat(jid, 'assistant', jawabanKlien);
-  await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
+  // Mode wajib Hermes: jawabanKlien null = tidak ada kalimat bawaan Node ke klien, admin yang membalas manual.
+  if (jawabanKlien) {
+    tambahRiwayat(jid, 'assistant', jawabanKlien);
+    await sendReply(sock, jid, msg.key, { name: 'handoff' }, jawabanKlien);
+  }
   await notifyAdmin(sock, phoneDigits(msg), { name: 'HANDOFF' }, getRiwayat(jid), alasan);
   await supa.upsertPause(jid, Date.now() + HANDOFF_AI_MS, 'ai');
 }
@@ -787,7 +792,8 @@ function registerMessageHandler(sock) {
       if (!lead && (galeri.RE_MINTA.test(t) || Date.now() - (galeri.ditanya.get(jid) || 0) < galeri.TANYA_MS) &&
           !/invoice|kwitansi|nota|bayar|pelunasan|reschedule/i.test(t) && await layaniGaleri(sock, msg, keys, originalText)) return;
       // ── 1. Kemitraan / sponsorship / franchise → handoff owner ──
-      if (!vendor && !lead && isKemitraan(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_KEMITRAAN)) {
+      // Wajib Hermes (Rama 16 Nov): kalimat tetap Node tidak dipakai; Hermes yang menjawab (prosedur cara-balas-wa).
+      if (!wajibHermes() && !vendor && !lead && isKemitraan(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_KEMITRAAN)) {
         await handoff(sock, msg, 'Lead kemitraan/sponsorship/franchise', KALIMAT_KEMITRAAN, originalText);
         return;
       }
@@ -798,7 +804,7 @@ function registerMessageHandler(sock) {
       // tanya softfile/harga 6 jam (…9512 menunggu admin 25 jam, …2152 tak terjawab) dan ke klien yang tanya rekening.
 
       // ── 3. Produk khusus → handoff (jangan karang harga) ──
-      if (!lead && isSpecialProduct(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_PRODUK_KHUSUS)) {
+      if (!wajibHermes() && !lead && isSpecialProduct(t) && !sudahDikirim(getRiwayat(jid), KALIMAT_PRODUK_KHUSUS)) {
         await handoff(sock, msg, 'Produk khusus (mingle/instant/software/cetak doang)', KALIMAT_PRODUK_KHUSUS, originalText);
         return;
       }
@@ -849,7 +855,7 @@ function registerMessageHandler(sock) {
         const kalimat = aiResponse.replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
         const aman = kalimat && kalimat.length <= 260 && !RE_KLAIM.test(kalimat) && !/\bRp\.?\s?\d/i.test(kalimat);
         await handoff(sock, msg, `Handoff diminta oleh AI${aman ? `: ${kalimat.slice(0, 120)}` : ''}`,
-          aman ? kalimat : 'Bentar ya Kak, yang ini aku tanyain ke admin dulu. Nanti aku kabarin di sini.', originalText);
+          aman ? kalimat : (wajibHermes() ? null : 'Bentar ya Kak, yang ini aku tanyain ke admin dulu. Nanti aku kabarin di sini.'), originalText);
         return;
       }
 
@@ -931,8 +937,13 @@ function registerMessageHandler(sock) {
       // AI mati / error lain: klien tetap dijawab dan admin dipanggil, jangan bisu.
       if (!originalText || !bolehBalas) return;
       try {
-        await handoff(sock, msg, `Bot error: ${err.message.slice(0, 120)}`,
-          'Bentar ya Kak, aku sampaikan ke admin dulu biar langsung dibalas.', originalText);
+        if (err.hermes || wajibHermes()) {
+          await kirimTelegram(`🚨 Bot WA: otak Hermes gagal membalas klien wa.me/${phoneDigits(msg)} — BELUM DIBALAS, mohon balas manual.\n` +
+            `Pesan klien: "${String(originalText).replace(/\s+/g, ' ').slice(0, 200)}"\nPenyebab: ${err.message.slice(0, 160)}`)
+            .catch((e) => console.error('[hermes] alarm Telegram gagal:', e.message));
+        }
+        await handoff(sock, msg, `${err.hermes ? 'Otak Hermes gagal — balas manual' : 'Bot error'}: ${err.message.slice(0, 120)}`,
+          wajibHermes() ? null : 'Bentar ya Kak, aku sampaikan ke admin dulu biar langsung dibalas.', originalText);
       } catch (e2) {
         console.error('Handoff darurat gagal:', e2.message);
       }

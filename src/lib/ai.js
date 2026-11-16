@@ -207,7 +207,10 @@ async function kirimHermes(endpoint, messages) {
     jadwalTersedia = /cek_ketersediaan[\s\S]{0,400}?bisa_terima_booking\\*"\s*:\s*true/.test(ev);
   } catch (e) { console.log(`[hermes] event ${run_id} tidak terbaca: ${e.message}`); }
   console.log(`[hermes] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}`);
-  return { content: String(st.output || ''), tool_calls: [], jadwalTersedia };
+  // Penanda lampiran dirapikan ke kunci satu kata ("[KIRIM: format cetak]" → "[KIRIM: format]") supaya semua penjaga
+  // lampiran ikut menyala (uji 16 Nov: penjaga "jangan ulang ukuran" tidak menyala karena kuncinya dua kata).
+  const content = String(st.output || '').replace(/\[KIRIM:\s*(\w+)[^\]]*\]/gi, '[KIRIM: $1]');
+  return { content, tool_calls: [], jadwalTersedia };
 }
 
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;
@@ -516,9 +519,11 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   if (/\[KIRIM:\s*(skema|rekanan)\]/i.test(teks) && /komisi/i.test(isi) && /potongan|harga publish/i.test(isi)) out.push('skema rekanan sudah dilampirkan: jangan ulang isinya di teks, cukup pengantar singkat dan persilakan bertanya kalau ada yang kurang jelas');
   if (/\[KIRIM:\s*format\]/i.test(teks) && (isi.match(/\d+(?:,\d+)?\s*[×x]\s*\d+/g) || []).length > 1) out.push('ilustrasi format cetak sudah dilampirkan: jangan ulang ukuran tiap format di teks, cukup pengantar singkat');
   // Rama 11 Nov ("better kasih lampiran ilustrasi dari pada bikin orang bingung"): penjelasan sleeve panjang di teks → ilustrasi sleeve.
-  if (/sleeve/i.test(isi) && /custom sleeve|sleeve basic|basic hitam|hitam atau putih/i.test(isi) && isi.length > 200) out.push(/\[KIRIM:\s*sleeve\]/i.test(teks)
-    ? 'ilustrasi sleeve sudah dilampirkan: jangan ulang isinya di teks, cukup pengantar singkat (harga Custom Sleeve hanya kalau dia menanyakannya)'
-    : 'penjelasan cetakan + sleeve sebaiknya lewat ilustrasi: tulis [KIRIM: sleeve] dengan pengantar singkat, jangan menjelaskan panjang di teks');
+  // Rama 11 Nov ("better kasih lampiran ilustrasi"): penjelasan sleeve/bingkai di teks → ilustrasi sleeve, berapa pun panjangnya
+  // (uji Hermes 16 Nov: 210 karakter tanpa lampiran lolos karena dulu batasnya 200).
+  const jelasSleeve = /sleeve/i.test(isi) && /custom sleeve|sleeve basic|basic hitam|hitam (atau )?putih|bingkai|desain(nya)? sendiri/i.test(isi);
+  if (jelasSleeve && !/\[KIRIM:\s*sleeve\]/i.test(teks)) out.push('penjelasan cetakan + sleeve sebaiknya lewat ilustrasi: tulis [KIRIM: sleeve] dengan pengantar singkat, jangan menjelaskan panjang di teks');
+  else if (jelasSleeve && isi.length > 200) out.push('ilustrasi sleeve sudah dilampirkan: jangan ulang isinya di teks, cukup pengantar singkat (harga Custom Sleeve hanya kalau dia menanyakannya)');
   // Rama 11 Nov: harga umum lewat lampiran pricelist, bukan daftar harga di chat.
   if (/\[KIRIM:\s*pricelist\]/i.test(teks) && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pricelist sudah dilampirkan: jangan mendaftar harga di teks, cukup satu kalimat pengantar yang menunjuk ke lampiran di bawahnya');
   out.push(...basaBasi(isi, pesanKlien));
@@ -1104,12 +1109,18 @@ async function jawabAI(history, message, leadContext) {
     console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
     return '[DIAM]';
   }
-  if (pakaiHermes()) {
-    try { return await panggil(HERMES, history, message, leadContext); }
-    catch (e) {
-      console.error(`[hermes] gagal, pakai jalur lama: ${e.message}`);
-      alarmModel('hermes', `⚠️ Bot WA: otak Hermes (cs-wa) gagal (${e.message.slice(0, 160)}). Balasan sementara lewat jalur lama.`);
+  // Rama 16 Nov: "mulai hari ini wajib hukumnya lewat hermes… full hanya hermes 100%". AI_OTAK=hermes = TANPA jalur lama:
+  // dicoba dua kali; tetap gagal → error bertanda hermes (messages.js: klien tidak dikirimi kalimat bawaan Node, admin
+  // dikabari saat itu juga untuk membalas manual, Rama dapat alarm Telegram setiap kejadian).
+  if (process.env.AI_OTAK === 'hermes') {
+    let galat = new Error('HERMES_CS_KEY kosong');
+    for (let coba = 1; coba <= 2 && process.env.HERMES_CS_KEY; coba++) {
+      try { return await panggil(HERMES, history, message, leadContext); }
+      catch (e) { galat = e; console.error(`[hermes] gagal (percobaan ${coba}): ${e.message}`); }
     }
+    const x = new Error(`otak Hermes gagal: ${galat.message}`);
+    x.hermes = true;
+    throw x;
   }
   try {
     const jawab = await panggil(PRIMARY, history, message, leadContext);

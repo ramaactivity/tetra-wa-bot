@@ -71,6 +71,15 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.ok(!ai.durasiDuaJalan('Paket 6 jam Rp 4.000.000.', 'kalau 6 jam berapa?'));
     assert.ok(!ai.masalahGaya('Halo Kak Jasmin! Buat 7 jam bisa 6 jam Rp 4.000.000 + extend 1 jam Rp 500.000, atau paket 8 jam Rp 5.000.000.', true, 'Durasi: 7 jam').some((m) => /SATU angka/.test(m)));
   });
+  await kasus('wajib Hermes: Hermes mati → error bertanda hermes, TIDAK jatuh ke jalur lama (Rama 16 Nov)', async () => {
+    const simpan = { o: process.env.AI_OTAK, u: process.env.HERMES_CS_URL, k: process.env.HERMES_CS_KEY };
+    Object.assign(process.env, { AI_OTAK: 'hermes', HERMES_CS_URL: 'http://127.0.0.1:9/v1', HERMES_CS_KEY: 'uji' });
+    try {
+      await assert.rejects(ai.getAIResponse([], 'kak harga 3 jam berapa?', 'Panggilan klien: Kak'), (e) => e.hermes === true);
+    } finally {
+      for (const [k, v] of [['AI_OTAK', simpan.o], ['HERMES_CS_URL', simpan.u], ['HERMES_CS_KEY', simpan.k]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    }
+  });
   await kasus('usulan 67: kalimat oper owner yang sama tidak dikirim dua kali (…1927 panitia kampus)', () => {
     assert.ok(msgs._sudahDikirim([{ role: 'user', content: 'proposal sponsorship' }, { role: 'assistant', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
     assert.ok(!msgs._sudahDikirim([{ role: 'user', content: msgs._KALIMAT_KEMITRAAN }], msgs._KALIMAT_KEMITRAAN));
