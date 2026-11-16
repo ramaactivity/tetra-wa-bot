@@ -219,7 +219,7 @@ async function kirimHermes(endpoint, messages) {
       if (terlewat.length) console.log(`[hermes] ${run_id} skill terlewat: ${terlewat.join(', ')}`);
     }
   } catch (e) { console.log(`[hermes] event ${run_id} tidak terbaca: ${e.message}`); }
-  console.log(`[hermes${endpoint.tugas ? '-tugas' : ''}] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}`);
+  console.log(`[hermes${endpoint.tugas ? '-tugas' : ''}] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}, model ${st.runtime?.model || '?'}`);
   // Penanda lampiran dirapikan ke kunci satu kata ("[KIRIM: format cetak]" → "[KIRIM: format]") supaya semua penjaga
   // lampiran ikut menyala (uji 16 Nov: penjaga "jangan ulang ukuran" tidak menyala karena kuncinya dua kata).
   const content = String(st.output || '').replace(/\[KIRIM:\s*(\w+)[^\]]*\]/gi, '[KIRIM: $1]');
