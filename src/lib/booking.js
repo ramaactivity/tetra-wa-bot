@@ -98,8 +98,8 @@ function teksForm(b, pembuka) {
   const baris = (label, v) => `- ${label}: ${v || ''}`.trimEnd();
   return [
     ...(pembuka ? [pembuka, ''] : []),
-    'Kak, tolong dibantu untuk melengkapi form berikut yaa.',
-    '',
+    // Wajib Hermes (Rama 16 Nov): permintaan mengisi form sudah ada di pembuka tulisan Hermes.
+    ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Kak, tolong dibantu untuk melengkapi form berikut yaa.', '']),
     '1. Data Event',
     baris(w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
     baris('Tanggal Event', d.tanggal),
@@ -125,19 +125,22 @@ function teksForm(b, pembuka) {
 }
 
 // Setelah data wajib lengkap (dari form atau chat), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
-function teksKonfirmasi(b) {
+function teksKonfirmasi(b, pembuka = null) {
   const isi = FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
     .map(([k, label]) => `• ${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]}`);
+  if (pembuka) return [pembuka, '', ...isi].join('\n');
   return ['Ini rekap data acaranya ya Kak, tolong dicek lagi:', '', ...isi, '',
     'Kalau sudah benar, balas "oke" ya. Kalau ada yang salah atau mau diubah, langsung koreksi di sini aja.'].join('\n');
 }
 // Kirim rekap ke klien SEKALI, saat data wajib pertama kali lengkap. Perubahan sesudahnya cukup dilapor ke admin.
-async function kirimKonfirmasi(sock, jid) {
+// buatPembuka: fungsi async opsional (tulisan Hermes), dipanggil hanya kalau rekap memang dikirim.
+async function kirimKonfirmasi(sock, jid, buatPembuka = null) {
   const b = semua[jid];
   if (!b || !b.lengkap || b.dikonfirmasi) return false;
   b.dikonfirmasi = Date.now();
   simpan();
-  await kirimTeks(sock, jid, teksKonfirmasi(b), 'rekap-booking→customer');
+  const pembuka = buatPembuka ? await buatPembuka().catch(() => null) : null;
+  await kirimTeks(sock, jid, teksKonfirmasi(b, pembuka), 'rekap-booking→customer');
   return true;
 }
 const CAPTION_KATALOG =
@@ -151,12 +154,14 @@ async function kirimTeks(sock, jid, teks, label) {
   tambahRiwayat(jid, 'assistant', teks);
 }
 
-async function kirimKatalog(sock, jid) {
+async function kirimKatalog(sock, jid, buatPembuka = null) {
   if (!fs.existsSync(KATALOG)) { console.error('[booking] katalog tidak ada:', KATALOG); return; }
-  const sent = await sendDocument(sock, jid, KATALOG, CAPTION_KATALOG);
+  const pengantar = buatPembuka ? await buatPembuka().catch(() => null) : null;
+  const caption = pengantar || (process.env.AI_OTAK === 'hermes' ? '' : CAPTION_KATALOG);
+  const sent = await sendDocument(sock, jid, KATALOG, caption);
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'katalog→customer');
-  tambahRiwayat(jid, 'assistant', `[kirim PDF katalog desain frame]\n${CAPTION_KATALOG}`);
+  tambahRiwayat(jid, 'assistant', `[kirim PDF katalog desain frame]\n${caption}`);
 }
 
 // Teruskan pesan asli klien (mis. foto bukti transfer) ke admin.

@@ -54,6 +54,13 @@ function konteksHandoffLama(jid) {
 }
 
 const wajibHermes = () => process.env.AI_OTAK === 'hermes';
+// Pengantar rekap & katalog ditulis Hermes (dipanggil hanya kalau memang dikirim); data rekap/file tetap dari sistem.
+const pembukaRekap = (jid) => (wajibHermes() ? () => require('../lib/ai').kalimatHermes(
+  'Data acara klien sudah lengkap. Sistem menempelkan rekap datanya tepat sesudah pesanmu. Minta dia mengecek; kalau sudah benar cukup balas oke, kalau ada yang salah langsung koreksi di chat.',
+  { history: require('../lib/store').getRiwayat(jid) }) : null);
+const pembukaKatalog = (jid) => (wajibHermes() ? () => require('../lib/ai').kalimatHermes(
+  'Sistem mengirim katalog desain frame (PDF) tepat sesudah pesanmu. Dia bisa pilih dari katalog (screenshot atau sebut halamannya), atau desain custom gratis dengan kirim brief/contoh.',
+  { history: require('../lib/store').getRiwayat(jid) }) : null);
 // Voice note → teks lewat mesin STT Hermes (skrip profil cs-wa: tools.transcription_tools.transcribe_audio).
 const csWaHome = () => require('path').join(process.env.HOME || '/home/ubuntu', '.hermes', 'profiles', 'cs-wa');
 function pythonHermes() {
@@ -515,7 +522,9 @@ function registerMessageHandler(sock) {
       tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
-        await mulaiBooking(jid, null, 'admin', 'DP-nya sudah diterima ya Kak, makasih!',
+        await mulaiBooking(jid, null, 'admin', wajibHermes()
+          ? await aiLib.kalimatHermes('Admin sudah mengonfirmasi DP klien diterima (keputusan admin). Ucapkan singkat, lalu minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.', { history: getRiwayat(jid) })
+          : 'DP-nya sudah diterima ya Kak, makasih!',
           'DP dikonfirmasi admin — data booking').catch((e) => console.error('[booking] gagal mulai:', e.message));
       }
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
@@ -552,7 +561,7 @@ function registerMessageHandler(sock) {
       booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD));
       await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
-      if (konfirmasi) await booking.kirimKonfirmasi(sock, jid);
+      if (konfirmasi) await booking.kirimKonfirmasi(sock, jid, pembukaRekap(jid));
     } catch (e) {
       console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
     }
@@ -570,8 +579,8 @@ function registerMessageHandler(sock) {
     // Form menanyakan ukuran frame & backdrop → ilustrasi format + pilihan backdrop basic wajib ikut (Rama 11 Nov); yang sudah pernah dikirim dilewati.
     const ilustrasiForm = [!b.data.ukuran_frame && 'format', !b.data.backdrop && 'backdrop'].filter(Boolean);
     if (!b.lengkap && ilustrasiForm.length) await kirimLampiran(sock, jid, ilustrasiForm, 'form-booking→customer').catch((e) => console.error('[booking] ilustrasi form:', e.message));
-    if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid);
-    await booking.kirimKonfirmasi(sock, jid);
+    if (!b.data.desain_frame) await booking.kirimKatalog(sock, jid, pembukaKatalog(jid));
+    await booking.kirimKonfirmasi(sock, jid, pembukaRekap(jid));
     await booking.laporAdmin(sock, jid, judulAdmin);
   };
 
@@ -846,7 +855,7 @@ function registerMessageHandler(sock) {
           } else {
             await mulaiBooking(jid, msg, 'bukti-transfer',
               wajibHermes()
-                ? await aiLib.kalimatHermes('Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. Form data acara dikirim sistem sesudah pesanmu.',
+                ? await aiLib.kalimatHermes('Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. Minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.',
                   { history: getRiwayat(jid), pesanKlien: originalText })
                 : 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
               'Bukti DP masuk — cek mutasi BCA, lalu input booking');

@@ -239,15 +239,26 @@ async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadConte
     ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
     { role: 'user', content: pesanKlien || '(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)' },
   ];
-  for (let coba = 1; coba <= 2; coba++) {
+  // Frasa kaku Rama (docs/FRASA-KAKU.md, mis. "aku kirim") → tulis ulang maksimal dua kali; kalau tetap ada, kalimat terakhir
+  // yang aman tetap dipakai supaya pesan penting (konfirmasi bukti transfer, rekap) tidak hilang.
+  let cadangan = null;
+  for (let coba = 1; coba <= 3; coba++) {
     try {
       const r = await kirimHermes({ ...HERMES, situasi: true }, messages);
       const t = rapikanGaya(r.content, 0).replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').trim();
-      if (t && !RE_KLAIM_AKSI.test(t) && !bocorPikiran(t) && !hargaAsing(t, SYSTEM_PROMPT_V2 + faq()).length) return t;
-      console.log(`[hermes-situasi] kalimat ditolak penjaga (percobaan ${coba}): ${t.slice(0, 100)}`);
+      if (!t || RE_KLAIM_AKSI.test(t) || bocorPikiran(t) || hargaAsing(t, SYSTEM_PROMPT_V2 + faq()).length) {
+        console.log(`[hermes-situasi] kalimat ditolak penjaga (percobaan ${coba}): ${t.slice(0, 100)}`);
+        continue;
+      }
+      const kaku = frasaKaku(t);
+      if (!kaku.length) return t;
+      cadangan = t;
+      console.log(`[hermes-situasi] frasa kaku ${kaku.join(', ')} — tulis ulang (percobaan ${coba})`);
+      messages.push({ role: 'assistant', content: t }, { role: 'user', content:
+        `KOREKSI SISTEM: hapus frasa kaku "${kaku.join('", "')}", tulis ulang dengan kalimat biasa (senada "silahkan kak, berikut … ya"). Balas HANYA pesannya.` });
     } catch (e) { console.error(`[hermes-situasi] gagal (percobaan ${coba}): ${e.message}`); }
   }
-  return null;
+  return cadangan;
 }
 
 const SHADOW = process.env.AI_SHADOW_MODEL ? { ...PRIMARY, model: process.env.AI_SHADOW_MODEL, effort: '' } : null;

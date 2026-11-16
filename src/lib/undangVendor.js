@@ -15,6 +15,8 @@ function bacaTag(teks) {
 }
 
 function kalimatLink(j) {
+  // Wajib Hermes (Rama 16 Nov): pengantarnya sudah ada di balasan Hermes; sistem cukup menempelkan link-nya.
+  if (process.env.AI_OTAK === 'hermes') return j.url;
   return j.masuk === 'link_pribadi'
     ? `Ini link dasbor rekanan ${j.vendor_name || 'kamu'}, sekali ketuk langsung masuk (berlaku 14 hari):\n${j.url}`
     : `${j.vendor_name || 'Kakak'} sudah terdaftar sebagai rekanan, masuk di ${j.url} pakai nomor WA ini ya.`;
