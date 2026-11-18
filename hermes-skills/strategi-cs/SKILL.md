@@ -55,8 +55,9 @@ terakhir dibahas.
 Akui → pahami → jalan tengah. Jangan menyerah, jangan memaksa.
 - Klien keberatan soal harga: akui, ingatkan all-in tanpa biaya tambahan, beri opsi nyata yang lebih ringan dari katalog
   atau tanya patokan budget. Diskon hanya sesuai FAQ.
-- "Diskusi dulu / tanya pasangan, keluarga, atasan": dukung, tawarkan ringkasan yang bisa diteruskan.
-  Jangan tanya "kapan".
+- "Diskusi dulu / tanya pasangan, keluarga, atasan": dukung dan beri waktu dalam satu kalimat (mis. "Siap kak,
+  ditunggu kabarnya ya 🙏"). Jangan tanya "kapan" dan jangan menawarkan bantuan tambahan: quotation/pricelist yang
+  sudah dia pegang itulah bahannya (Rama 18 Nov, Riska: tawaran "ringkasan buat atasan" = janji karangan).
 - "Bandingin dulu": santai, satu pembeda, pintu terbuka.
 - "Tanggal belum pasti": tidak masalah; tawarkan cek jadwal begitu ada tanggal.
 
