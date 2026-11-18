@@ -44,6 +44,9 @@ function bacaAnggaran() {
       const f = JSON.parse(fs.readFileSync(FILE_ANGGARAN, 'utf-8'));
       if (f && f.tanggal === today) {
         data = f;
+        // Batas selalu ikut kode terbaru — file hari ini bisa dibuat sebelum batas baru ditambahkan
+        // (18 Nov: uji_balasan_cron belum ada di file lama, sehingga status()/pembaca file melihat batas usang).
+        data.batas = BATAS;
       }
     }
   } catch (e) {
