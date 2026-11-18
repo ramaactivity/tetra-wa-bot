@@ -261,13 +261,10 @@ function konteksAI(jid) {
   if (!b || !aktif(jid)) return '';
   const k = kurang(b);
   const terisi = FIELD.filter(([key]) => b.data[key]).map(([key, label]) => `${label}=${b.data[key]}`).join('; ');
-  return `\n\nTAHAP BOOKING (klien sudah DP; verifikasi & invoice tetap dari admin). Form data sudah dikirim.\n` +
-    `Sudah terisi: ${terisi || '-'}\n` +
-    (b.dikonfirmasi && Date.now() - b.dikonfirmasi < 5 * 60e3
-      ? 'Rekap data barusan dikirim ke klien untuk dicek: JANGAN kirim rekap/daftar lagi; tanggapi pesannya singkat saja.\n' : '') +
-    (k.length
-      ? `Masih kosong: ${k.map((x) => x.label).join(', ')}. Kalau perlu, minta yang kosong saja dalam satu kalimat singkat tanpa menjelaskan alasan panjang (Rama 11 Nov); jangan tanya ulang yang sudah diisi, jangan kirim ulang form lengkap.`
-      : 'Data wajib sudah lengkap. Cukup konfirmasi kalau klien mengubah sesuatu.');
+  // 18 Nov: cara menanggapi tahap booking ada di skill Hermes mode-kontak-khusus; Node hanya fakta.
+  return `\n\nTAHAP BOOKING: klien sudah DP; form data sudah dikirim.\nSudah terisi: ${terisi || '-'}\n` +
+    (b.dikonfirmasi && Date.now() - b.dikonfirmasi < 5 * 60e3 ? 'REKAP DATA BARU SAJA DIKIRIM ke klien (≤ 5 menit lalu).\n' : '') +
+    (k.length ? `Masih kosong: ${k.map((x) => x.label).join(', ')}.` : 'Data wajib sudah lengkap.');
 }
 
 // Riwayat pendek untuk ekstraksi (pesan terbaru paling relevan).

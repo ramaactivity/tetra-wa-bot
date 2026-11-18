@@ -9,7 +9,6 @@ const supa = require('./supa');
 const FILE = path.join(__dirname, '..', '..', 'docs', 'VENDOR-REKANAN.md');
 const digit = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.startsWith('0') ? '62' + d.slice(1) : d; };
 const bacaFile = () => { try { return fs.readFileSync(FILE, 'utf8'); } catch { return ''; } };
-const aturanUmum = (teks) => (teks.match(/## Aturan umum[\s\S]*?(?=\n## |$)/) || [''])[0].trim();
 const bagian = (teks, nomor) => (teks.match(new RegExp(`\\n## ${nomor}\\b[\\s\\S]*?(?=\\n## |$)`)) || [''])[0].trim();
 
 // null = bukan vendor terdaftar.
@@ -21,14 +20,14 @@ async function cari(nomor) {
   const v = (await supa.fetchVendorContacts()).find((x) => digit(x.phone) === n);
   if (!v && !khusus) return null;
   const nama = v?.name || (khusus.match(/— ([^(\n]+)/) || [])[1]?.trim() || 'Vendor';
-  return { nomor: n, nama, khusus, aturan: aturanUmum(teks) };
+  return { nomor: n, nama, khusus };
 }
 
 // Konteks untuk AI balasan & follow-up.
 function konteks(v) {
   if (!v) return '';
-  return `\n\nKONTAK INI VENDOR REKANAN: ${v.nama}. Ikuti ATURAN VENDOR di bawah (menggantikan aturan KONTAK PERTAMA & gaya sales).\n` +
-    `${v.khusus || '(Belum ada kesepakatan harga tertulis untuk vendor ini: harga apa pun dicek admin, pakai [INFO_ADMIN].)'}\n\n${v.aturan}`;
+  // 18 Nov: aturan umum vendor pindah ke skill Hermes mode-kontak-khusus; Node hanya fakta + kesepakatan khusus vendor ini.
+  return `\n\nKONTAK INI VENDOR REKANAN: ${v.nama}.\nKESEPAKATAN KHUSUS VENDOR INI: ${v.khusus || '(belum ada kesepakatan harga tertulis untuk vendor ini)'}`;
 }
 
 module.exports = { cari, konteks, digit };

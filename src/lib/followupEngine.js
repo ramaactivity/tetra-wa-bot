@@ -141,11 +141,7 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
   // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
   // gaya akrab, tanpa "masih tertarik?" (keputusan Rama 30 Sep 2026).
   if (vendor) {
-    const p = `Tulis SATU pesan WhatsApp singkat (maks 3 baris) ke vendor rekanan ${vendor.nama} untuk ` +
-      `menindaklanjuti urusan yang terakhir dibahas di riwayat (mis. konfirmasi jadwal, desain frame, data acara). ` +
-      `Gaya akrab sesuai ATURAN VENDOR. JANGAN tanya "masih tertarik", JANGAN tawarkan paket/DP, JANGAN gaya sales ("amankan"). ` +
-      `Jangan tanya hal yang sudah ada di riwayat. Kalau di riwayat sudah ada pesan Tetra dalam 3 hari terakhir, balas persis [DIAM]. ` +
-      `Kalau di riwayat tidak ada urusan yang perlu ditindaklanjuti, balas persis [DIAM].`;
+    const p = `TUGAS FOLLOW-UP VENDOR: tulis SATU pesan lanjutan untuk vendor rekanan ${vendor.nama} — ikuti skill mode-kontak-khusus bagian "Follow-up khusus".`;
     try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
     catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
   }
@@ -363,19 +359,11 @@ async function followupProspek(sock, paused, sudah) {
         const i = riw.findLastIndex((x) => x.role !== 'user');
         msg = await getAIResponse(riw.slice(0, i + 1), riw.slice(i + 1).map((x) => x.content).join('\n'), prospekWa.konteksLead(p));
       } else {
-        const tugas = jenis === 'lanjut'
-          ? `${p.nama || 'Lead ini'} belum membalas lagi. Tulis SATU pesan lanjutan singkat (maks 3 kalimat) yang merujuk hal terakhir di riwayat ` +
-            `(mis. pricelist yang sudah dikirim, kontak PIC yang diminta) dan mengajak lanjut ngobrol soal ${prospekWa.rekanan(p) ? 'kerja sama vendor rekanan' : 'kebutuhan photobooth untuk acara mereka'}. ` +
-            'Jangan menagih, jangan tanya "masih tertarik?", jangan pakai kata "follow up".'
-          : `Kontak ini baru membalas otomatis. Tulis SATU pesan lanjutan singkat (maks 2 kalimat) yang meminta nomor WA/email PIC yang mengurus ${prospekWa.rekanan(p) ? 'kerja sama vendor/marketing' : 'acara kantor/sekolah (HR/GA/humas/panitia)'}.`;
-        // Audit 22 Okt: follow-up lead menulis "kemarin" untuk pesan 5–12 hari lalu, menyapa nama dari data prospek
-        // ("Kak Talia" untuk Aydi), dan minta PIC padahal lead masih menunggu harga rekanan.
+        // 18 Nov: aturan follow-up lead ada di skill mode-kontak-khusus bagian "Follow-up khusus"; Node hanya fakta.
         const hari = Math.max(0, Math.round((now - (riw.filter((x) => x.role !== 'user').at(-1)?.t || now)) / 864e5));
-        const fakta = `\nFAKTA: pesan terakhir kita ${hari} hari lalu — jangan tulis "kemarin/tadi" kalau tidak benar. Sapa "Kak" saja; ` +
-          'nama orang hanya kalau orang itu sendiri menyebut namanya di riwayat. Kalau lead masih menunggu sesuatu dari kita ' +
-          '(harga/skema rekanan, contoh hasil, materi), pesan ini harus memenuhi itu — jangan minta PIC atau mengulang pertanyaan lama. ' +
-          'Jangan menganggap tawaran kita sudah disetujui kalau lead belum bilang setuju.';
-        msg = await getAIResponse(riw.slice(-30), `${tugas}${fakta}\nKalau dari riwayat tidak pantas dikirimi pesan, balas persis [DIAM].`, prospekWa.konteksLead(p));
+        const tugas = `TUGAS FOLLOW-UP LEAD (${jenis === 'lanjut' ? 'lanjut' : 'balasan otomatis'}): ${p.nama || 'lead ini'}, ` +
+          `${prospekWa.rekanan(p) ? 'calon rekanan' : 'calon klien'} — ikuti skill mode-kontak-khusus bagian "Follow-up khusus".`;
+        msg = await getAIResponse(riw.slice(-30), `${tugas}\nFAKTA: pesan terakhir kita ${hari} hari lalu.`, prospekWa.konteksLead(p));
       }
     } catch (e) { console.error(`[followup-lead] gagal generate ${jid}:`, e.message); continue; }
     msg = String(msg || '');
@@ -443,10 +431,9 @@ async function followupBooking(sock, paused, sudahTerkirim) {
 
     const k = booking.kurang(b).map((x) => x.label);
     const prompt =
-      `Tulis SATU pesan WhatsApp singkat (maks 4 baris) untuk klien yang SUDAH DP, mengingatkan dengan ramah ` +
-      `data acara yang masih kurang: ${k.join(', ')}. Minta yang masih kosong saja dalam satu kalimat singkat, tanpa penjelasan panjang (Rama 11 Nov). ` +
-      (sisaHari !== null ? `Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi. ` : '') +
-      `Jangan tawarkan DP atau paket lagi, jangan kirim ulang form lengkap.`;
+      `TUGAS FOLLOW-UP DATA BOOKING: klien sudah DP; data acara yang masih kurang: ${k.join(', ')}.` +
+      (sisaHari !== null ? ` Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi.` : '') +
+      ' Ikuti skill mode-kontak-khusus bagian "Follow-up khusus".';
     let msg;
     try { msg = await getAIResponse(riw.slice(-20), prompt, booking.konteksAI(jid)); }
     catch (e) { console.error('[followup-booking] gagal generate:', e.message); continue; }
