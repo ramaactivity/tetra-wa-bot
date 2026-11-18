@@ -207,6 +207,30 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.strictEqual(iso('tgl 25/12 di bogor'), '2026-12-25');
     assert.strictEqual(iso('acaranya mulai jam 10.12 kak'), null);
   });
+  await kasus('jatah uji per pemanggil: cron maks 4 uji_balasan/hari & tidak memakan jatah lain (temuan Hermes t_769ccf81)', () => {
+    const simpan = { ...process.env };
+    const file = `/tmp/anggaran-regresi-${process.pid}.json`;
+    try {
+      Object.assign(process.env, { ANGGARAN_UJI_FILE: file, SALDO_SUMOPOD_FILE: '/tmp/tidak-ada-saldo.json', HERMES_SESSION_PROFILE: 'tetra-wa-bot', HERMES_CRON_SESSION: '1' });
+      delete process.env.HERMES_PROFILE; delete process.env.RAMA_MANUAL;
+      delete require.cache[require.resolve('./src/lib/anggaranUji')];
+      const a = require('./src/lib/anggaranUji');
+      for (let i = 0; i < 4; i++) a.periksaDanCatat('uji_balasan');
+      assert.throws(() => a.periksaDanCatat('uji_balasan'), /cron\) habis/);
+      process.env.HERMES_CRON_SESSION = '0';
+      const r = a.periksaDanCatat('uji_balasan');
+      assert.strictEqual(r.terpakai.uji_balasan, 1, 'cron tidak memakan jatah uji_balasan pemanggil lain');
+      assert.strictEqual(r.terpakai.total_panggilan, 5);
+      const d = JSON.parse(require('fs').readFileSync(file, 'utf-8'));
+      assert.strictEqual(d.terpakai_per_pemanggil['hermes:tetra-wa-bot:cron'].uji_balasan, 4);
+      assert.strictEqual(d.riwayat.at(-1).pemanggil, 'hermes:tetra-wa-bot');
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in simpan)) delete process.env[k];
+      Object.assign(process.env, simpan);
+      try { require('fs').unlinkSync(file); } catch {}
+      delete require.cache[require.resolve('./src/lib/anggaranUji')];
+    }
+  });
   await kasus('janji "nanti aku kabari" tercatat ke admin (…4324)', () => {
     assert.ok(ai.RE_JANJI_ADMIN.test('Siap Kak, nanti aku kabari ya'));
   });

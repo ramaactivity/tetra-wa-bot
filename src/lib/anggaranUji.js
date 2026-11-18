@@ -15,8 +15,12 @@ const path = require('path');
 const FILE_ANGGARAN = process.env.ANGGARAN_UJI_FILE || path.join(__dirname, '..', '..', 'data', 'anggaran-uji.json');
 const FILE_SALDO = process.env.SALDO_SUMOPOD_FILE || path.join(process.env.HOME || '/home/ubuntu', '.hermes', 'profiles', 'tetra-wa-bot', 'saldo-sumopod.json');
 
+// uji_balasan_cron (temuan Hermes t_769ccf81): cron "Belajar cepat CS Mintet" (4×/hari) menguji ±12× per putaran → ±48/hari, 3× jatah
+// harian, sehingga uji sebelum rilis selalu kehabisan. Cron tetap boleh membuktikan pelajaran (Rama 16 Nov), tapi maks 4/hari dan
+// tidak memakan jatah uji_balasan pemanggil lain (terpakai.uji_balasan = selain cron); total_panggilan tetap untuk semua.
 const BATAS = {
   uji_balasan: 15,
+  uji_balasan_cron: 4,
   regresi: 1,
   total_panggilan: 30,
   min_saldo_usd: 1.00
@@ -76,8 +80,12 @@ function cekOtorisasi() {
   if (process.argv.includes('--paksa') || process.env.RAMA_MANUAL === '1') {
     return { ok: true, pemanggil: 'rama_manual' };
   }
-  if (process.env.HERMES_AGENT === 'true' || process.env.HERMES_PROFILE) {
-    return { ok: true, pemanggil: `hermes:${process.env.HERMES_PROFILE || 'agent'}` };
+  // Identitas dari env yang Hermes injeksikan ke tiap perintah (gateway/session_context.py, tools/environments/base_session_env.py):
+  // cron yang jalan di proses gateway tidak membawa HERMES_PROFILE, jadi dulu tercatat "hermes:agent" (temuan Hermes t_769ccf81).
+  const profil = process.env.HERMES_SESSION_PROFILE || process.env.HERMES_PROFILE;
+  if (process.env.HERMES_AGENT === 'true' || profil) {
+    const cron = process.env.HERMES_CRON_SESSION === '1';
+    return { ok: true, pemanggil: `hermes:${profil || 'agent'}${cron ? ':cron' : ''}`, cron };
   }
   return {
     ok: false,
@@ -101,8 +109,15 @@ function periksaDanCatat(jenis, detail = {}) {
   // 3. Batas kuota harian
   const data = bacaAnggaran();
   const bebanPanggilan = jenis === 'regresi' ? (detail.jumlah_kasus || 13) : 1;
+  // Hitungan per pemanggil disimpan terpisah, bukan dihitung dari `riwayat` (riwayat dipotong 50 entri → hitungan bocor).
+  data.terpakai_per_pemanggil = data.terpakai_per_pemanggil || {};
+  const milik = data.terpakai_per_pemanggil[oto.pemanggil] || { uji_balasan: 0, regresi: 0, total_panggilan: 0 };
+  if (jenis === 'uji_balasan' && oto.cron && milik.uji_balasan >= BATAS.uji_balasan_cron) {
+    throw new Error(`Jatah uji AI pemanggil otomatis (cron) habis (${milik.uji_balasan}/${BATAS.uji_balasan_cron} per hari). ` +
+      'Jangan uji ulang; tulis temuannya sebagai usulan.');
+  }
 
-  if (jenis === 'uji_balasan' && data.terpakai.uji_balasan >= BATAS.uji_balasan) {
+  if (jenis === 'uji_balasan' && !oto.cron && data.terpakai.uji_balasan >= BATAS.uji_balasan) {
     throw new Error(`Anggaran harian uji_balasan habis (${data.terpakai.uji_balasan}/${BATAS.uji_balasan} kali). Kumpulkan uji untuk besok.`);
   }
 
@@ -115,9 +130,12 @@ function periksaDanCatat(jenis, detail = {}) {
   }
 
   // Catat pemakaian
-  if (jenis === 'uji_balasan') data.terpakai.uji_balasan += 1;
+  if (jenis === 'uji_balasan' && !oto.cron) data.terpakai.uji_balasan += 1;
   if (jenis === 'regresi') data.terpakai.regresi += 1;
   data.terpakai.total_panggilan += bebanPanggilan;
+  if (jenis === 'uji_balasan' || jenis === 'regresi') milik[jenis] += 1;
+  milik.total_panggilan += bebanPanggilan;
+  data.terpakai_per_pemanggil[oto.pemanggil] = milik;
 
   data.riwayat.push({
     t: new Date().toISOString(),
