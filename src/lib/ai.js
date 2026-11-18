@@ -1299,6 +1299,9 @@ async function ekstrakQuotation(pesan, ringkasan, namaAddon = []) {
       '"addons":[{"nama":"nama add-on","qty":1}],"backdrop":"White|Red|Silver|Gold|Emerald Green|Blue|Luxury #01|Luxury #02|dekorasi_klien","gross_up":false,"catatan":null}\n' +
       `Hari ini ${hariIni}; tanggal tanpa tahun = tanggal terdekat ke depan. gross_up true hanya kalau klien minta pajak dicantumkan. ` +
       'Isi hanya yang disebut/disepakati di chat; yang tidak ada tulis null (atau array kosong). Jangan menebak, jangan isi harga atau diskon. ' +
+      // 18 Nov (Yessi): "di daerah Grand Wisata" jadi venue/kota null → Tetra Ops menulis baris Transport "Diisi admin".
+      'Lokasi dicari di SELURUH chat: venue = nama gedung/tempat ATAU daerah yang klien sebut ("di daerah Grand Wisata" → "Grand Wisata"); ' +
+      'kota = kota/kabupaten tempat itu kalau jelas dari chat atau dari nama tempatnya yang terkenal (Grand Wisata → Bekasi, Sentul → Bogor). ' +
       'format hanya untuk photobooth; jam = durasi layanan dalam jam (bilangan bulat). ' +
       'qty = jumlah unit/booth layanan itu di acara yang sama ("2 booth", "x 2 unit"); tidak disebut = 1; jumlah tamu atau jam BUKAN qty. ' +
       (namaAddon.length ? `addons[].nama WAJIB persis salah satu dari: ${namaAddon.join(' | ')}. Add-on yang tidak ada di daftar masukkan ke catatan.` : '') },

@@ -604,7 +604,7 @@ function registerMessageHandler(sock) {
   // external_id = hash isi permintaan: permintaan sama tidak membuat draft ganda.
   const mintaQuotation = async (jid, msg) => {
     try {
-      const req = await ekstrakQuotation(getRiwayat(jid).slice(-30), getRingkasan(jid), await supa.fetchAddonNames());
+      const req = await ekstrakQuotation(getRiwayat(jid), getRingkasan(jid), await supa.fetchAddonNames()); // seluruh chat: lokasi sering disebut di awal
       const digit = phoneDigits(msg);
       req.klien = { ...(req.klien || {}), wa: /^\d{8,15}$/.test(digit) ? digit : null };
       req.layanan = (req.layanan || []).filter((l) => l && l.kategori)
