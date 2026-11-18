@@ -228,26 +228,15 @@ async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadConte
     ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
     { role: 'user', content: pesanKlien || '(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)' },
   ];
-  // Frasa kaku Rama (docs/FRASA-KAKU.md, mis. "aku kirim") → tulis ulang maksimal dua kali; kalau tetap ada, kalimat terakhir
-  // yang aman tetap dipakai supaya pesan penting (konfirmasi bukti transfer, rekap) tidak hilang.
-  let cadangan = null;
-  for (let coba = 1; coba <= 3; coba++) {
+  // Penjaga (klaim, bocor, harga) dan tulis ulang frasa kaku dikerjakan plugin Hermes penjaga-cs (Tahap 3A); kalau tidak aman,
+  // plugin mengembalikan [ADMIN_HANDOFF] -> setelah penanda dibuang kosong -> null (pemanggil mengabari admin).
+  for (let coba = 1; coba <= 2; coba++) {
     try {
       const r = await kirimHermes({ ...HERMES, situasi: true }, messages);
-      const t = rapikanGaya(r.content, 0).replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').trim();
-      if (!t || RE_KLAIM_AKSI.test(t) || bocorPikiran(t) || hargaAsing(t, SYSTEM_PROMPT_V2 + faq()).length) {
-        console.log(`[hermes-situasi] kalimat ditolak penjaga (percobaan ${coba}): ${t.slice(0, 100)}`);
-        continue;
-      }
-      const kaku = frasaKaku(t);
-      if (!kaku.length) return t;
-      cadangan = t;
-      console.log(`[hermes-situasi] frasa kaku ${kaku.join(', ')} — tulis ulang (percobaan ${coba})`);
-      messages.push({ role: 'assistant', content: t }, { role: 'user', content:
-        `KOREKSI SISTEM: hapus frasa kaku "${kaku.join('", "')}", tulis ulang dengan kalimat biasa (senada "silahkan kak, berikut … ya"). Balas HANYA pesannya.` });
+      return String(r.content || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').trim() || null;
     } catch (e) { console.error(`[hermes-situasi] gagal (percobaan ${coba}): ${e.message}`); }
   }
-  return cadangan;
+  return null;
 }
 
 // Pesan terstruktur (form data acara, rekap) disusun Hermes dengan format skill form-booking (Rama 16 Nov: "gua mau").
@@ -267,12 +256,12 @@ async function susunHermes(situasi, { history = [], wajibAda = [] } = {}) {
       const t = rapikanGaya(r.content, 0).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
       const nt = norm(t);
       const hilang = wajibAda.filter((w) => w && !nt.includes(norm(w)));
-      const kaku = frasaKaku(t);
-      if (t && !RE_KLAIM_AKSI.test(t) && !bocorPikiran(t) && !hilang.length && !kaku.length) return t;
-      console.log(`[hermes-susun] ditolak (percobaan ${coba}): hilang ${hilang.length ? hilang.join(' | ').slice(0, 160) : '-'}; kaku ${kaku.join(', ') || '-'}`);
+      // Tahap 3A: klaim/bocor/frasa kaku dijaga plugin penjaga-cs; Node hanya memastikan nilai data sistem tersalin persis.
+      if (t && !hilang.length) return t;
+      console.log(`[hermes-susun] ditolak (percobaan ${coba}): hilang ${hilang.length ? hilang.join(' | ').slice(0, 160) : '(kosong/dioper admin)'}`);
+      if (!t) return null;
       messages.push({ role: 'assistant', content: t }, { role: 'user', content: 'KOREKSI SISTEM: ' +
-        (hilang.length ? `baris/nilai ini hilang atau berubah, wajib ditulis persis: ${hilang.map((h) => `"${h}"`).join(', ')}. ` : '') +
-        (kaku.length ? `hapus frasa kaku "${kaku.join('", "')}". ` : '') + 'Tulis ulang pesannya utuh. Balas HANYA pesannya.' });
+        `baris/nilai ini hilang atau berubah, wajib ditulis persis: ${hilang.map((h) => `"${h}"`).join(', ')}. Tulis ulang pesannya utuh. Balas HANYA pesannya.` });
     } catch (e) { console.error(`[hermes-susun] gagal (percobaan ${coba}): ${e.message}`); }
   }
   return null;
@@ -887,6 +876,10 @@ async function panggil(endpoint, history, message, leadContext) {
     if (!panggilanAlat.length) {
       let teks = (msg.content || '').trim();
       if (!teks) throw new Error('balasan kosong dari model');
+      // Tahap 3A (Rama 18 Nov: "bener-bener native semua dihandle oleh hermes"): penjaga balasan cs-wa (klaim palsu, bocor
+      // pikiran, harga/link karangan, janji temu, durasi, gaya) = plugin Hermes penjaga-cs (hermes-plugins/penjaga-cs) yang
+      // menulis ulang / mengoper ke admin sebelum teks keluar dari Hermes. Node hanya meneruskan teks dan menjalankan penanda.
+      if (endpoint.hermes) return teks;
       // Sumber harga diambil SEBELUM koreksi: balasan salah yang didorong ke messages tidak boleh ikut jadi "sumber"
       // (dulu nominal karangan yang diulang di tulis ulang jadi lolos).
       // Jalur Hermes: FAQ, prosedur, dan pelajaran dibaca agent lewat skill (tidak ada di messages) — penjaga harga/link
@@ -1175,6 +1168,7 @@ function pisahPertanyaan(teks) {
 }
 
 async function getAIResponse(history, message, leadContext) {
+  if (process.env.AI_OTAK === 'hermes') return jawabAI(history, message, leadContext); // gaya dirapikan plugin penjaga-cs
   // V2: tanpa cetak tebal sama sekali (uji 11 Nov: 66 bold per 100 balasan masih terasa bot).
   return pisahPertanyaan(rapikanGaya(await jawabAI(history, message, leadContext), pakaiV2() ? 0 : 1));
 }
