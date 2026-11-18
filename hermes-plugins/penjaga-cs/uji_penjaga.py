@@ -192,6 +192,17 @@ def _():
     assert P.pisah_pertanyaan("Siap Kak. Tanggal berapa?") == "Siap Kak. Tanggal berapa?"
 
 
+@kasus("baris kalimat diberi satu baris kosong; daftar & penanda tetap rapat (Rama 18 Nov)")
+def _():
+    assert P.beri_jarak("Untuk 3 jam Rp 2.500.000 ya Kak.\nAcaranya di mana Kak?") == "Untuk 3 jam Rp 2.500.000 ya Kak.\n\nAcaranya di mana Kak?"
+    assert P.beri_jarak("Sudah berjarak.\n\nYa Kak?") == "Sudah berjarak.\n\nYa Kak?"
+    form = "Kak, tolong dibantu ya.\n1. Data Event\n- Nama Pengantin: D & R\n- Tanggal Event:\n\n2. Frame Foto\n- Ukuran Frame:"
+    assert P.beri_jarak(form) == form
+    assert P.beri_jarak("Silahkan Kak, berikut pricelistnya ya.\n[KIRIM: pricelist]") == "Silahkan Kak, berikut pricelistnya ya.\n[KIRIM: pricelist]"
+    rekap = "Ini rekapnya ya Kak:\n• Tanggal: 4 Des\n• Jam: 17.30\nKalau sudah benar cukup balas oke."
+    assert P.beri_jarak(rekap) == rekap
+
+
 @kasus("link & alamat karangan ditangkap (...2792)")
 def _():
     g = P.Giliran(giliran("boleh share lok?"))
@@ -354,8 +365,9 @@ def _():
 @kasus("alur plugin: balasan bersih tidak diubah dan tidak memanggil AI; tugas sistem dilewati")
 def _():
     llm = LLM([])
-    t = "Untuk 3 jam Rp 2.500.000 ya Kak, cetaknya sepuasnya.\nAcaranya di mana Kak?"
+    t = "Untuk 3 jam Rp 2.500.000 ya Kak, cetaknya sepuasnya.\n\nAcaranya di mana Kak?"
     assert jalankan(llm, t, giliran("3 jam berapa?")) == t and llm.n == 0
+    assert jalankan(llm, t.replace("\n\n", "\n"), giliran("3 jam berapa?")) == t and llm.n == 0, "baris rapat diberi jarak tanpa AI"
     tugas = [{"role": "system", "content": STABIL + "\n\nTUGAS SISTEM (bukan pesan untuk klien).\n\nTUGAS SISTEM: ringkas-chat — x"}, {"role": "user", "content": "KLIEN: halo"}]
     assert jalankan(llm, "- semoga — *x*", tugas) == "- semoga — *x*" and llm.n == 0
 

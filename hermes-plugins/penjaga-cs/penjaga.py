@@ -421,6 +421,23 @@ def pisah_pertanyaan(teks: str) -> str:
     return "\n".join(baris)
 
 
+RE_DAFTAR = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s")
+RE_BARIS_PENANDA = re.compile(r"^\s*\[[A-Z_]+")
+
+
+def beri_jarak(teks: str) -> str:
+    """Rama 18 Nov ("teksnya bertumpuk"): baris kalimat yang berurutan diberi satu baris kosong. Daftar (-, •, 1.) dan baris
+    penanda [..] tetap rapat (form data acara, rekap)."""
+    out: list[str] = []
+    for b in str(teks or "").split("\n"):
+        a = out[-1] if out else ""
+        if (b.strip() and a.strip() and not RE_DAFTAR.match(b) and not RE_DAFTAR.match(a)
+                and not RE_BARIS_PENANDA.match(b) and not RE_BARIS_PENANDA.match(a)):
+            out.append("")
+        out.append(b)
+    return "\n".join(out)
+
+
 # ── Konteks satu giliran ────────────────────────────────────────────────────────────────────────────────────────
 def teks_pesan(m: dict) -> str:
     c = m.get("content")
@@ -547,7 +564,7 @@ def selesaikan(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> tup
             teks += f'\n[INFO_ADMIN: klien mengajak tim Tetra ke grup WA / pertemuan: "{potong(g.pesan_klien, 100)}"]'
             aksi.append("tambah:ajak_grup")
     teks = re.sub(r"^\(admin\)\s*", "", teks, flags=re.I)  # jangan pernah menyamar jadi pesan admin di riwayat
-    teks = pisah_pertanyaan(rapikan_gaya(teks, 0))
+    teks = beri_jarak(pisah_pertanyaan(rapikan_gaya(teks, 0)))
     return teks, aksi
 
 
