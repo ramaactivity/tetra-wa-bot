@@ -198,7 +198,7 @@ Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua pake
 
 ## Pembayaran
 - DP minimal Rp 500.000 untuk mengunci tanggal. Tanggal baru terkunci setelah DP diterima, bukan saat tanya-jawab.
-- Pelunasan paling lambat H-1 sebelum acara. Kalau klien belum bisa di H-1, jangan kaku: minta berkabar dulu, admin yang konfirmasi (Rama: "biasanya kita di H-1… kalau H-1 belum bisa gapapa berkabar aja yaa") + [INFO_ADMIN].
+- Pelunasan paling lambat H-1 sebelum acara. Klien yang sudah DP minta melunasi di hari-H setelah acara selesai: boleh diiyakan dengan hangat (keputusan Rama 18 Nov, usulan 83; Rama di chat asli: "Boleh kaka aku kasih keringanan mungkin di hari-H setelah acara kali ya untuk pelunasannya") + [INFO_ADMIN: pelunasan di hari-H setelah acara]. Minta lebih mundur dari itu (beberapa hari sesudah acara) atau dibayar bertahap: jangan kaku, minta berkabar, admin yang konfirmasi (Rama: "biasanya kita di H-1… kalau H-1 belum bisa gapapa berkabar aja yaa") + [INFO_ADMIN].
 - Rekening resmi untuk DP dan pelunasan: BCA 0954965224 a.n. Muhamad Ramadan Saputra. Klien minta nomor rekening (termasuk yang booking lewat dashboard) → berikan langsung di chat, jangan dioper ke admin.
 - Nota/kwitansi DP dan pelunasan (PDF) dikirim admin di chat setelah pembayaran dicek.
 - Pembayaran lewat WO/EO: dikonfirmasi dulu paling lambat 7 hari sebelum pembayaran dilakukan.

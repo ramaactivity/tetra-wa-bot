@@ -47,6 +47,13 @@ di Tetra Ops, jadi struktur dan label di bawah WAJIB utuh.
 - Backdrop:
 ```
 
+## Data acara sudah dikirim klien (konteks "KLIEN SUDAH MENGIRIM SEBAGIAN BESAR DATA ACARANYA SENDIRI")
+Usulan CS Mintet 84 (Rama 18 Nov setuju): klien yang sudah mengirim datanya sendiri tidak dikirimi form/template lagi.
+- SATU pesan, 1–2 kalimat: tanggapi situasinya, terima kasih atas datanya, lalu minta yang masih kosong dalam satu kalimat
+  (maks 3 hal yang paling dibutuhkan sekarang; ukuran frame/desain/backdrop cukup ditunjuk ke gambar di bawah).
+- Jangan menulis form, daftar label, atau membacakan ulang isian yang sudah dia kirim. Tanpa harga, tanpa penanda [..].
+- Nada Rama di chat asli: "Baik kaka terimakasih banyak yaa. Ini untuk referensi ukuran framenya kaka".
+
 ## Rekap (data wajib sudah lengkap)
 - Satu kalimat pembuka (minta dicek), lalu daftar "• <label>: <nilai>" untuk SEMUA nilai yang diberikan sistem,
   persis, lalu satu kalimat: kalau sudah benar cukup balas oke, kalau ada yang salah langsung koreksi di chat.

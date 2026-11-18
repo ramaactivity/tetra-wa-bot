@@ -508,9 +508,9 @@ function registerMessageHandler(sock) {
       tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
-        await mulaiBooking(jid, null, 'admin', wajibHermes()
-          ? await aiLib.kalimatHermes('Admin sudah mengonfirmasi DP klien diterima (keputusan admin). Ucapkan singkat, lalu minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.', { history: getRiwayat(jid) })
-          : 'DP-nya sudah diterima ya Kak, makasih!',
+        await mulaiBooking(jid, null, 'admin', (akhir) => (wajibHermes()
+          ? aiLib.kalimatHermes(`Admin sudah mengonfirmasi DP klien diterima (keputusan admin). Ucapkan singkat, lalu: ${akhir}`, { history: getRiwayat(jid) })
+          : 'DP-nya sudah diterima ya Kak, makasih!'),
           'DP dikonfirmasi admin — data booking').catch((e) => console.error('[booking] gagal mulai:', e.message));
       }
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
@@ -554,17 +554,30 @@ function registerMessageHandler(sock) {
   };
 
   // Mulai tahap booking: form (terisi sebagian) + katalog ke klien, rekap ke admin.
-  const mulaiBooking = async (jid, msg, sumber, pembuka, judulAdmin) => {
+  // pembukaUntuk(akhir) menulis kalimat situasi (DP masuk / dikonfirmasi admin) SESUDAH data acara dibaca, supaya isinya cocok
+  // dengan yang benar-benar dikirim (form / tanpa form / rekap). Dulu selalu "lengkapi form di bawah" walau form tidak dikirim.
+  const mulaiBooking = async (jid, msg, sumber, pembukaUntuk, judulAdmin) => {
     const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
     await perbaruiBooking(jid, null, false);
+    const baris = booking.barisForm(b);
+    // Usulan CS Mintet 84 (Rama 18 Nov setuju): klien yang sudah mengirim sendiri sebagian besar data acaranya (>=5 isian) tidak
+    // dikirimi template form panjang lagi (…2977, …4035, …5611 dapat template padahal datanya sudah dikirim): satu pesan Hermes,
+    // terima kasih + yang masih kosong (skill form-booking). Klien lain tetap form lengkap (Rama 11 Nov).
+    let singkat = !b.lengkap && wajibHermes() && baris.filter((x) => x.asli).length >= 5;
+    const pembuka = await pembukaUntuk(b.lengkap
+      ? 'Data acaranya sudah lengkap dari chat; rekap untuk dia cek dikirim sistem tepat sesudah pesanmu.'
+      : singkat
+        ? `KLIEN SUDAH MENGIRIM SEBAGIAN BESAR DATA ACARANYA SENDIRI (form tidak dikirim). Masih kosong: ${baris.filter((x) => !x.asli).map((x) => x.label).join(', ')}. ` +
+          'Gambar pilihan yang masih perlu (ukuran frame, backdrop, katalog desain) ditempel sistem sesudah pesanmu. Skill form-booking bagian "Data acara sudah dikirim klien".'
+        : 'Minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.');
+    if (singkat && !pembuka) singkat = false; // Hermes gagal menulis → form data sistem
     // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
     // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
-    let teksAwal = b.lengkap ? pembuka : booking.teksForm(b, pembuka);
+    let teksAwal = b.lengkap || singkat ? pembuka : booking.teksForm(b, pembuka);
     // Wajib Hermes (Rama 16 Nov "gua mau"): form disusun Hermes (skill form-booking); penjaga memastikan semua label & nilai
     // asli ada persis. Gagal → form data sistem (isian dipakai admin untuk input Tetra Ops).
-    if (!b.lengkap && wajibHermes()) {
-      const baris = booking.barisForm(b);
+    if (!b.lengkap && !singkat && wajibHermes()) {
       const isian = baris.map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
       const form = await aiLib.susunHermes(
         `Susun form data acara (skill form-booking) untuk acara ${booking.isWedding(b) ? 'wedding' : 'non-wedding'}. Nilai yang sudah diketahui:\n${isian}\n` +
@@ -851,11 +864,10 @@ function registerMessageHandler(sock) {
               ? 'bukti bayar/pelunasan dikirim klien di tahap booking (lihat pesan yang diteruskan) — cek mutasi'
               : 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
           } else {
-            await mulaiBooking(jid, msg, 'bukti-transfer',
-              wajibHermes()
-                ? await aiLib.kalimatHermes('Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. Minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.',
-                  { history: getRiwayat(jid), pesanKlien: originalText })
-                : 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
+            await mulaiBooking(jid, msg, 'bukti-transfer', (akhir) => (wajibHermes()
+              ? aiLib.kalimatHermes(`Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. ${akhir}`,
+                { history: getRiwayat(jid), pesanKlien: originalText })
+              : 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.'),
               'Bukti DP masuk — cek mutasi BCA, lalu input booking');
           }
           return;
