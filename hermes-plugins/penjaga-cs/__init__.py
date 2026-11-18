@@ -7,7 +7,8 @@ Dulu penjaga ini kode Node (~/tetra-wa-bot/src/lib/ai.js): deteksi -> minta cs-w
   batas waktu) -> buang kalimat / tambah penanda admin / rapikan gaya; masalah fatal yang tersisa -> [ADMIN_HANDOFF].
 - `transform_llm_output` B (jaring_cepat): kalau A tidak selesai (lewat plugins.hook_callback_timeout atau galat), balasan
   bermasalah fatal tetap tidak terkirim. Hasil pertama yang berupa teks menang; A terdaftar lebih dulu.
-Kejadian dicatat di <plugin-data>/penjaga-cs/kejadian.jsonl (dibaca bahan belajar CS Mintet).
+Kejadian dicatat di <plugin-data>/penjaga-cs/kejadian.jsonl (dibaca bahan belajar CS Mintet); status.json = tanda hidup
+(jumlah balasan diperiksa, waktu terakhir).
 Pembagian sumber: kode ini di repo bot (~/tetra-wa-bot/hermes-plugins/penjaga-cs), profil cs-wa memuatnya lewat symlink.
 """
 from __future__ import annotations
@@ -40,6 +41,21 @@ def _baca_frasa():
     except OSError as e:
         log.warning("penjaga-cs: %s tidak terbaca (%s); frasa kaku tidak dicek", FRASA_FILE, e)
     return _frasa["isi"]
+
+
+def _status(bermasalah: bool) -> None:
+    """Tanda hidup: kapan terakhir balasan diperiksa (balasan bersih tidak meninggalkan jejak lain)."""
+    try:
+        from plugins.plugin_storage import plugin_data_dir
+        f = plugin_data_dir("penjaga-cs") / "status.json"
+        with _kunci:
+            st = json.loads(f.read_text()) if f.exists() else {"diperiksa": 0, "bermasalah": 0}
+            st["diperiksa"] += 1
+            st["bermasalah"] += int(bermasalah)
+            st["terakhir"] = int(time.time() * 1000)
+            f.write_text(json.dumps(st))
+    except Exception as e:
+        log.warning("penjaga-cs: status tidak tercatat: %s", e)
 
 
 def _kejadian(rec: dict) -> None:
@@ -92,6 +108,7 @@ def periksa_dan_perbaiki(response_text="", session_id="", **_):
         teks, masalah = baru, m2
     akhir, aksi = P.selesaikan(teks, g, frasa, robot)
     c["selesai"] = True
+    _status(bool(jejak or aksi))
     if jejak or aksi:
         log.info("penjaga-cs %s: masalah %s, aksi %s", session_id, jejak, aksi)
         _kejadian({"sesi": session_id, "masalah": jejak, "aksi": aksi, "situasi": g.situasi,
