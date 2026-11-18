@@ -33,10 +33,8 @@ const RE_STOP = /^\s*(stop|unsubscribe|berhenti|jangan (hubungi|chat|wa)( (saya|
 function konteksTamu(jid) {
   const t = tamuCtx.get(jid);
   if (!t) return '';
-  return `\nTAMU BOOTH: ${t.replace(/^tamu booth:\s*/i, '')}. Dia tamu yang baru foto di photobooth Tetra di acara itu, lalu meninggalkan nomor karena tertarik pakai Tetra. ` +
-    'Ini balasan atas pesan kita: jangan perkenalan ulang, jangan sebut website. Layani sebagai calon klien yang hangat: tanggapi pesannya, gali acaranya (jenis, tanggal, lokasi) seperti biasa. ' +
-    'Kalau ada kode promo di atas, itu milik nomor ini; sebut saat bahas harga/booking, jangan janjikan lebih dari hadiahnya dan sebut batas berlakunya. ' +
-    'Begitu dia siap booking, kirim link booking di atas (kode promonya sudah terisi otomatis). Admin bisa menolak bukti promo belakangan, jadi jangan bilang promonya pasti.';
+  // 18 Nov: cara melayani tamu booth (promo, link booking) ada di skill Hermes mode-kontak-khusus; Node hanya fakta.
+  return `\nTAMU BOOTH: ${t.replace(/^tamu booth:\s*/i, '')}. Pesan ini balasan atas pesan kita.`;
 }
 // Usulan CS Mintet 67 (Rama 16 Nov "go ahead"): kalimat oper ke owner/tim yang baku dikirim SEKALI per kontak. Dulu rute kata kunci
 // mengirim kalimat identik tiap hari (…1927 panitia kampus 13, 14, 15 Nov) tanpa menyinggung proposal yang dia kirim.
@@ -91,11 +89,8 @@ async function dengarVoiceNote(m) {
 function konteksKlienLama(jid) {
   const k = klienLamaCtx.get(jid);
   if (!k) return '';
-  return `\nKLIEN LAMA: ${k.nama}${k.pic ? ` (PIC ${k.pic})` : ''} sudah pernah memakai Tetra${k.alasan ? ` — ${k.alasan}` : ''}. ` +
-    'Dia sudah tahu harga & layanan Tetra: JANGAN mengirim atau menawarkan pricelist kecuali dia sendiri memintanya. ' +
-    'Ini balasan atas sapaan Rama, BUKAN pengunjung website baru: jangan memperkenalkan diri ulang. Balas sesuai isi pesannya, hangat dan singkat (panggil "kak"). ' +
-    'Kalau rencana acaranya masih lama (lebih dari ±2 bulan lagi, mis. "Juni tahun depan") atau belum jelas: cukup ucapkan terima kasih dan bilang nanti kami kabari lagi mendekati waktunya — JANGAN menanyakan detail. ' +
-    'Kalau acaranya dalam ±2 bulan: baru tanyakan tanggal pasti, lokasi, dan detail acaranya supaya bisa dicek ketersediaan unit.';
+  // 18 Nov: cara menanggapi klien lama ada di skill Hermes mode-kontak-khusus; Node hanya fakta.
+  return `\nKLIEN LAMA: ${k.nama}${k.pic ? ` (PIC ${k.pic})` : ''} sudah pernah memakai Tetra${k.alasan ? ` — ${k.alasan}` : ''}; pesan ini balasan atas sapaan Rama.`;
 }
 const vendorLib = require('../lib/vendor');
 const klienBooking = require('../lib/klienBooking'); // klien sudah booking (Tetra Ops DR-052)
@@ -263,8 +258,9 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   const lines = [`Persona: ${persona} (${smart.segmentLabel(seg.segment)})`];
   if (known.length) lines.push(`Sudah diketahui: ${known.join(', ')}`);
   else lines.push('Belum ada detail acara.');
-  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')} — urutan bertanya ala Rama: acara apa & tanggalnya (boleh sekalian kota) → setelah dijawab, nama venue-nya (kalau belum ada venue, kotanya) → baru jam acara bila perlu. Maksimal 2 hal dalam satu pesan.`);
-  else lines.push('Detail acara sudah lengkap — fokus ke cek slot & rekomendasi paket.');
+  // 18 Nov: cara memakai fakta ini (urutan bertanya, kontak pertama) ada di skill Hermes cara-balas-wa.
+  if (missing.length) lines.push(`Masih kurang: ${missing.join(', ')}.`);
+  else lines.push('Detail acara sudah lengkap.');
   const w = smart.parseWebsite(pesanBaru);
   if (w.dariWebsite || w.halaman) {
     const info = [w.halaman && `halaman ${w.halaman}`, w.paket && `paket yang diklik: ${w.paket}`,
@@ -276,9 +272,9 @@ function buildLeadContext(fullText, jid, pesanBaru = '', namaWA = '', vendor = n
   if (nama) lines.push(`Nama klien: ${nama} (boleh dipakai menyapa).`);
   if (!vendor) {
     const tp = tahapPercakapan(jid, det, fullText, pesanBaru);
-    if (tp.tahap === 'SAPA') lines.push('TAHAP PERCAKAPAN: SAPA — belum pernah ada percakapan. Ini KONTAK PERTAMA dengan klien ini — ikuti aturan KONTAK PERTAMA.');
+    if (tp.tahap === 'SAPA') lines.push('TAHAP PERCAKAPAN: SAPA (KONTAK PERTAMA) — belum pernah ada percakapan.');
     else lines.push(`TAHAP PERCAKAPAN: ${tp.tahap}${tp.hari >= 3 ? ` + LANJUTAN (klien kembali setelah ${tp.hari} hari)` : ''}. ` +
-      `Belum diketahui (info saja, BUKAN daftar pertanyaan — tanya hanya yang memajukan topik yang sedang dibahas): ${tp.belum.join(', ') || '-'}. Baca kliennya dulu (STRATEGI CS).`);
+      `Belum diketahui: ${tp.belum.join(', ') || '-'}.`);
     lines.push(varianEksperimen(jid, persona, tp.tahap).trim());
   }
   const ringkasan = getRingkasan(jid);
