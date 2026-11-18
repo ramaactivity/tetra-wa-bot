@@ -490,21 +490,9 @@ function urusanKlien(riwayat) {
   return riwayat.some((p) => p.role === 'user' && RE_URUSAN_KLIEN.test(String(p.content)));
 }
 
+// Aturan mode ambil alih ada di skill cara-balas-wa (18 Nov, Rama: 100% buku Hermes); Node hanya memberi faktanya.
 const KONTEKS_ASSIST = (menit) =>
-  `\n\nMODE AMBIL ALIH: chat ini sedang dipegang admin, tapi pesan terbaru klien belum dibalas admin selama ${menit} menit. ` +
-  'Kamu BOLEH menjawab HANYA kalau pertanyaannya sederhana, tidak krusial, dan jawabannya pasti ada di info resmi ' +
-  '(harga paket standar, isi paket, cara booking & DP minimal, jam operasional, format cetak, backdrop basic, transport, galeri, cek jadwal). ' +
-  'Pesan berawalan "(admin)" adalah keputusan resmi: jangan diulang, dibantah, atau diralat. ' +
-  'Kalau pertanyaannya SULIT atau krusial, JANGAN dijawab: balas persis "[SULIT: <topik singkat>]" supaya admin dikabari. Sulit = ' +
-  'diskon/promo/harga khusus/negosiasi, pembayaran atau konfirmasi DP/pelunasan, perubahan/batal/reschedule booking, komplain, ' +
-  'keputusan yang admin janjikan sendiri (potongan, jadwal khusus), atau kamu tidak yakin jawabannya. ' +
-  'Usulan CS Mintet 66 & 68 (Rama 16 Nov): kalau SEBAGIAN bisa dijawab dari info resmi (mis. backdrop dari desain sendiri: boleh, patokan area ±3×3 m, ' +
-  'desain dari klien atau tim Tetra), jawab bagian itu dan tambahkan [INFO_ADMIN: <angka/keputusan yang perlu admin>] — jangan [SULIT] hanya karena satu angka dihitung admin. ' +
-  'Kalau klien baru menjawab pertanyaan admin (ukuran, pilihan, jam) dan admin belum melanjutkan: rangkum keputusannya 1–2 baris, sebut yang dihitung admin, ' +
-  'tutup dengan satu pertanyaan praktis, dan tambahkan [INFO_ADMIN]. ' +
-  'Kalau pesannya tidak perlu dijawab (ok, makasih, ucapan, stiker), balas persis [DIAM]. ' +
-  'Jangan pakai [ADMIN_HANDOFF], [QUOTATION], atau [PERUBAHAN]. Lampiran resmi boleh lewat [KIRIM: pricelist/backdrop/format/…] seperti biasa. ' +
-  'Kalau menjawab: jangan perkenalkan diri, jawab langsung dan singkat; boleh bilang bagian lain tetap admin yang lanjutkan.';
+  `\n\nMODE AMBIL ALIH: chat ini sedang dipegang admin; pesan terbaru klien belum dibalas admin selama ${menit} menit.`;
 
 function registerMessageHandler(sock) {
   sockTerakhir = sock;

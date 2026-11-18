@@ -179,18 +179,12 @@ const pakaiHermes = () => process.env.AI_OTAK === 'hermes' && !!process.env.HERM
 const HERMES_TUGAS = { hermes: true, tugas: true, model: 'hermes:cs-wa', timeout: Number(process.env.HERMES_TUGAS_TIMEOUT_MS || 90000) };
 const epTugas = () => (pakaiHermes() ? HERMES_TUGAS : PRIMARY);
 const bolehCadangan = () => process.env.AI_OTAK !== 'hermes';
-// 18 Nov: ketiga skill dipin lewat `skills.auto_load` profil cs-wa (fitur bawaan Hermes, dimuat penuh tiap sesi baru) —
-// audit 16–18 Nov: 26 dari 79 run tidak memanggil skill_view walau diwajibkan, jadi pelajaran tidak terpakai.
-const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): skill faq-tetra (fakta & harga resmi), cara-balas-wa (prosedur & penanda sistem), dan ' +
-  'cs-mintet-pelajaran (pelajaran dari chat nyata) sudah dimuat penuh di awal sesi — itu acuanmu, tidak perlu skill_view untuk ketiganya; ' +
-  'contoh percakapan ada di references/contoh.md skill cs-mintet-pelajaran (skill_view kalau situasinya butuh contoh). ' +
-  'Status tanggal hanya dari alat cek_ketersediaan. Pesan berawalan "(admin)" di riwayat = balasan admin manusia (keputusan resmi). ' +
-  'Balas HANYA teks WhatsApp final untuk klien; penanda [..] di baris paling akhir. Pesan "KOREKSI SISTEM" dari sistem: ikuti, lalu tulis ulang pesan final saja.';
+// 18 Nov (Rama: "pindahkan semuanya ke buku hermes"): cara kerja, mode ambil alih, pesan situasi, dan tugas sistem ada di
+// skill cara-balas-wa; strategi di skill strategi-cs; semuanya dipin lewat `skills.auto_load` profil cs-wa. Node hanya memberi fakta.
 async function kirimHermes(endpoint, messages) {
   const url = process.env.HERMES_CS_URL || 'http://127.0.0.1:8642/p/cs-wa/v1';
   const H = { Authorization: `Bearer ${process.env.HERMES_CS_KEY}`, 'Content-Type': 'application/json' };
-  const sys = (endpoint.tugas ? 'TUGAS SISTEM (bukan pesan untuk klien): kerjakan persis sesuai instruksi dan format keluaran yang diminta; ' +
-    'jangan menulis kalimat untuk klien dan jangan membaca skill kecuali instruksi memintanya.\n\n' : '') +
+  const sys = (endpoint.tugas ? 'TUGAS SISTEM (bukan pesan untuk klien).\n\n' : '') +
     (messages[0]?.role === 'system' ? messages[0].content : '');
   const percakapan = messages.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.tool_calls)
     .map((m) => ({ role: m.role, content: String(m.content || '') }));
@@ -227,13 +221,10 @@ async function kirimHermes(endpoint, messages) {
 // bukan teks tetap Node (Rama 16 Nov: "full hanya hermes 100%"). Node memberi situasi + fakta; data persis (link, isian
 // form) ditempel Node. Mengembalikan null kalau Hermes gagal/tidak dipakai — pemanggil yang memutuskan (wajib Hermes:
 // tanpa kalimat bawaan, admin dikabari).
-const HERMES_SITUASI = 'CARA KERJA (dari sistem bot WA Tetra): sistem meminta SATU pesan pendek (1–2 kalimat) untuk klien sesuai SITUASI ' +
-  'di bawah, dengan suaramu (SOUL). Baca skill hanya kalau butuh fakta. Jangan menambah janji atau klaim di luar situasi, ' +
-  'jangan menulis link, isian form, atau penanda [..] (sistem yang menempelkannya). Balas HANYA pesannya.';
 async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadContext = '' } = {}) {
   if (process.env.AI_OTAK !== 'hermes' || !process.env.HERMES_CS_KEY) return null;
   const messages = [
-    { role: 'system', content: HERMES_SITUASI + konteksWaktu() + (leadContext ? `\n\nKONTEKS:\n${leadContext}` : '') + `\n\nSITUASI DARI SISTEM: ${situasi}` },
+    { role: 'system', content: konteksWaktu() + (leadContext ? `\n\nKONTEKS:\n${leadContext}` : '') + `\n\nSITUASI DARI SISTEM: ${situasi}` },
     ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
     { role: 'user', content: pesanKlien || '(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)' },
   ];
@@ -262,14 +253,11 @@ async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadConte
 // Pesan terstruktur (form data acara, rekap) disusun Hermes dengan format skill form-booking (Rama 16 Nov: "gua mau").
 // Penjaga: SEMUA string di wajibAda (label form + nilai asli) harus ada persis; gagal tiga kali → null (pemanggil memakai
 // versi data sistem, karena isian ini dipakai admin untuk input booking di Tetra Ops).
-const HERMES_SUSUN = 'CARA KERJA (dari sistem bot WA Tetra): sistem meminta kamu menyusun pesan WhatsApp untuk klien sesuai SITUASI di bawah ' +
-  'dengan suaramu (SOUL). Baca skill form-booking dengan skill_view dan ikuti formatnya persis. Nilai dari sistem diisi persis, ' +
-  'jangan diubah atau ditebak. Tanpa harga, tanpa janji tambahan, tanpa penanda [..]. Balas HANYA pesannya.';
 async function susunHermes(situasi, { history = [], wajibAda = [] } = {}) {
   if (!pakaiHermes()) return null;
   const norm = (x) => rapikanGaya(String(x), 0).toLowerCase().replace(/\s+/g, ' ').trim();
   const messages = [
-    { role: 'system', content: HERMES_SUSUN + konteksWaktu() + `\n\nSITUASI DARI SISTEM: ${situasi}` },
+    { role: 'system', content: konteksWaktu() + `\n\nSITUASI DARI SISTEM: ${situasi}` },
     ...history.slice(-10).filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role, content: String(m.content || '') })),
     { role: 'user', content: '(sistem meminta pesan ini; tidak ada pesan baru dari klien)' },
   ];
@@ -483,9 +471,7 @@ function konteksWaktu() {
     'Agustus', 'September', 'Oktober', 'November', 'Desember'][wib.getUTCMonth()];
   const tgl = `${hari}, ${wib.getUTCDate()} ${bulan} ${wib.getUTCFullYear()}`;
   const jam = String(wib.getUTCHours()).padStart(2, '0') + '.' + String(wib.getUTCMinutes()).padStart(2, '0');
-  return `\n\nWAKTU SEKARANG: ${tgl}, pukul ${jam} WIB.\n` +
-    `Pakai ini untuk mengartikan "besok", "minggu depan", "weekend ini" dan sejenisnya. ` +
-    `Jangan balik bertanya tanggal berapa besok -- kamu sudah tahu.`;
+  return `\n\nWAKTU SEKARANG: ${tgl}, pukul ${jam} WIB.`; // cara memakainya: skill cara-balas-wa (18 Nov)
 }
 
 // Penjaga harga (keputusan: zero mistake soal angka). Setiap nominal rupiah di
@@ -609,7 +595,8 @@ function masalahGaya(teks, pertama = false, pesanKlien = '') {
   if (jelasSleeve && !/\[KIRIM:\s*sleeve\]/i.test(teks)) out.push('penjelasan cetakan + sleeve sebaiknya lewat ilustrasi: tulis [KIRIM: sleeve] dengan pengantar singkat, jangan menjelaskan panjang di teks');
   else if (jelasSleeve && isi.length > 200) out.push('ilustrasi sleeve sudah dilampirkan: jangan ulang isinya di teks, cukup pengantar singkat (harga Custom Sleeve hanya kalau dia menanyakannya)');
   // Rama 11 Nov: harga umum lewat lampiran pricelist, bukan daftar harga di chat.
-  if (/\[KIRIM:\s*pricelist\]/i.test(teks) && (isi.match(/Rp ?\d/g) || []).length > 1) out.push('pricelist sudah dilampirkan: jangan mendaftar harga di teks, cukup satu kalimat pengantar yang menunjuk ke lampiran di bawahnya');
+  // 18 Nov: penjaga "pricelist + >1 harga → tulis ulang" dihapus — aturannya di skill faq-tetra (dengan pengecualian durasi di luar
+  // tabel); penjaga ini memaksa jawaban 12 jam yang benar ditulis ulang jadi samar (Rama: 100% buku Hermes).
   out.push(...basaBasi(isi, pesanKlien));
   // Regresi 11 Nov: dua kalimat pengantar untuk satu lampiran ("ini ada gambaran…" + "Silahkan Kak, berikut…") = redundant.
   if (/\[KIRIM:/i.test(teks) && (isi.match(/\b(berikut|ini (ada |dia )?(gambaran|perbandingan|contoh))\b/gi) || []).length >= 2)
@@ -877,11 +864,11 @@ async function panggil(endpoint, history, message, leadContext) {
   const BATAS = Number(process.env.AI_V2_BATAS_MS || 240000);
   if (v2 && endpoint === PRIMARY) endpoint = { ...endpoint, effort: process.env.AI_V2_EFFORT || 'medium', timeout: 120000 };
   const konteksLead = leadContext
-    ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}\nJadikan ini acuan — jangan tanya ulang yang sudah diketahui. Yang kurang ditanya sekaligus, maksimal 2 hal.`
+    ? `\n\nKONTEKS LEAD (dari deteksi & riwayat):\n${leadContext}`
     : '';
   const messages = [
     { role: 'system', content: endpoint.hermes
-      ? HERMES_CARA + strategi() + konteksWaktu() + konteksLead
+      ? konteksWaktu() + konteksLead
       : v2
       ? SYSTEM_PROMPT_V2 + strategi() + faq() + pelajaran(true) + contoh.gayaAdmin(message) + contoh.blokPrompt(message, history, leadContext) + konteksWaktu() + konteksLead
       : SYSTEM_PROMPT + strategi() + faq() + pelajaran() + konteksWaktu() + konteksLead },

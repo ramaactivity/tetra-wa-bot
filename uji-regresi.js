@@ -145,8 +145,10 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     const instruksi = ai._SYSTEM_PROMPT_V2.replace(/"[^"]*"/g, '').toLowerCase();
     assert.deepStrictEqual(ai.daftarFrasaKaku().filter((f) => instruksi.includes(f)), []);
   });
-  await kasus('pricelist: daftar harga di teks ditolak penjaga, gambar tanpa caption (Rama 11 Nov)', () => {
-    assert.ok(ai.masalahGaya('Siap Kak. 2 jam Rp 2.000.000, 3 jam Rp 2.500.000.\n[KIRIM: pricelist]').length);
+  // 18 Nov (Rama: 100% buku Hermes): aturan "jangan daftar harga kalau ada pricelist" pindah ke skill faq-tetra; kode tidak boleh lagi
+  // memaksa tulis ulang jawaban dua jalan (12 jam) yang benar.
+  await kasus('pricelist: aturan daftar harga di skill, jawaban dua jalan 12 jam tidak ditulis ulang kode, gambar tanpa caption', () => {
+    assert.deepStrictEqual(ai.masalahGaya('Bisa dua jalan kak: paket 8 jam Rp 5.000.000 + extend 4 jam (Rp 500.000/jam) jadi Rp 7.000.000, atau paket 13 jam Rp 7.500.000 (format 2R).\n[KIRIM: pricelist]'), []);
     assert.deepStrictEqual(ai.masalahGaya('Silahkan Kak, berikut pricelistnya ya. Acaranya kapan?\n[KIRIM: pricelist]'), []);
     assert.strictEqual(require('./src/lib/pricelist').CAPTION_GAMBAR, '');
   });
