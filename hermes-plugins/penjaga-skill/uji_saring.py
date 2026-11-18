@@ -54,7 +54,7 @@ def _():
 def _():
     for t in ["- Klien tanya 3 jam: jawab Rp 2.500.000 lalu satu pertanyaan.", "- Tanya jenis acara dulu sebelum menyebut durasi.",
               "- rekening/pembayaran tidak diulang kalau sudah dikirim", "- Sponsorship booth gratis ditolak (keputusan Rama).",
-              "- Jangan kasih diskon kalau belum diminta.", "- Minta pelunasan mundur: hari-H setelah acara boleh diiyakan hangat (usulan 83)."]:
+              "- Jangan kasih diskon kalau belum diminta.", "4. DILARANG harga, nominal, persen, diskon, promo, rekening, link, nomor.", "- Minta pelunasan mundur: hari-H setelah acara boleh diiyakan hangat (usulan 83)."]:
         assert m(t) == [], (t, m(t))
 
 

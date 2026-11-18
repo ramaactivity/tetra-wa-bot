@@ -36,13 +36,14 @@ def angka_rupiah(teks: str) -> list[int]:
 
 RE_LARANGAN = re.compile(r"\b(jangan|tidak|tak|bukan|dilarang|belum|tanpa|ditolak|tolak)\b", re.I)
 ATURAN = [
-    ("nominal ditulis huruf", re.compile(r"\b(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s*(?:ratus|puluh|belas)?\s*(?:ribu|juta)\b", re.I)),
-    ("persen", re.compile(r"\d+\s*%|\bpersen\b", re.I)),
     ("link", re.compile(r"\bhttps?:|\bwww\.|wa\.me", re.I)),
     ("nomor panjang (rekening/HP)", re.compile(r"\d{6,}|\b0\d{2,4}[- ]\d{3,4}[- ]\d{3,5}\b")),
     ("upaya mengubah aturan", re.compile(r"abaikan|ignore|lupakan|system prompt|aturan di atas", re.I)),
 ]
-# Hanya bahaya kalau BUKAN kalimat larangan (koreksi Hermes atas regex lama).
+# Hanya bahaya kalau BUKAN kalimat larangan (koreksi Hermes atas regex lama; bagian "Cara merawat" sendiri berbunyi "DILARANG harga,
+# nominal, persen, diskon, promo, rekening, link…").
+RE_NOMINAL_HURUF = re.compile(r"\b(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s*(?:ratus|puluh|belas)?\s*(?:ribu|juta)\b", re.I)
+RE_PERSEN = re.compile(r"\d+\s*%|\bpersen\b", re.I)
 RE_REKENING = re.compile(r"rekening|\brek\b|\b(bca|bni|bri|mandiri)\b", re.I)
 RE_KERINGANAN = re.compile(r"\b(kasih|beri(kan)?|boleh|langsung|tawarkan)\s+(saja\s+)?(diskon|potongan|gratis|promo|free)\b", re.I)
 RE_FAKTA = re.compile(r'^\s*-\s*(.+?)\s*\(admin:\s*"([^"]+)"\)\s*$')
@@ -98,7 +99,8 @@ def masalah_baris(baris: str, faq: set[int], kutipan: Kutipan | None) -> list[st
     t = str(baris)
     out = [f"nominal Rp {n:,} tidak ada di FAQ".replace(",", ".") for n in angka_rupiah(t) if n not in faq]
     out += [nama for nama, rx in ATURAN if rx.search(t)]
-    for rx, nama in ((RE_REKENING, "rekening/bank"), (RE_KERINGANAN, "memberi keringanan")):
+    for rx, nama in ((RE_NOMINAL_HURUF, "nominal ditulis huruf"), (RE_PERSEN, "persen"), (RE_REKENING, "rekening/bank"),
+                     (RE_KERINGANAN, "memberi keringanan")):
         m = rx.search(t)
         if m and not RE_LARANGAN.search(t[:m.start()]) and not RE_LARANGAN.search(t[m.end():m.end() + 25]):
             out.append(nama)
