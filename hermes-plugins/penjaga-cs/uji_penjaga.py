@@ -280,6 +280,14 @@ def _():
     assert t == "Sama-sama Kak." and "buang:kata_robot" in aksi, t
 
 
+@kasus("klaim pembayaran tanpa subjek (Sudah masuk kaka) ditangkap di konteks bayar saja (18 Nov)")
+def _():
+    assert "klaim_aksi" in kode(gaya("Sudah masuk kaka terimakasih banyak", False, "[kirim gambar: bukti transfer DP]"))
+    assert "klaim_aksi" in kode(gaya("Siap Kak, DP-nya sudah masuk ya."))
+    assert "klaim_aksi" not in kode(gaya("Sudah masuk kak, desainnya aku teruskan ke tim desain ya.", False, "[kirim dokumen: desain.pdf] ini desainnya kak"))
+    assert "klaim_aksi" not in kode(gaya("Makasih Kak, bukti transfernya aku teruskan ke admin buat dicek ya.", False, "[kirim gambar: bukti transfer]"))
+
+
 @kasus("permintaan tulis ulang: peran bergantian, hasil alat ikut, tanpa alat")
 def _():
     msgs = giliran("2 desember bisa?", riwayat=[("user", "halo"), ("assistant", "Halo Kak")], alat='{"bisa_terima_booking": false}')

@@ -202,6 +202,10 @@ RE_KLAIM_AKSI = re.compile("|".join([
     r"\b(sudah|udah)\s+(aku|kami)\s+(perbarui|perbaharui|update|ubah|ganti|geser|amankan)\b",
     r"\b(aku|kami)\s+(sudah\s+|udah\s+)?(perbarui|perbaharui|update)\b",
 ]), re.I)
+# "Sudah masuk kaka" tanpa subjek sesudah klien kirim bukti transfer (contoh admin Rama yang sempat masuk buku contoh, 18 Nov):
+# bot tidak bisa mengecek rekening. Hanya di konteks pembayaran, supaya "filenya sudah masuk" tetap boleh.
+RE_SUDAH_MASUK = re.compile(r"(?:^|[.!?]\s+)(?:sudah|udah|telah)\s+(?:masuk|diterima|kami terima|aku terima|lunas)\b", re.I | re.M)
+RE_BAYAR = re.compile(r"transfer|\btf\b|bukti|\bdp\b|pelunasan|bayar|lunas|rekening", re.I)
 # Lokasi kantor & janji temu sepihak (Rama 11 Nov: "jangan pernah share lokasi kantor… jangan asal terima janji sepihak").
 RE_JANJI_TEMU = re.compile("|".join([
     r"\b(silakan|silahkan|boleh|bisa)\s+(langsung\s+)?(datang|mampir|main|ambil)\s+(ke\s+)?(kantor|studio|basecamp|workshop|gudang|rumah|tempat)\s+(kami|kita|tetra|aku)",
@@ -322,6 +326,9 @@ def masalah_gaya(teks: str, pertama: bool = False, pesan_klien: str = "", frasa:
     if k:
         out.append(("klaim_aksi", "fatal", f'klaim tindakan yang tidak bisa kamu lakukan ("{k.group(0)}"): kamu tidak bisa melihat gambar/rekening, '
                     "mengirim email, mengantar barang, atau mendaftarkan rekanan. Bilang akan diteruskan ke admin, lalu tambahkan [INFO_ADMIN: <apa yang perlu dilakukan>]"))
+    elif RE_SUDAH_MASUK.search(isi) and (RE_BAYAR.search(isi) or RE_BAYAR.search(str(pesan_klien or ""))):
+        out.append(("klaim_aksi", "fatal", 'klaim pembayaran "sudah masuk/diterima": kamu tidak bisa mengecek rekening. Bilang bukti/infonya '
+                    "diteruskan ke admin untuk dicek, lalu tambahkan [INFO_ADMIN: cek pembayaran klien]"))
     if len(RE_EMOJI.findall(isi)) > 1:
         out.append(("emoji", "gaya", "emoji maksimal 1"))
     # Rama 11 Nov: isi lampiran tidak diulang di teks (skema rekanan, format cetak, sleeve).
