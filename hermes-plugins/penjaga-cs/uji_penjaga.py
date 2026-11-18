@@ -292,8 +292,11 @@ def _():
 def _():
     g = P.Giliran(giliran("harga 3 jam?"))
     assert "bocor" in kode(P.periksa("We need to answer the price.\nUntuk 3 jam Rp 2.500.000 ya Kak.", g, FRASA, ROBOT))
-    faq = [s for s in P._kalimat_aturan(P.RE_BLOK_FAQ.search(g.stabil).group(0)) if 60 < len(s) < 160][:2]
-    aturan = [s for s in P._kalimat_aturan(g.aturan) if 60 < len(s) < 160][:2]
+    # Urut (bukan urutan set) dan FAQ yang juga tertulis di buku aturan tidak dipakai: dulu uji ini kadang gagal (VPS 33/34).
+    set_aturan = set(P._kalimat_aturan(g.aturan))
+    faq = sorted(s for s in P._kalimat_aturan(P.RE_BLOK_FAQ.search(g.stabil).group(0)) if 60 < len(s) < 160 and s not in set_aturan
+                 and not any(s in x or x in s for x in set_aturan))[:2]
+    aturan = sorted(s for s in set_aturan if 60 < len(s) < 160)[:2]
     assert len(faq) == 2 and len(aturan) == 2
     assert not P.bocor_pikiran(" ".join(faq), g.aturan), "dua kalimat FAQ boleh dikutip"
     assert P.bocor_pikiran(" ".join(aturan), g.aturan), "dua kalimat aturan = bocor"
