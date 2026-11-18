@@ -491,8 +491,9 @@ function start(getSock) {
 // dari transkrip utuh, dikembalikan ke Tetra Ops lewat hasil perintah; terkirim hanya setelah owner klik Kirim (send-followup).
 async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
   const pesan = transkripGabungan(jid, []);
-  if (!pesan.length) return { ok: false, pesan: 'riwayat chat kontak ini kosong di bot' };
-  const panggilan = namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n')) || 'Kak';
+  // Klien lama dari Tetra Ops (mis. korporat sebelum bot ada, Juni 2026) belum punya riwayat: boleh menyapa dari konteks saja.
+  if (!pesan.length && !konteks) return { ok: false, pesan: 'riwayat chat kontak ini kosong di bot; kirim konteks (acara terakhir) untuk menyapa ulang' };
+  const panggilan = (pesan.length && namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n'))) || 'Kak';
   const botAkhir = pesan.filter((p) => p.role === 'assistant').at(-1);
   const hariDiam = Math.round((Date.now() - (botAkhir?.t || Date.now())) / 864e5);
   const ringkasan = getRingkasan(jid);
@@ -500,7 +501,8 @@ async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
     `FAKTA: owner meminta follow-up dari Tetra Ops (alasan: ${alasan || '-'}); pesan terakhir kita ${hariDiam} hari lalu.\n` +
     (konteks ? `KONTEKS DARI TETRA OPS: ${String(konteks).slice(0, 800)}\n` : '') +
     (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
-    `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${barisTranskrip(pesan.slice(-80)).join('\n')}`;
+    (pesan.length ? `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${barisTranskrip(pesan.slice(-80)).join('\n')}`
+      : 'TRANSKRIP: belum pernah chat lewat bot WA (klien lama) — pakai KONTEKS DARI TETRA OPS.');
   const m = await generateFollowupMessage(panggilan, leadContext);
   const draf = String(m || '').replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
   if (!draf) return { ok: false, pesan: 'Hermes gagal menulis draf' };
