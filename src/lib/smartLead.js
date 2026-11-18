@@ -54,12 +54,14 @@ function detectCity(text) {
 const FULL_MONTHS = 'januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember';
 const ABBR_MONTHS = 'jan|feb|mar|apr|jun|jul|agt|agus|agst|agu|sept|sep|okt|nov|des';
 
+// Audit 18 Nov (tab "Acara mendekat" Tetra Ops): tahun hanya 4 digit 20xx — "8 agustus 13.30" dulu terbaca tahun 2013; angka
+// bertitik 2 bagian ("10.12", "11.11") biasanya jam, jadi titik hanya sah kalau lengkap dd.mm.yyyy.
 function detectDate(text) {
-  let m = text.match(new RegExp(`(\\b\\d{1,2}\\s+)?\\b(${FULL_MONTHS})\\b(\\.?\\s*\\d{2,4})?`, 'i'));
+  let m = text.match(new RegExp(`(\\b\\d{1,2}\\s+)?\\b(${FULL_MONTHS})\\b(\\.?\\s*20\\d{2}\\b)?`, 'i'));
   if (m && m[0].trim()) return m[0].replace(/\s+/g, ' ').trim();
-  m = text.match(new RegExp(`\\b\\d{1,2}\\s*(${ABBR_MONTHS})\\b(\\.?\\s*\\d{2,4})?`, 'i'));
+  m = text.match(new RegExp(`\\b\\d{1,2}\\s*(${ABBR_MONTHS})\\b(\\.?\\s*20\\d{2}\\b)?`, 'i'));
   if (m) return m[0].replace(/\s+/g, ' ').trim();
-  m = text.match(/\b(\d{1,2})[/\-.](\d{1,2})([/\-.]\d{2,4})?\b/);
+  m = text.match(/\b(\d{1,2})[/\-](\d{1,2})([/\-]\d{2,4})?\b|\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/);
   if (m) return m[0];
   return null;
 }
@@ -83,7 +85,7 @@ function toISODate(raw, ref = new Date()) {
   if (!raw) return null;
   const s = String(raw).toLowerCase().trim();
   let day, mon, year;
-  let m = s.match(/\b(\d{1,2})\s+([a-z]+)\.?(?:\s+(\d{2,4}))?/);
+  let m = s.match(/\b(\d{1,2})\s+([a-z]+)\.?(?:\s+(\d{4}|\d{2})(?![.:]\d))?/); // "13.30" = jam, bukan tahun
   if (m && MONTH_NUM[m[2]]) {
     day = +m[1];
     mon = MONTH_NUM[m[2]];

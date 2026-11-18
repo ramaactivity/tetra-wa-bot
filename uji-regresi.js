@@ -207,6 +207,15 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.deepStrictEqual(ai.hargaAsing('paket *8 jam Rp 5.000.000* + extend 4 jam (*Rp 500.000*/jam) jadi *Rp 7.000.000*', ai._sumberHarga()), []);
     assert.ok(ai.hargaAsing('4 jam Rp 2.000.000', ai._sumberHarga()).length);
   });
+  await kasus('tanggal acara: jam tidak terbaca tahun/tanggal (audit 18 Nov, "8 agustus 13.30" → 2013)', () => {
+    const lead = require('./src/lib/smartLead');
+    const ref = new Date('2026-07-01T00:00:00+07:00');
+    const iso = (t) => lead.toISODate(lead.parseLeadDetails(t).tanggal, ref);
+    assert.strictEqual(iso('360 untuk 8 agustus 13.30 bisa ?'), '2026-08-08');
+    assert.strictEqual(iso('Acara: wedding\nTanggal: Sabtu, 21 November 2026\nJam photobooth: 11.00 - 13.00'), '2026-11-21');
+    assert.strictEqual(iso('tgl 25/12 di bogor'), '2026-12-25');
+    assert.strictEqual(iso('acaranya mulai jam 10.12 kak'), null);
+  });
   await kasus('janji "nanti aku kabari" tercatat ke admin (…4324)', () => {
     assert.ok(ai.RE_JANJI_ADMIN.test('Siap Kak, nanti aku kabari ya'));
   });
