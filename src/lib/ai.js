@@ -1179,10 +1179,8 @@ async function getAIResponse(history, message, leadContext) {
   return pisahPertanyaan(rapikanGaya(await jawabAI(history, message, leadContext), pakaiV2() ? 0 : 1));
 }
 async function jawabAI(history, message, leadContext) {
-  if (cumaMenutup(history, message)) {
-    console.log(`[diam-penutup] klien cuma menutup: ${String(message).slice(0, 60)}`);
-    return '[DIAM]';
-  }
+  // Usulan CS Mintet 74 (Rama 18 Nov setuju): penjaga kode "penutup → [DIAM]" dicabut; cara menanggapi penutup ada di skill
+  // cara-balas-wa bagian "Klien menutup" (satu baris hangat, lalu [DIAM] kalau klien membalas penutupnya lagi).
   // Rama 16 Nov: "mulai hari ini wajib hukumnya lewat hermes… full hanya hermes 100%". AI_OTAK=hermes = TANPA jalur lama:
   // dicoba dua kali; tetap gagal → error bertanda hermes (messages.js: klien tidak dikirimi kalimat bawaan Node, admin
   // dikabari saat itu juga untuk membalas manual, Rama dapat alarm Telegram setiap kejadian).
