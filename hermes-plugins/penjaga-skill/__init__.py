@@ -68,8 +68,9 @@ def _di_skill(path: str, dir_skill: Path) -> bool:
         return SKILL in str(path)
 
 
-def tulisan(tool_name: str, args: dict, dir_skill: Path) -> list[tuple[str, str]] | str | None:
-    """(teks baru, teks lama) yang akan masuk ke skill; str = alasan blok langsung; None = bukan urusan penjaga."""
+def tulisan(tool_name: str, args: dict, dir_skill: Path) -> list[tuple[str, str, bool]] | str | None:
+    """(teks baru, teks lama, hanya_tandai) yang akan masuk ke skill; str = alasan blok langsung; None = bukan urusan penjaga.
+    hanya_tandai: file references/ (contoh percakapan asli; tidak dibaca cs-wa) cukup dicatat, tidak diblok (Hermes t_e35d4cc7)."""
     if tool_name == "skill_manage":
         ops = args.get("operations")
         ops = ops if isinstance(ops, list) else [args]
@@ -80,22 +81,23 @@ def tulisan(tool_name: str, args: dict, dir_skill: Path) -> list[tuple[str, str]
             aksi = op.get("action") or args.get("action")
             if aksi in ("delete", "remove_file"):
                 return f"{aksi} pada skill {SKILL} tidak diizinkan otomatis (minta Rama)"
-            target = dir_skill / (op.get("file_path") or "SKILL.md")
-            lama = _baca(target)
+            fp = op.get("file_path") or "SKILL.md"
+            lama, tandai = _baca(dir_skill / fp), fp.startswith("references/")
             if op.get("new_string") is not None:
-                out.append((op["new_string"], (op.get("old_string") or "") + "\n" + lama))
+                out.append((op["new_string"], (op.get("old_string") or "") + "\n" + lama, tandai))
             for k in ("content", "file_content"):
                 if op.get(k) is not None:
-                    out.append((op[k], lama))
+                    out.append((op[k], lama, tandai))
         return out or None
     if tool_name == "write_file" and _di_skill(args.get("path", ""), dir_skill):
-        return [(args.get("content") or "", _baca(Path(os.path.expanduser(args.get("path", "")))))]
+        return [(args.get("content") or "", _baca(Path(os.path.expanduser(args.get("path", "")))), "/references/" in args.get("path", ""))]
     if tool_name == "patch":
         if _di_skill(args.get("path", ""), dir_skill):
-            return [(args.get("new_string") or "", (args.get("old_string") or "") + "\n" + _baca(Path(os.path.expanduser(args["path"]))))]
+            return [(args.get("new_string") or "", (args.get("old_string") or "") + "\n" + _baca(Path(os.path.expanduser(args["path"]))),
+                     "/references/" in args["path"])]
         v4a = str(args.get("patch") or "")
         if SKILL in v4a or str(dir_skill) in v4a:
-            return [("\n".join(b[1:] for b in v4a.splitlines() if b.startswith("+")), "")]
+            return [("\n".join(b[1:] for b in v4a.splitlines() if b.startswith("+")), "", False)]
         return None
     if tool_name == "terminal":
         cmd = str(args.get("command") or "")
@@ -115,9 +117,13 @@ def cek(tool_name="", args=None, task_id="", **_):
         _kejadian({"alat": tool_name, "blok": t, "sesi": task_id})
         log.warning("penjaga-skill: blok %s: %s", tool_name, t)
         return {"action": "block", "message": f"penjaga-skill: {t}."}
-    faq = S.angka_faq(_baca(FAQ_FILE))
+    faq_teks = _baca(FAQ_FILE)
+    faq = S.angka_faq(faq_teks)
     kutipan = S.Kutipan(RIWAYAT, ALLOWLIST)
-    masalah = [x for baru, lama in t for x in S.periksa(baru, lama, faq, kutipan)]
+    catat = [x for baru, lama, tandai in t if tandai for x in S.periksa(baru, lama, faq, kutipan, faq_teks)]
+    if catat:
+        _kejadian({"alat": tool_name, "sesi": task_id, "tandai": [[b.strip()[:200], m] for b, m in catat]})
+    masalah = [x for baru, lama, tandai in t if not tandai for x in S.periksa(baru, lama, faq, kutipan, faq_teks)]
     if not masalah:
         return None
     rinci = "; ".join(f'"{b.strip()[:90]}" ({", ".join(m)})' for b, m in masalah[:5])

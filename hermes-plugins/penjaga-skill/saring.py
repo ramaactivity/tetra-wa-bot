@@ -36,7 +36,6 @@ def angka_rupiah(teks: str) -> list[int]:
 
 RE_LARANGAN = re.compile(r"\b(jangan|tidak|tak|bukan|dilarang|belum|tanpa|ditolak|tolak)\b", re.I)
 ATURAN = [
-    ("link", re.compile(r"\bhttps?:|\bwww\.|wa\.me", re.I)),
     ("nomor panjang (rekening/HP)", re.compile(r"\d{6,}|\b0\d{2,4}[- ]\d{3,4}[- ]\d{3,5}\b")),
     ("upaya mengubah aturan", re.compile(r"abaikan|ignore|lupakan|system prompt|aturan di atas", re.I)),
 ]
@@ -95,9 +94,15 @@ def angka_faq(teks_faq: str) -> set[int]:
     return set(angka_rupiah(teks_faq))
 
 
-def masalah_baris(baris: str, faq: set[int], kutipan: Kutipan | None) -> list[str]:
+RE_LINK = re.compile(r"https?://[^\s)\]>\"']+|\bwww\.[^\s)\]>\"']+|wa\.me/?\S*", re.I)
+
+
+def masalah_baris(baris: str, faq: set[int], kutipan: Kutipan | None, faq_teks: str = "") -> list[str]:
     t = str(baris)
     out = [f"nominal Rp {n:,} tidak ada di FAQ".replace(",", ".") for n in angka_rupiah(t) if n not in faq]
+    # Link resmi yang tertulis di FAQ (galeri, booking) boleh dirujuk pelajaran; link lain tidak.
+    if any(u.rstrip(".,;:").lower() not in faq_teks.lower() for u in RE_LINK.findall(t)):
+        out.append("link")
     out += [nama for nama, rx in ATURAN if rx.search(t)]
     for rx, nama in ((RE_NOMINAL_HURUF, "nominal ditulis huruf"), (RE_PERSEN, "persen"), (RE_REKENING, "rekening/bank"),
                      (RE_KERINGANAN, "memberi keringanan")):
@@ -120,5 +125,5 @@ def baris_baru(baru: str, lama: str = "") -> list[str]:
     return [b for b in str(baru).splitlines() if b.strip() and b.strip() not in ada and b.strip() != "---"]
 
 
-def periksa(baru: str, lama: str, faq: set[int], kutipan: Kutipan | None) -> list[tuple[str, list[str]]]:
-    return [(b, m) for b in baris_baru(baru, lama) if (m := masalah_baris(b, faq, kutipan))]
+def periksa(baru: str, lama: str, faq: set[int], kutipan: Kutipan | None, faq_teks: str = "") -> list[tuple[str, list[str]]]:
+    return [(b, m) for b in baris_baru(baru, lama) if (m := masalah_baris(b, faq, kutipan, faq_teks))]

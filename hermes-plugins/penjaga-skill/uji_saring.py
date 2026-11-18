@@ -39,7 +39,8 @@ def kasus(nama):
     return bungkus
 
 
-m = lambda t: S.masalah_baris(t, FAQ, KUTIP)
+FAQ_TEKS = (BOT / "hermes-skills" / "faq-tetra" / "SKILL.md").read_text(encoding="utf-8")
+m = lambda t: S.masalah_baris(t, FAQ, KUTIP, FAQ_TEKS)
 
 
 @kasus("baris berbahaya diblok (kasus pemuat Node lama)")
@@ -54,7 +55,7 @@ def _():
 def _():
     for t in ["- Klien tanya 3 jam: jawab Rp 2.500.000 lalu satu pertanyaan.", "- Tanya jenis acara dulu sebelum menyebut durasi.",
               "- rekening/pembayaran tidak diulang kalau sudah dikirim", "- Sponsorship booth gratis ditolak (keputusan Rama).",
-              "- Jangan kasih diskon kalau belum diminta.", "4. DILARANG harga, nominal, persen, diskon, promo, rekening, link, nomor.", "- Minta pelunasan mundur: hari-H setelah acara boleh diiyakan hangat (usulan 83)."]:
+              "- Jangan kasih diskon kalau belum diminta.", "- Minta contoh hasil: arahkan ke https://tetraphoto.com/galeri", "4. DILARANG harga, nominal, persen, diskon, promo, rekening, link, nomor.", "- Minta pelunasan mundur: hari-H setelah acara boleh diiyakan hangat (usulan 83)."]:
         assert m(t) == [], (t, m(t))
 
 
@@ -83,7 +84,9 @@ def _():
     assert plugin.cek("skill_manage", {"operations": [{"action": "patch", "name": "cs-mintet-pelajaran", "old_string": "x", "new_string": "- Jawab dulu yang dia tanya."}]}) is None
     assert plugin.cek("skill_manage", {"operations": [{"action": "patch", "name": "faq-tetra", "old_string": "x", "new_string": "- Rek BCA 0954965224"}]}) is None
     assert plugin.cek("skill_manage", {"action": "write_file", "name": "cs-mintet-pelajaran", "file_path": "references/contoh.md",
-                                       "file_content": "Klien: transfer ke 1234567890"})["action"] == "block"
+                                       "file_content": "Balasan: komisi 10% kami transfer, rekening BCA 0954965224"}) is None, "references/ cukup ditandai"
+    assert plugin.cek("skill_manage", {"action": "write_file", "name": "cs-mintet-pelajaran", "file_path": "SKILL.md",
+                                       "file_content": "- Klien: transfer ke 1234567890"})["action"] == "block"
     assert plugin.cek("skill_manage", {"operations": [{"action": "delete", "name": "cs-mintet-pelajaran"}]})["action"] == "block"
 
 
@@ -110,7 +113,7 @@ def _():
     sumber = BOT / "data" / "kutipan-admin-ok.json"
     salinan.write_text(sumber.read_text() if sumber.exists() else "[]")
     kut = S.Kutipan(BOT / "data" / "riwayat.json", salinan)
-    salah = S.periksa(asli.read_text(encoding="utf-8"), "", FAQ, kut)
+    salah = S.periksa(asli.read_text(encoding="utf-8"), "", FAQ, kut, FAQ_TEKS)
     assert salah == [], salah[:5]
 
 
