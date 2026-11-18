@@ -201,6 +201,10 @@ RE_KLAIM_AKSI = re.compile("|".join([
     r"\b(di)?antar(kan|in)?\s+ke\s+(kantor|alamat|rumah|venue)",
     r"\b(sudah|udah)\s+(aku|kami)\s+(perbarui|perbaharui|update|ubah|ganti|geser|amankan)\b",
     r"\b(aku|kami)\s+(sudah\s+|udah\s+)?(perbarui|perbaharui|update)\b",
+    # Tahap 3B: pola penjaga Node messages.js RE_KLAIM (insiden 28 Sep), lebih lebar: "sudah dijadwalkan/dikunci/di-refund".
+    # "di-?": ejaan "sudah di-refund / di-reschedule / di-update" lolos dari pola Node lama (ditemukan saat pindahan).
+    r"\b(sudah|udah|telah|sdh)(\s+\w+){0,2}?\s+(di-?)?(perbarui|update|ubah|ganti|geser|pindah(kan)?|reschedule|jadwal(kan)?|kunci|amankan|batalkan|refund|konfirmasi)\b",
+    r"\b(dp|pembayaran|transfer|pelunasan)(-?nya)?\s+(sudah|udah|telah)\s+(masuk|diterima|terverifikasi|lunas)",
 ]), re.I)
 # "Sudah masuk kaka" tanpa subjek sesudah klien kirim bukti transfer (contoh admin Rama yang sempat masuk buku contoh, 18 Nov):
 # bot tidak bisa mengecek rekening. Hanya di konteks pembayaran, supaya "filenya sudah masuk" tetap boleh.
@@ -325,7 +329,8 @@ def masalah_gaya(teks: str, pertama: bool = False, pesan_klien: str = "", frasa:
     k = RE_KLAIM_AKSI.search(isi)
     if k:
         out.append(("klaim_aksi", "fatal", f'klaim tindakan yang tidak bisa kamu lakukan ("{k.group(0)}"): kamu tidak bisa melihat gambar/rekening, '
-                    "mengirim email, mengantar barang, atau mendaftarkan rekanan. Bilang akan diteruskan ke admin, lalu tambahkan [INFO_ADMIN: <apa yang perlu dilakukan>]"))
+                    "mengirim email, mengantar barang, mendaftarkan rekanan, atau mengubah/mengonfirmasi booking. Bilang akan diteruskan ke admin; kalau klien minta "
+                    "ubah jam/tanggal/paket/batal tambahkan [PERUBAHAN: <apa> | <lama> -> <baru>], selain itu [INFO_ADMIN: <apa yang perlu dilakukan>]"))
     elif RE_SUDAH_MASUK.search(isi) and (RE_BAYAR.search(isi) or RE_BAYAR.search(str(pesan_klien or ""))):
         out.append(("klaim_aksi", "fatal", 'klaim pembayaran "sudah masuk/diterima": kamu tidak bisa mengecek rekening. Bilang bukti/infonya '
                     "diteruskan ke admin untuk dicek, lalu tambahkan [INFO_ADMIN: cek pembayaran klien]"))
@@ -444,6 +449,88 @@ def beri_jarak(teks: str) -> str:
     return "\n".join(out)
 
 
+# ── Lampiran yang seharusnya ikut (pindahan penebak Node, Tahap 3B) ──────────────────────────────────────────────────
+# Saran Hermes t_d063ba1a: bagian semantis keluar dari Node. Di sini penandanya DITULIS ke teks (terlihat di transkrip), Node
+# tinggal menjalankan. Aturan asal: Rama 22 Okt & 11 Nov (tanya format/backdrop → ilustrasi), usulan 64 (info backdrop basic gratis
+# tetap dengan contohnya), Ranti 8 Okt & …9166 (bilang "ini pricelist-nya" = file wajib ikut).
+RE_JANJI_FILE = re.compile(r"(sudah|udah|barusan|telah)\s+(aku\s+|kami\s+)?(kirim|terkirim|kukirim|dikirim)|\b(ini|berikut)\s+(aku\s+|kami\s+)?kirim(kan)?|"
+                           r"\b(ini|berikut)\s+(pricelist|price ?list|daftar harga|pl)(nya)?\b|\baku\s+kirim(kan)?\b|terlampir|di (atas|bawah) ya", re.I)
+RE_TOPIK_PL = re.compile(r"harga|pricelist|price ?list|\bpl\b|daftar paket", re.I)
+
+
+def kunci_kirim(teks: str) -> set[str]:
+    return {m.lower() for m in re.findall(r"\[KIRIM:\s*(\w+)", str(teks), re.I)}
+
+
+def lampiran_kurang(teks: str, g: "Giliran") -> list[str]:
+    isi = re.sub(r"\[[A-Z_]+[^\]]*\]", "", str(teks))
+    ada, out = kunci_kirim(teks), []
+    ajak = re.search(r"\?|mau yang mana|pilih|silahkan|silakan", isi, re.I)
+    fmt = {x.lower().replace("photostrip", "2r") for x in re.findall(r"\b(2R|4R|photostrip|polaroid)\b", isi, re.I)}
+    if ajak and len(fmt) >= 2 and "format" not in ada:
+        out.append("format")
+    custom = re.search(r"custom|desain sendiri", isi, re.I)
+    if "backdrop" not in ada and not custom and re.search(r"backdrop", isi, re.I) and (
+            re.search(r"(warna|pilih|mau yang mana)[^.!\n]*\?|\?[^.!\n]*warna", isi, re.I)
+            or (re.search(r"backdrop basic", isi, re.I) and re.search(r"compliment|free|gratis", isi, re.I))):
+        out.append("backdrop")
+    # Janji pricelist tanpa penanda: hanya kalau tidak ada lampiran lain ("gambar" yang dimaksud bisa backdrop/katalog) dan belum pernah terkirim.
+    sudah = any("[kirim PDF pricelist]" in teks_pesan(m) for m in g.riwayat)
+    dekat = "\n".join(teks_pesan(m) for m in g.riwayat[-2:] if m["role"] == "assistant")
+    if (not out and not (ada - {"pricelist"}) and "pricelist" not in ada and not sudah
+            and RE_TOPIK_PL.search(f"{isi}\n{g.pesan_klien}\n{dekat}") and RE_JANJI_FILE.search(isi)):
+        out.append("pricelist")
+    return out
+
+
+# ── Follow-up (pindahan penjaga Node followupEngine.js, Tahap 3B) ────────────────────────────────────────────────────
+# Usulan CS Mintet 12 & 69, audit 22 Okt: kalimat basi, desakan booking tanpa diminta, mengulang pertanyaan yang dicuekin, dan
+# bentuk pesan. Gagal sesudah ditulis ulang → [DIAM] (follow-up tidak dikirim; dulu Node menahan pesannya).
+RE_SLOP_FU = re.compile(r"sekadar mengingatkan|keduluan|amankan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|masih tertarik", re.I)
+RE_FOLLOWUP = re.compile(r"follow.?up", re.I)
+RE_DESAK = re.compile(r"\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|potongan|diskon|harga\s+khusus", re.I)
+TOPIK_TANYA = {"tanggal": r"tanggal|tgl|kapan", "jam": r"jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)",
+               "lokasi": r"lokasi|venue|di\s?mana|daerah|kota", "tamu": r"tamu|undangan|berapa\s+orang", "format": r"2R|4R|polaroid|format"}
+
+
+def bentuk_salah(teks: str) -> bool:
+    """Usulan 69: follow-up calon klien = maks 3 kalimat dan ditutup SATU pertanyaan (…0832 Nadila)."""
+    t = re.sub(r"\[[A-Z_]+[^\]]*\]", "", str(teks)).strip()
+    return len([k for k in re.split(r"(?<=[.!?])\s+", t) if k]) > 3 or not re.search(r"\?\s*$", t)
+
+
+def ulang_tanya(lama: str, baru: str) -> bool:
+    q = " ".join(re.findall(r"[^.!?\n]*\?", str(baru or "")))
+    return bool(lama and q) and any(re.search(rx, lama, re.I) and re.search(rx, q, re.I) for rx in TOPIK_TANYA.values())
+
+
+def periksa_followup(teks: str, g: "Giliran", frasa: list[str], robot: list[str]) -> list[tuple[str, str, str]]:
+    isi = isi_klien(teks)
+    out = [m for m in masalah_gaya(teks, False, "", frasa, robot) if m[0] in ("klaim_aksi", "kata_robot", "frasa_kaku", "saya", "kamu", "emoji")]
+    tautan = tautan_asing(teks, g.sumber)
+    if tautan:
+        out.append(("tautan", "fatal", "link/alamat " + ", ".join(f'"{x}"' for x in tautan) + " tidak ada di info resmi maupun chat; jangan ditulis"))
+    if RE_JANJI_TEMU.search(isi):
+        out.append(("janji_temu", "fatal", "jangan membagikan lokasi kantor atau menjanjikan temu/kunjungan/antar-jemput"))
+    s = RE_SLOP_FU.search(isi)
+    if s:
+        out.append(("slop_followup", "tahan", f'hapus "{s.group(0)}": kalimat basi/klaim di follow-up'))
+    # "izin followup" boleh untuk follow-up dokumen yang sudah terkirim (bahasa Rama 18 Nov, kasus Riska); selain itu terlarang.
+    if RE_FOLLOWUP.search(isi) and not re.search(r"quotation|invoice|dokumen|penawaran", isi, re.I):
+        out.append(("slop_followup", "tahan", 'kata "follow up" hanya untuk follow-up dokumen yang sudah dikirim (quotation/invoice); di sini jangan dipakai'))
+    lain = [p for p in penanda(teks) if not p.startswith("KIRIM") and p != "DIAM"]
+    if lain:
+        out.append(("penanda_followup", "tahan", "follow-up tidak memakai penanda selain [KIRIM: …]; kalau perlu admin, balas persis [DIAM]"))
+    if g.followup in ("klien", "vendor"):
+        if not g.tanya_booking and RE_DESAK.search(isi):
+            out.append(("desak", "tahan", "dia belum pernah bertanya soal booking/DP: follow-up jangan mendorong DP, mengunci tanggal, rekening, atau diskon"))
+        if ulang_tanya(g.tanya_akhir, isi):
+            out.append(("ulang_tanya", "tahan", f'jangan ulang topik pertanyaan terakhir yang belum dia jawab ("{g.tanya_akhir}"); bawa hal lain yang berguna buat acaranya'))
+    if g.followup == "klien" and bentuk_salah(teks):
+        out.append(("bentuk", "tahan", "follow-up calon klien maks 2 kalimat lalu SATU pertanyaan penutup"))
+    return out
+
+
 # ── Konteks satu giliran ────────────────────────────────────────────────────────────────────────────────────────
 def teks_pesan(m: dict) -> str:
     c = m.get("content")
@@ -469,6 +556,12 @@ class Giliran:
         self.situasi = "SITUASI DARI SISTEM:" in self.fakta
         self.pertama = "KONTAK PERTAMA" in self.fakta
         self.vendor = "VENDOR REKANAN" in self.fakta
+        # Follow-up dari bot WA: pesan "user"-nya instruksi TUGAS FOLLOW-UP (bukan pesan klien) — Tahap 3B.
+        f = re.match(r"\s*TUGAS FOLLOW-UP(?: (VENDOR|LEAD|DATA BOOKING))?", self.pesan_klien)
+        self.followup = (f.group(1) or "klien").lower() if f else ""
+        t = re.search(r'pertanyaan terakhir kita yang belum dia jawab: "(.*?)"', self.fakta)
+        self.tanya_akhir = t.group(1) if t and t.group(1) != "-" else ""
+        self.tanya_booking = "SUDAH pernah bertanya soal booking" in self.fakta
         self.jadwal_tersedia = any(re.search(r'bisa_terima_booking\\*"?\s*:\s*true', a) for a in self.alat)
         bebas = "\n".join([self.fakta, *(teks_pesan(m) for m in obrolan), *self.alat])
         self.sumber = self.stabil + "\n" + bebas
@@ -493,8 +586,11 @@ def periksa(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> list[t
     if asing:
         out.append(("harga", "fatal", "nominal " + ", ".join(f"Rp {n:,}".replace(",", ".") for n in asing) + " tidak ada di daftar harga, FAQ, maupun chat. "
                     "Tulis ulang HANYA dengan harga resmi; kalau harganya memang tidak ada, bilang admin yang info"))
+    if g.followup:
+        return out + periksa_followup(teks, g, frasa, robot)
     if g.situasi:  # pesan situasi/susun: penjaga yang sama dengan kalimatHermes/susunHermes lama
-        out += [m for m in masalah_gaya(teks, False, "", frasa, robot) if m[0] in ("klaim_aksi", "frasa_kaku", "kata_robot")]
+        dp_admin = "Admin sudah mengonfirmasi DP" in g.fakta  # DP memang sudah dicek admin: menyebutnya bukan klaim palsu
+        out += [m for m in masalah_gaya(teks, False, "", frasa, robot) if m[0] in ("frasa_kaku", "kata_robot") or (m[0] == "klaim_aksi" and not dp_admin)]
         return out
     sekarang = normal(isi)
     dulu4 = [isi_klien(teks_pesan(m)) for m in g.riwayat if m["role"] == "assistant"][-4:]  # Node: termasuk pesan admin
@@ -543,6 +639,11 @@ def selesaikan(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> tup
     if g.tugas:
         return teks, aksi
     sisa = periksa(teks, g, frasa, robot)
+    if g.followup:
+        tahan = [m[0] for m in sisa if m[1] in ("fatal", "tahan")]
+        if tahan:
+            aksi.append("diam:" + ",".join(tahan))
+            return "[DIAM]", aksi
     fatal = [m[0] for m in sisa if m[1] == "fatal"]
     if fatal:
         aksi.append("handoff:" + ",".join(fatal))
@@ -557,7 +658,10 @@ def selesaikan(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> tup
     if "minta_ulang" in kode:
         teks = buang_kalimat(teks, RE_MINTA_ULANG)
         aksi.append("buang:minta_ulang")
-    if not g.situasi:
+    if not g.situasi and not g.followup:
+        for k in lampiran_kurang(teks, g):
+            teks += f"\n[KIRIM: {k}]"
+            aksi.append(f"tambah:kirim_{k}")
         if "janji_kabari" in kode:
             teks = buang_kalimat(teks, RE_JANJI_KABARI)
             if not re.search(r"\[INFO_ADMIN", teks, re.I):

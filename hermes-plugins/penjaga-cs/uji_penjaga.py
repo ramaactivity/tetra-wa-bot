@@ -226,6 +226,62 @@ def _():
     assert P.buang_dulu(pendek, g, P.periksa(pendek, g, FRASA, ROBOT), ROBOT) == pendek
 
 
+FU_FAKTA = ('KONTEKS LEAD (dari deteksi & riwayat):\nPanggilan klien: Kak Nadila\nFAKTA: pesan terakhir kita 3 hari lalu; pesan terakhir klien 80 jam lalu; '
+            'pertanyaan terakhir kita yang belum dia jawab: "Acaranya mulai jam berapa Kak?"; dia BELUM pernah bertanya soal booking/DP.')
+FU_PESAN = 'TUGAS FOLLOW-UP: tulis SATU pesan WhatsApp lanjutan untuk Kak Nadila, calon klien yang belum membalas.'
+
+
+@kasus("follow-up (pindahan followupEngine): basi, desak, ulang tanya, bentuk; 'izin followup' dokumen boleh")
+def _():
+    g = P.Giliran(giliran(FU_PESAN, FU_FAKTA))
+    assert g.followup == "klien" and g.tanya_akhir == "Acaranya mulai jam berapa Kak?" and not g.tanya_booking
+    k = lambda t: kode(P.periksa(t, g, FRASA, ROBOT))
+    assert "slop_followup" in k("Kak Nadila, sekadar mengingatkan soal photobooth-nya ya. Ada yang bisa dibantu?")
+    assert "desak" in k("Kak Nadila, tanggalnya bisa dikunci dengan DP Rp 500.000. Mau aku bantu?")
+    assert "ulang_tanya" in k("Kak Nadila, untuk resepsinya nanti mulai jam berapa ya?")
+    # usulan 69 (…0832 Nadila): dua fakta lama tanpa pertanyaan
+    assert "bentuk" in k("Buat resepsi wedding biasanya mulai pagi jam 10-11. Harga di pricelist itu sudah termasuk transport dan backdrop basic ya Kak, jadi tidak ada tambahan lagi.")
+    assert "bentuk" not in k("Kak Nadila, untuk resepsi di Bogor tanggal itu masih bisa kami bantu. Konsep dekorasinya sudah ada belum Kak?")
+    assert "slop_followup" not in k("Kak Riska, permisi aku izin followup terkait quotation yang kemarin sudah aku kirimkan. Apakah ada yang kurang kak?")
+    assert "slop_followup" in k("Kak Nadila, aku izin follow up ya, gimana rencananya?")
+    assert "penanda_followup" in k("Kak Nadila, konsepnya sudah ada belum?\n[INFO_ADMIN: cek]")
+    t, aksi = P.selesaikan("Kak Nadila, sekadar mengingatkan ya. Ada kabar?", g, FRASA, ROBOT)
+    assert t == "[DIAM]" and aksi and aksi[0].startswith("diam:"), (t, aksi)
+    gl = P.Giliran(giliran("TUGAS FOLLOW-UP LEAD (lanjut): Hotel X, calon rekanan — ikuti skill mode-kontak-khusus.", FU_FAKTA))
+    assert gl.followup == "lead" and "slop_followup" in kode(P.periksa("Halo Kak, masih tertarik kerja sama?", gl, FRASA, ROBOT))
+    assert "bentuk" not in kode(P.periksa("Halo Kak, ini profil kerja sama rekanan kami ya.", gl, FRASA, ROBOT))
+
+
+@kasus("klaim ubah booking (pindahan RE_KLAIM messages.js, insiden 28 Sep) & DP yang dikonfirmasi admin bukan klaim")
+def _():
+    for t in ["Siap Kak, jadwalnya sudah aku pindahkan ke jam 10 ya.", "Sudah dijadwalkan ulang ya Kak.", "Tanggalnya sudah dikunci ya Kak.",
+              "Sudah di-refund ya Kak.", "Pelunasannya sudah terverifikasi ya Kak."]:
+        assert "klaim_aksi" in kode(gaya(t)), t
+    assert "klaim_aksi" not in kode(gaya("Tanggalnya dikunci begitu bukti DP diunggah ya Kak."))
+    gs = P.Giliran(giliran("(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)", "SITUASI DARI SISTEM: Admin sudah mengonfirmasi DP klien diterima (keputusan admin)."))
+    assert "klaim_aksi" not in kode(P.periksa("DP-nya sudah diterima ya Kak, makasih!", gs, FRASA, ROBOT))
+    gb = P.Giliran(giliran("(tidak ada pesan baru dari klien; sistem yang meminta pesan ini)", "SITUASI DARI SISTEM: Klien mengirim bukti transfer DP."))
+    assert "klaim_aksi" in kode(P.periksa("DP-nya sudah diterima ya Kak, makasih!", gb, FRASA, ROBOT))
+
+
+@kasus("lampiran yang seharusnya ikut (pindahan lampiranOtomatis & janjiPricelist, Rama 22 Okt/11 Nov, usulan 64, …9166)")
+def _():
+    g = P.Giliran(giliran("mau liat harga"))
+    assert P.lampiran_kurang("Silahkan Kak, berikut pilihan warna backdrop basic yang jadi compliment free dari kami ya.", g) == ["backdrop"]
+    assert P.lampiran_kurang("Backdrop basic-nya mau warna apa Kak?", g) == ["backdrop"]
+    assert P.lampiran_kurang("Dua hal yang perlu kami pastikan dulu: format cetaknya mau yang mana (2R photostrip, 4R, atau Polaroid), dan apakah pajak perlu dicantumkan?", g) == ["format"]
+    assert P.lampiran_kurang("Cetaknya 4R ya Kak.", g) == []
+    assert P.lampiran_kurang("Backdrop custom bisa ya Kak, warnanya mau apa?", g) == []
+    assert P.lampiran_kurang("Ini pricelist-nya ya Kak", g) == ["pricelist"]
+    assert P.lampiran_kurang("Ini pricelist-nya ya Kak\n[KIRIM: pricelist]", g) == []
+    sudah = P.Giliran(giliran("mau liat harga", riwayat=[("assistant", "[kirim PDF pricelist] (hanya gambar harga paket unlimited)")]))
+    assert P.lampiran_kurang("Ini pricelist-nya ya Kak", sudah) == []
+    t, aksi = P.selesaikan("Ini pricelist-nya ya Kak", g, FRASA, ROBOT)
+    assert t.endswith("[KIRIM: pricelist]") and "tambah:kirim_pricelist" in aksi, (t, aksi)
+    gf = P.Giliran(giliran(FU_PESAN, FU_FAKTA))
+    assert "[KIRIM" not in P.selesaikan("Kak Nadila, backdrop basic-nya gratis kok. Warnanya mau apa Kak?", gf, FRASA, ROBOT)[0]
+
+
 @kasus("link & alamat karangan ditangkap (...2792)")
 def _():
     g = P.Giliran(giliran("boleh share lok?"))
@@ -381,6 +437,16 @@ def _():
     t = "Tanggal 4 Desember masih available ya Kak. Untuk resepsi malam di Depok biasanya enak 3 jam, cetaknya sepuasnya. Acaranya mulai jam berapa Kak?"
     out = jalankan(llm, t, giliran("4 desember bisa kak? acaranya resepsi di Depok jam 7 malam"))
     assert "available" not in out and "jam berapa" in out and llm.n == 0, (out, llm.n)
+
+
+@kasus("alur plugin: follow-up yang tetap mendesak sesudah ditulis ulang tidak dikirim ([DIAM])")
+def _():
+    llm = LLM(["Kak Nadila, tanggalnya bisa dikunci dengan DP ya. Mau?", "Kak Nadila, DP-nya bisa sekarang biar aman ya?"])
+    out = jalankan(llm, "Kak Nadila, yuk DP sekarang biar tanggalnya dikunci. Mau?", giliran(FU_PESAN, FU_FAKTA))
+    assert out == "[DIAM]" and llm.n == 2, (out, llm.n)
+    llm = LLM(["Kak Nadila, kemarin aku lihat resepsinya di Bogor ya. Konsep dekorasinya sudah ada belum Kak?"])
+    out = jalankan(llm, "Kak Nadila, yuk DP sekarang biar tanggalnya dikunci. Mau?", giliran(FU_PESAN, FU_FAKTA))
+    assert out.startswith("Kak Nadila, kemarin") and llm.n == 1, (out, llm.n)
 
 
 @kasus("alur plugin: tulis ulang yang menghilangkan penanda ditolak")

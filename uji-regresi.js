@@ -52,13 +52,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.ok(ai.masalahGaya('Untuk backdrop basic kain polos jadi compliment free dari kami ya Kak.\n\nKakak lebih condong ke yang mana?').some((m) => /pertanyaan memilih/.test(m)));
     const ok = 'Silahkan Kak, berikut pilihan warna backdrop basic yang jadi compliment free dari kami ya.';
     assert.ok(!ai.masalahGaya(ok).some((m) => /pertanyaan memilih/.test(m)));
-    assert.match(require('./src/lib/lampiran').lampiranOtomatis(ok), /\[KIRIM: backdrop\]/);
     assert.ok(!ai.masalahGaya('Backdrop basic free dari kami, transport juga gratis Jabodetabek.\nMau pakai format cetak yang mana, Kak? 2R photostrip, 4R, atau Polaroid?').some((m) => /pertanyaan memilih/.test(m)));
-  });
-  await kasus('usulan 69: follow-up maks 2 kalimat + satu pertanyaan penutup (…0832 Nadila)', () => {
-    const { _bentukSalah } = require('./src/lib/followupEngine');
-    assert.ok(_bentukSalah('Buat resepsi wedding biasanya mulai pagi jam 10-11. Harga di pricelist itu sudah termasuk transport dan backdrop basic ya Kak, jadi tidak ada tambahan lagi.'));
-    assert.ok(!_bentukSalah('Kak Nadila, untuk resepsi di Bogor tanggal itu masih bisa kami bantu. Resepsinya rencana mulai jam berapa Kak?'));
   });
   await kasus('usulan 71: janji mengabari & minta kirim ulang dikenali (…5386)', () => {
     for (const t of ['Nanti tim yang kabari jadwal dan biayanya ya Kak.', 'nanti aku kabarin lagi ya kak', 'Tim yang infoin ya Kak.']) assert.ok(ai.RE_JANJI_KABARI.test(t), t);
@@ -184,14 +178,11 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.deepStrictEqual(ai.basaBasi('Cukup Kak, soalnya 1 jam bisa melayani 100+ tamu, jadi 3 jam sudah pas buat 300 tamu.', '3 jam cukup ga buat 300 tamu?'), []);
     assert.ok(ai.frasaKaku('Paham, Kak. Tanggal 19 Desember sendiri masih kosong di jam itu.').length >= 2);
   });
-  await kasus('pertanyaan pindah ke baris baru; tanya format/backdrop → ilustrasi otomatis', () => {
+  await kasus('pertanyaan pindah ke baris baru', () => {
     assert.strictEqual(ai.pisahPertanyaan('Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya. Lokasi acaranya di mana?'),
       'Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya.\nLokasi acaranya di mana?'); // 16 Nov: baris baru tanpa baris kosong (admin 1% paragraf berjarak)
     assert.strictEqual(ai.pisahPertanyaan('Siap Kak. Tanggal berapa?'), 'Siap Kak. Tanggal berapa?');
-    const { lampiranOtomatis } = require('./src/lib/lampiran');
-    assert.match(lampiranOtomatis('Dua hal yang perlu kami pastikan dulu: format cetaknya mau yang mana (2R photostrip, 4R, atau Polaroid), dan apakah pajak perlu dicantumkan di penawaran? Kalau perlu, harganya di-gross up 2,5%.'), /\[KIRIM: format\]/);
-    assert.match(lampiranOtomatis('Backdrop basic-nya mau warna apa Kak?'), /\[KIRIM: backdrop\]/);
-    assert.doesNotMatch(lampiranOtomatis('Cetaknya 4R ya Kak.'), /KIRIM/);
+    // Tahap 3B: lampiran otomatis (format/backdrop) & janji pricelist pindah ke plugin penjaga-cs (uji_penjaga.py).
   });
   await kasus('link & alamat karangan ditangkap (…2792)', () => {
     assert.ok(ai.tautanAsing('share lok https://maps.app.goo.gl/w132t81yQ9kZ7dLLA', ai._sumberHarga()).length);
@@ -219,8 +210,9 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
   await kasus('janji "nanti aku kabari" tercatat ke admin (…4324)', () => {
     assert.ok(ai.RE_JANJI_ADMIN.test('Siap Kak, nanti aku kabari ya'));
   });
-  await kasus('"Ini pricelist-nya" tanpa file → file dikirim (…9166)', () => {
-    assert.ok(msgs._janjiPricelist('Ini pricelist-nya ya Kak', 'mau liat harga', [], []));
+  await kasus('klien bilang pricelist belum masuk → dikirim ulang (pemulihan pengiriman tetap di Node)', () => {
+    assert.ok(msgs._janjiPricelist('Aduh maaf Kak', 'kak pricelistnya ga masuk', [], [{ role: 'assistant', content: 'Silahkan Kak, berikut pricelistnya ya' }]));
+    assert.ok(!msgs._janjiPricelist('Ini pricelist-nya ya Kak', 'mau liat harga', [], []), 'janji tanpa penanda kini ditangani plugin');
   });
 
   if (!process.argv.includes('--cepat')) {

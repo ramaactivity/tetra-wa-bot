@@ -126,22 +126,19 @@ function kartuKontak(message) {
   }).join('; ');
 }
 
-// Bot menjanjikan/mengklaim pricelist terkirim, atau klien bilang belum menerima → kirim sekarang (lihat handleBatch).
-const RE_JANJI_FILE = /(sudah|udah|barusan|telah)\s+(aku\s+|kami\s+)?(kirim|terkirim|kukirim|dikirim)|\b(ini|berikut)\s+(aku\s+|kami\s+)?kirim(kan)?|\b(ini|berikut)\s+(pricelist|price ?list|daftar harga|pl)(nya)?\b|\baku\s+kirim(kan)?\b|terlampir|di (atas|bawah) ya/i;
+// Klien bilang pricelist belum masuk padahal bot baru membahasnya → kirim ulang (pemulihan pengiriman = tugas pipa). Janji
+// "ini pricelist-nya" tanpa penanda sejak Tahap 3B ditangani plugin Hermes penjaga-cs (menambah [KIRIM: pricelist] ke teks).
 const RE_BELUM_TERIMA = /\b(gak|ga|gaada|nggak|enggak|tidak|belum|blm)\b.{0,15}\b(ada|masuk|terkirim|muncul|nyampe|sampai|keliatan|kelihatan|kebuka|ke ?kirim)\b|\bmana\b|\bdimana\b|\bdi ?mana\b|kirim(in|kan)? (lagi|ulang)/i;
 const RE_TOPIK_PL = /harga|pricelist|price ?list|\bpl\b|daftar paket/i;
 function janjiPricelist(jawaban, pesanKlien, lampiran, riwayat) {
   // Sedang mengirim lampiran lain (backdrop/katalog/layout) → "gambar" yang dimaksud bukan pricelist.
   if (lampiran.some((k) => k !== 'pricelist')) return false;
-  const sudah = riwayat.some((p) => String(p.content).includes('[kirim PDF pricelist]'));
   const dekat = riwayat.slice(-2).filter((p) => p.role === 'assistant').map((p) => p.content).join('\n');
   const topik = RE_TOPIK_PL.test(`${jawaban}\n${pesanKlien}\n${dekat}`);
   if (!topik) return false;
   // Klien bilang belum menerima & sebelumnya bot menyinggung pricelist/harga → kirim (juga kirim ulang).
   const bahasPL = riwayat.slice(-6).some((p) => p.role === 'assistant' && /harga|pricelist|gambar/i.test(String(p.content)));
-  if (RE_BELUM_TERIMA.test(pesanKlien) && bahasPL) return true;
-  if (sudah) return false;
-  return RE_JANJI_FILE.test(jawaban);
+  return RE_BELUM_TERIMA.test(pesanKlien) && bahasPL;
 }
 
 function teksPesan(message) {
@@ -371,18 +368,15 @@ const antrian = new Map();      // jid -> { msgs: [], timer, mulai }
 // dan bot di menit yang sama). jid -> waktu balasan manual admin terakhir.
 const adminTerakhir = new Map();
 
-// Klaim tindakan yang bot TIDAK bisa lakukan (28 Sep: "sudah aku perbarui
-// jadwalnya" padahal Tetra Ops masih jam lama). Balasan seperti ini tidak dikirim.
+// Klaim tindakan yang bot TIDAK bisa lakukan (28 Sep: "sudah aku perbarui jadwalnya" padahal Tetra Ops masih jam lama).
+// Sejak Tahap 3B penjaganya di plugin Hermes penjaga-cs (klaim_aksi); di sini tinggal gerbang mode assist & kalimat handoff
+// (dibuang di Tahap 3C).
 const RE_KLAIM = new RegExp(
   '\\b(sudah|udah|telah|sdh)(\\s+\\w+){0,2}?\\s+(di)?' +
   '(perbarui|update|ubah|ganti|geser|pindah(kan)?|reschedule|jadwal(kan)?|kunci|amankan|batalkan|refund|konfirmasi)\\b' +
   '|\\b(dp|pembayaran|transfer|pelunasan)(nya)?\\s+(sudah|udah|telah)\\s+(masuk|diterima|terverifikasi|lunas)', 'i');
-// Klaim palsu hanya dicatat sebagai PERUBAHAN kalau klien memang membahas booking (8 Okt: "ohh boleh" Kak Nadia
-// jadi notif perubahan palsu ke grup owner).
-const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|\bubah|ganti|batal|cancel|booking|durasi|paket|extend|tambah (jam|unit)/i;
-const KALIMAT_AMAN = 'Oke Kak, aku sampaikan ke admin dulu ya biar dicek jadwalnya. Nanti admin yang kabarin di sini.';
 
-const { LAMPIRAN, kirimLampiran, lampiranOtomatis } = require('../lib/lampiran');
+const { LAMPIRAN, kirimLampiran } = require('../lib/lampiran');
 const SISIP = '\u2063LAMPIRAN\u2063'; // posisi [KIRIM: x] di tengah balasan cs-wa (tidak pernah terkirim ke klien)
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
@@ -694,7 +688,7 @@ function registerMessageHandler(sock) {
     if (sulit) return kabari(sulit[2] || sulit[1].toLowerCase());
     if (/\[DIAM\]/i.test(jawab)) { console.log(`[assist] ${nama}: tidak perlu dijawab`); return; }
     const info = (jawab.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/i) || [])[1];
-    const lampiran = require('../lib/lampiran').kunci(lampiranOtomatis(jawab));
+    const lampiran = require('../lib/lampiran').kunci(jawab); // lampiran yang kurang sudah ditambahkan penjaga Hermes
     jawab = jawab.replace(/\[(INFO_ADMIN|KIRIM)[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
     if (!jawab || /\[/.test(jawab) || RE_KLAIM.test(jawab)) {
       console.log(`[assist] ${nama}: balasan tidak aman, tidak dikirim: ${jawab.slice(0, 120)}`);
@@ -946,7 +940,6 @@ function registerMessageHandler(sock) {
       // bot tetap melayani. Penanda dibuang sebelum dikirim ke klien.
       const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
-      aiResponse = lampiranOtomatis(aiResponse);
       // Kontrak dari Hermes (kartu konsultasi t_d063ba1a; Rama 18 Nov, kasus …1837 Fel): [KIRIM: x] di baris sendiri yang diapit
       // teks = posisi lampiran → teks sebelum, lampiran tanpa keterangan, teks sesudah. Penanda di baris terakhir = seperti dulu.
       let sisip = null;
@@ -964,24 +957,8 @@ function registerMessageHandler(sock) {
         .replace(/\*\*([^*\n]+)\*\*/g, '*$1*'); // tebal gaya Markdown -> gaya WhatsApp
       const quotation = /\[QUOTATION\]/i.test(aiResponse);
       aiResponse = aiResponse.replace(/\[QUOTATION\]/gi, '').trim();
-      let perubahan = (aiResponse.match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1];
+      const perubahan = (aiResponse.match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1];
       aiResponse = aiResponse.replace(/\[PERUBAHAN[^\]]*\]/gi, '').trim();
-
-      // Pengaman: klaim sudah mengubah/mengamankan sesuatu -> tulis ulang sekali;
-      // masih mengklaim -> kalimat aman, dan admin tetap dikabari.
-      if (RE_KLAIM.test(aiResponse)) {
-        console.log(`[klaim] ${jid.split('@')[0]}: balasan mengklaim tindakan, ditulis ulang: ${aiResponse.slice(0, 120)}`);
-        const ulang = await getAIResponse(getRiwayat(jid), originalText,
-          kProfil + buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksHandoffLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking +
-          `\n\nKOREKSI SISTEM: draf balasanmu mengklaim sudah melakukan tindakan ("${aiResponse.slice(0, 200)}"). ` +
-          'Kamu tidak bisa mengubah atau mengonfirmasi apa pun. Tulis ulang: teruskan ke admin, tanpa klaim, ikuti aturan KAMU TIDAK BISA MENGUBAH DATA.')
-          .catch(() => '');
-        const bersih = String(ulang).replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
-        perubahan = perubahan || (String(ulang).match(/\[PERUBAHAN:?\s*([^\]]*)\]/i) || [])[1] || (RE_SOAL_BOOKING.test(originalText) ? `klien: "${originalText.slice(0, 150)}"` : undefined);
-        aiResponse = bersih && !RE_KLAIM.test(bersih) ? bersih
-          : wajibHermes() ? '[ADMIN_HANDOFF]'
-          : (RE_SOAL_BOOKING.test(originalText) ? KALIMAT_AMAN : 'Siap Kak, aku bantu cek dulu ya, nanti aku kabari di chat ini.');
-      }
 
       if (lead) aiResponse = prospekWa.tanpaAngka(aiResponse);
       // Calon rekanan tertarik → akun rekanan + link dasbor dari Tetra Ops (DR-050), ditempel oleh kode (Rama 22 Okt).

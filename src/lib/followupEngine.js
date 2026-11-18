@@ -116,27 +116,11 @@ function barisTranskrip(pesan) {
   });
 }
 
-// Kalimat basi & klaim palsu yang pernah lolos. Ketemu = pesan tidak dikirim.
-const RE_SLOP = /follow.?up|sekadar mengingatkan|ramaikan|keseruan|berkesan|momen spesial|siap (bantu|membantu)|keduluan|amankan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|\[/i;
-
-// Penanda follow-up (audit 22 Okt). RE_TUNDA: klien minta waktu. RE_DESAK: dorongan booking. ulangTanya: pertanyaan follow-up
-// membahas topik yang sama dengan pertanyaan terakhir kita yang tidak dijawab.
+// Gerbang sebelum memanggil AI (audit 22 Okt). RE_TUNDA: klien minta waktu → follow-up ditunda. Penjaga TEKS follow-up (kalimat basi,
+// desakan booking, mengulang pertanyaan, bentuk pesan) sejak Tahap 3B ada di plugin Hermes penjaga-cs (mode follow-up): gagal → [DIAM].
 const RE_TUNDA = /diskusi|dirundingkan|dibicarakan|tanya(in)?\s+(dulu|ke|sama)|info(in)?\s+ke|nanti\s+(aku|saya|ku|kami)?\s*(kabari|kabarin|hubungi|info)|kabar(i|in)\s+(lagi|nanti)|pikir(-pikir)?\s+dulu|dulu\s+ya\b/i;
 const RE_SOAL_BOOKING = /\bdp\b|booking|\bbook\b|transfer|rekening|cara\s+(pesan|bayar|booking)|bayar(nya)?\s+(ke|gimana)/i;
-const RE_DESAK = /\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|potongan|diskon|harga\s+khusus/i;
-const TOPIK_TANYA = { tanggal: /tanggal|tgl|kapan/i, jam: /jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)/i,
-  lokasi: /lokasi|venue|di\s?mana|daerah|kota/i, tamu: /tamu|undangan|berapa\s+orang/i, format: /2R|4R|polaroid|format/i };
-// Usulan 69: follow-up calon klien = maks 2 kalimat + satu pertanyaan penutup (…0832 Nadila: dua fakta lama tanpa pertanyaan, tidak dibalas).
-function bentukSalah(m) {
-  const t = String(m || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
-  return t.split(/(?<=[.!?])\s+/).filter(Boolean).length > 3 || !/\?\s*$/.test(t);
-}
 
-function ulangTanya(lama, baru) {
-  const qBaru = (String(baru || '').match(/[^.!?\n]*\?/g) || []).join(' ');
-  if (!lama || !qBaru) return false;
-  return Object.values(TOPIK_TANYA).some((re) => re.test(lama) && re.test(qBaru));
-}
 async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
   // Vendor rekanan: bukan penawaran. Konfirmasi/kelanjutan urusan yang sedang berjalan,
   // gaya akrab, tanpa "masih tertarik?" (keputusan Rama 30 Sep 2026).
@@ -238,37 +222,20 @@ async function runFollowupCycle(sock) {
       (nilai ? `PENILAIAN (penilai follow-up Hermes): ${nilai.status || '-'} — ${nilai.alasan || '-'}\n` : '') +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
       `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
-    // Penanda [KIRIM:*] dicabut sebelum pengecekan gaya (RE_SLOP memblokir "[") dan dikumpulkan dari tiap draf: dulu draf
-    // berpenanda selalu ditahan/ditulis ulang tanpa lampiran (Syifa minta PL 22 Okt, filenya tak pernah terkirim).
+    // Penanda [KIRIM:*] dikumpulkan lalu dicabut (Syifa minta PL 22 Okt). Penanda lain sudah ditahan penjaga Hermes ([DIAM]);
+    // sisa yang lolos dicabut supaya tidak pernah terkirim mentah.
     const lampiran = new Set();
     const bersihkan = (m) => {
       if (typeof m !== 'string') return m;
       lampiranLib.kunci(m).forEach((k) => lampiran.add(k));
-      return m.replace(/\[KIRIM:[^\]]*\]/gi, '').replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
+      return m.replace(/\[KIRIM:[^\]]*\]/gi, '').replace(/\[(?!DIAM\]|ADMIN_HANDOFF\])[A-Z_]+[^\]]*\]/g, '')
+        .replace(/\*\*([^*\n]+)\*\*/g, '*$1*').trim();
     };
-    let msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
-    // Tertahan kalimat terlarang → tulis ulang sekali sekarang, bukan menunggu siklus berikutnya (usulan CS Mintet 12:
-    // follow-up Alfa tertunda ±6 jam berulang 3 hari).
-    if (typeof msg === 'string' && RE_SLOP.test(msg)) {
-      console.log(`[followup] tulis ulang ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
-      msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
-    }
-    // Desakan booking tanpa diminta, atau mengulang pertanyaan yang dicuekin → tulis ulang sekali; masih → tidak dikirim.
-    const salah = (m) => typeof m === 'string' && !/\[(DIAM|ADMIN_HANDOFF)\]/.test(m) &&
-      ((!tanyaBooking && RE_DESAK.test(m)) || ulangTanya(tanyaAkhir, m) || (!vendor && bentukSalah(m)));
-    if (salah(msg)) {
-      console.log(`[followup] tulis ulang ${jid} (desak/ulang tanya): ${msg.replace(/\s+/g, ' ').slice(0, 120)}`);
-      msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
-      if (salah(msg)) { lewati('masih mendesak/mengulang pertanyaan setelah tulis ulang'); continue; }
-    }
+    const msg = bersihkan(await generateFollowupMessage(panggilan, leadContext, vendor));
     if (!msg || typeof msg !== 'string') continue;
     if (/\[(ADMIN_HANDOFF|DIAM)\]/.test(msg)) {
       state[jid] = now; // AI memutuskan jangan di-follow-up; jangan ditanya ulang tiap 6 jam
       continue;
-    }
-    if (RE_SLOP.test(msg)) {
-      console.log(`[followup] DITAHAN ${jid} (kalimat terlarang): ${msg.replace(/\s+/g, ' ').slice(0, 200)}`);
-      continue; // siklus berikutnya coba tulis ulang
     }
 
     try {
@@ -367,7 +334,7 @@ async function followupProspek(sock, paused, sudah) {
       }
     } catch (e) { console.error(`[followup-lead] gagal generate ${jid}:`, e.message); continue; }
     msg = String(msg || '');
-    if (!msg.trim() || /\[(DIAM|ADMIN_HANDOFF)\]/.test(msg) || /masih tertarik|follow.?up/i.test(msg)) {
+    if (!msg.trim() || /\[(DIAM|ADMIN_HANDOFF)\]/.test(msg)) { // "masih tertarik"/"follow up" ditahan penjaga Hermes → [DIAM]
       state[jid] = { ...s, stop: true };
       console.log(`[followup-lead] ${jid}: ${jenis} tidak dikirim (${msg.replace(/\s+/g, ' ').slice(0, 80)})`);
       continue;
@@ -497,4 +464,4 @@ async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
   return { ok: true, pesan: draf };
 }
 
-module.exports = { drafFollowup, _bentukSalah: bentukSalah, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
+module.exports = { drafFollowup, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
