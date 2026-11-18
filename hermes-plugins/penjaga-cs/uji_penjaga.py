@@ -252,6 +252,13 @@ def _():
     assert "bentuk" not in kode(P.periksa("Halo Kak, ini profil kerja sama rekanan kami ya.", gl, FRASA, ROBOT))
 
 
+@kasus("[DIAM] / penanda saja tidak diperiksa, tidak ditulis ulang (temuan Hermes t_231fdd55)")
+def _():
+    g = P.Giliran(giliran(FU_PESAN, FU_FAKTA))
+    assert P.periksa("[DIAM]", g, FRASA, ROBOT) == [] and P.selesaikan("[DIAM]", g, FRASA, ROBOT)[0] == "[DIAM]"
+    assert P.periksa("[KIRIM: pricelist]", g, FRASA, ROBOT) == []
+
+
 @kasus("klaim ubah booking (pindahan RE_KLAIM messages.js, insiden 28 Sep) & DP yang dikonfirmasi admin bukan klaim")
 def _():
     for t in ["Siap Kak, jadwalnya sudah aku pindahkan ke jam 10 ya.", "Sudah dijadwalkan ulang ya Kak.", "Tanggalnya sudah dikunci ya Kak.",
@@ -437,6 +444,12 @@ def _():
     t = "Tanggal 4 Desember masih available ya Kak. Untuk resepsi malam di Depok biasanya enak 3 jam, cetaknya sepuasnya. Acaranya mulai jam berapa Kak?"
     out = jalankan(llm, t, giliran("4 desember bisa kak? acaranya resepsi di Depok jam 7 malam"))
     assert "available" not in out and "jam berapa" in out and llm.n == 0, (out, llm.n)
+
+
+@kasus("alur plugin: [DIAM] dari model tidak memanggil tulis ulang")
+def _():
+    llm = LLM(["Kak Nadila, ada kabar?"])
+    assert jalankan(llm, "[DIAM]", giliran(FU_PESAN, FU_FAKTA)) == "[DIAM]" and llm.n == 0
 
 
 @kasus("alur plugin: follow-up yang tetap mendesak sesudah ditulis ulang tidak dikirim ([DIAM])")

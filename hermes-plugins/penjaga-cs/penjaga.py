@@ -578,6 +578,8 @@ def periksa(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> list[t
     if g.tugas:
         return []
     isi = isi_klien(teks)
+    if not isi:
+        return []  # [DIAM]/penanda saja: tidak ada yang dibaca klien (temuan Hermes t_231fdd55: [DIAM] sempat ditulis ulang)
     out = []
     if bocor_pikiran(teks, g.aturan):
         out.append(("bocor", "fatal", "balasan tadi memuat catatan/pikiran internal dan kutipan aturan. Klien TIDAK BOLEH melihat itu. "
