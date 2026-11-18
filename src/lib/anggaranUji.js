@@ -75,6 +75,16 @@ function cekSaldo() {
   }
 }
 
+function namaProfil() {
+  const langsung = process.env.HERMES_SESSION_PROFILE || process.env.HERMES_PROFILE;
+  if (langsung) return langsung;
+  // Sesi cron (gateway) mengirim HERMES_SESSION_PROFILE KOSONG dan tidak punya HERMES_PROFILE
+  // (diukur 18 Nov: HERMES_CRON_SESSION=1, HERMES_SESSION_PROFILE=, HERMES_HOME=.../profiles/tetra-wa-bot).
+  // Tanpa fallback ini semua cron tercatat "hermes:agent:cron" dan tidak bisa dibedakan per profil.
+  const m = /\/profiles\/([^/]+)\/?$/.exec(process.env.HERMES_HOME || '');
+  return m ? m[1] : '';
+}
+
 function cekOtorisasi() {
   // Boleh jika dijalankan oleh Hermes agent, sesi Rama manual, atau flag --paksa
   if (process.argv.includes('--paksa') || process.env.RAMA_MANUAL === '1') {
@@ -82,7 +92,7 @@ function cekOtorisasi() {
   }
   // Identitas dari env yang Hermes injeksikan ke tiap perintah (gateway/session_context.py, tools/environments/base_session_env.py):
   // cron yang jalan di proses gateway tidak membawa HERMES_PROFILE, jadi dulu tercatat "hermes:agent" (temuan Hermes t_769ccf81).
-  const profil = process.env.HERMES_SESSION_PROFILE || process.env.HERMES_PROFILE;
+  const profil = namaProfil();
   if (process.env.HERMES_AGENT === 'true' || profil) {
     const cron = process.env.HERMES_CRON_SESSION === '1';
     return { ok: true, pemanggil: `hermes:${profil || 'agent'}${cron ? ':cron' : ''}`, cron };

@@ -114,7 +114,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     const simpan = { ...process.env };
     const file = `/tmp/anggaran-regresi-${process.pid}.json`;
     try {
-      Object.assign(process.env, { ANGGARAN_UJI_FILE: file, SALDO_SUMOPOD_FILE: '/tmp/tidak-ada-saldo.json', HERMES_SESSION_PROFILE: 'tetra-wa-bot', HERMES_CRON_SESSION: '1' });
+      Object.assign(process.env, { ANGGARAN_UJI_FILE: file, SALDO_SUMOPOD_FILE: '/tmp/tidak-ada-saldo.json', HERMES_SESSION_PROFILE: '', HERMES_HOME: '/home/ubuntu/.hermes/profiles/tetra-wa-bot', HERMES_CRON_SESSION: '1' });
       delete process.env.HERMES_PROFILE; delete process.env.RAMA_MANUAL;
       delete require.cache[require.resolve('./src/lib/anggaranUji')];
       const a = require('./src/lib/anggaranUji');
