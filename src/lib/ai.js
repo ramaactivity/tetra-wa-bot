@@ -179,9 +179,11 @@ const pakaiHermes = () => process.env.AI_OTAK === 'hermes' && !!process.env.HERM
 const HERMES_TUGAS = { hermes: true, tugas: true, model: 'hermes:cs-wa', timeout: Number(process.env.HERMES_TUGAS_TIMEOUT_MS || 90000) };
 const epTugas = () => (pakaiHermes() ? HERMES_TUGAS : PRIMARY);
 const bolehCadangan = () => process.env.AI_OTAK !== 'hermes';
-const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): sebelum menjawab, WAJIB panggil skill_view untuk KETIGA skill ini, jangan ada yang dilewati: ' +
-  '(1) faq-tetra = fakta & harga resmi, (2) cara-balas-wa = prosedur & penanda sistem, (3) cs-mintet-pelajaran = pelajaran dari chat nyata ' +
-  '(contoh percakapan ada di references/contoh.md skill itu; buka kalau situasinya butuh contoh). ' +
+// 18 Nov: ketiga skill dipin lewat `skills.auto_load` profil cs-wa (fitur bawaan Hermes, dimuat penuh tiap sesi baru) —
+// audit 16–18 Nov: 26 dari 79 run tidak memanggil skill_view walau diwajibkan, jadi pelajaran tidak terpakai.
+const HERMES_CARA = 'CARA KERJA (dari sistem bot WA Tetra): skill faq-tetra (fakta & harga resmi), cara-balas-wa (prosedur & penanda sistem), dan ' +
+  'cs-mintet-pelajaran (pelajaran dari chat nyata) sudah dimuat penuh di awal sesi — itu acuanmu, tidak perlu skill_view untuk ketiganya; ' +
+  'contoh percakapan ada di references/contoh.md skill cs-mintet-pelajaran (skill_view kalau situasinya butuh contoh). ' +
   'Status tanggal hanya dari alat cek_ketersediaan. Pesan berawalan "(admin)" di riwayat = balasan admin manusia (keputusan resmi). ' +
   'Balas HANYA teks WhatsApp final untuk klien; penanda [..] di baris paling akhir. Pesan "KOREKSI SISTEM" dari sistem: ikuti, lalu tulis ulang pesan final saja.';
 async function kirimHermes(endpoint, messages) {
@@ -213,11 +215,6 @@ async function kirimHermes(endpoint, messages) {
   try {
     const ev = await (await fetch(`${url}/runs/${run_id}/events`, { headers: H, signal: AbortSignal.timeout(10000) })).text();
     jadwalTersedia = /cek_ketersediaan[\s\S]{0,400}?bisa_terima_booking\\*"\s*:\s*true/.test(ev);
-    // Putaran tulis ulang (KOREKSI SISTEM) tidak perlu membaca ulang skill: draf & koreksinya sudah di konteks.
-    if (!endpoint.tugas && !endpoint.situasi && !/^KOREKSI SISTEM/.test(String(akhir?.content || ''))) {
-      const terlewat = ['faq-tetra', 'cara-balas-wa', 'cs-mintet-pelajaran'].filter((k) => !new RegExp(`"tool": "skill_view", "preview": "${k}`).test(ev));
-      if (terlewat.length) console.log(`[hermes] ${run_id} skill terlewat: ${terlewat.join(', ')}`);
-    }
   } catch (e) { console.log(`[hermes] event ${run_id} tidak terbaca: ${e.message}`); }
   console.log(`[hermes${endpoint.tugas ? '-tugas' : ''}] ${run_id} selesai, token masuk ${st.usage?.input_tokens ?? '?'} (cache ${st.usage?.cache_read_tokens ?? '?'}), jadwal ${jadwalTersedia ? 'dicek: tersedia' : '-'}, model ${st.runtime?.model || '?'}`);
   // Penanda lampiran dirapikan ke kunci satu kata ("[KIRIM: format cetak]" → "[KIRIM: format]") supaya semua penjaga

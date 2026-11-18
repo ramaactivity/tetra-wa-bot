@@ -53,16 +53,15 @@ async function kirimGrupAdmin(sock, teks) {
 // Kirim teks ke topic Telegram CS Mintet (grup Agent Rama). Melempar error kalau gagal.
 const TG_CHAT = process.env.ESKALASI_TELEGRAM_CHAT_ID || '-1004377661750';
 const TG_THREAD = process.env.ESKALASI_TELEGRAM_THREAD_ID || '109';
+// Alarm Telegram lewat `hermes send` (cara Hermes, tabel A2 "Notify Telegram from a script/app"; bot & kredensial sama dengan
+// gateway). Teks lewat stdin sebagai UTF-8: emoji yang terpotong jadi "�", bukan ditolak Telegram (18 Nov 07:58 gagal 400).
 async function kirimTelegram(text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error('TELEGRAM_BOT_TOKEN kosong');
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: TG_CHAT, message_thread_id: Number(TG_THREAD), text, disable_web_page_preview: true }),
-    signal: AbortSignal.timeout(15000),
+  const bin = require('path').join(require('os').homedir(), '.local', 'bin', 'hermes');
+  await new Promise((ok, gagal) => {
+    const p = require('child_process').execFile(bin, ['send', '-q', '--to', `telegram:${TG_CHAT}:${TG_THREAD}`, '-f', '-'],
+      { timeout: 60000 }, (e, _out, err) => (e ? gagal(new Error(`hermes send: ${String(err || e.message).slice(0, 150)}`)) : ok()));
+    p.stdin.end(String(text));
   });
-  if (!res.ok) throw new Error(`Telegram ${res.status} ${(await res.text()).slice(0, 150)}`);
 }
 
 // Grup WA crew "Tetra Crew": briefing & pengingat rekap dari Tetra Ops (perintah send-grup-crew). Tanda pesan

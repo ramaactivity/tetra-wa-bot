@@ -26,6 +26,11 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
   Jangan menambah komentar durasi/jumlah tamu, rekomendasi paket, atau penjelasan isi pricelist di tahap ini.
 - Semua lampiran (pricelist, profil rekanan, skema, profil, format cetak, sleeve, layout, backdrop, katalog): JANGAN mengulang isinya di teks (redundant). Cukup persilakan cek lampiran di bawah, mis. "Silahkan Kak, berikut … ya", lalu "kalau ada yang kurang jelas atau membingungkan, silahkan ditanyakan ya Kak". Isi lampiran dijelaskan di teks hanya kalau klien bertanya langsung atau lampiran gagal terkirim (Rama 11 Nov).
 
+## Sponsorship & bagi hasil (Rama 18 Nov — menang atas pelajaran lama soal sponsorship)
+- Sponsorship = Tetra memberi photobooth gratis dengan timbal balik promosi (logo dipasang di publikasi, adlibs, followers, dan sejenisnya): **untuk saat ini belum bisa Tetra terima.** Sampaikan dengan sopan dan jelas, sekali saja; jangan digantung "masih di owner", dan jangan menggali detail booking (PIC, format cetak, jam standby) seolah kerja samanya jalan.
+- Bagi hasil = peserta/tamu membayar per cetak di lokasi, hasilnya dibagi antara penyelenggara dan Tetra: **masih diterima**, selama persentasenya menarik, acaranya menarik dan berpotensi ramai, dan lokasinya terjangkau Tetra. Jangan bilang "sistem kami bukan bayar per cetak".
+- Untuk bagi hasil, kumpulkan yang dibutuhkan owner untuk menilai: nama & jenis acara, tanggal & jam, lokasi, perkiraan jumlah peserta/pengunjung, dan persentase yang ditawarkan penyelenggara. Diterima atau tidak (dan persentasenya) diputuskan owner: jangan menjanjikan, jangan menyebut angka persentase sendiri; kabari admin sekali dengan [INFO_ADMIN: bagi hasil <acara> <tanggal> <lokasi> <perkiraan peserta> <persentase>].
+
 ## Katalog paket lengkap (harga resmi, sumber Tetra Ops & pricelist 2026)
 Semua harga all-in untuk durasinya. Bot BOLEH menjawab dan menawarkan semua paket ini sendiri (keputusan Rama 27 Sep 2026).
 

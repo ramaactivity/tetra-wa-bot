@@ -149,41 +149,11 @@ async function generateFollowupMessage(panggilan, leadContext, vendor = null) {
     try { return await getAIResponse([], p, leadContext + vendorLib.konteks(vendor)); }
     catch (e) { console.error('[followupEngine] Gagal generate pesan vendor:', e.message); return null; }
   }
-  // Ditulis ulang 22 Okt dari audit 28 follow-up (19% dibalas): 24/28 cuma mengulang pertanyaan yang dicuekin, ajakan
-  // DP 0/5 dibalas. Yang berhasil memberi sesuatu dulu. Prinsip Rama: tiap klien unik, jangan salesy.
-  const prompt =
-    `Kamu tim Tetra (bukan admin). Tulis SATU pesan WhatsApp lanjutan untuk ${panggilan}, calon klien yang belum membalas. ` +
-    `Tujuannya: dia merasa dipahami dan terbantu sehingga mudah membalas; deal itu hasil, bukan isi pesan.\n` +
-    `Sebelum menulis, baca TRANSKRIP dan FAKTA, tentukan dalam hati: dia sedang memutuskan apa, menunggu apa/siapa, seberapa hangat ` +
-    `dan bagaimana nadanya. Pilih SATU langkah yang paling cocok untuk DIA — setiap klien beda, jangan pola yang sama:\n` +
-    `- info praktis yang khas acaranya (tip yang berguna, bukan brosur);\n` +
-    `- jawab keraguan yang tersirat (diam setelah dapat harga = mungkin soal harga: JANGAN ulang isi paket yang sudah dia terima ` +
-    `(transport, backdrop, unlimited, "sudah termasuk"); buka pintu untuk patokan budget; paket/opsi yang lebih murah HANYA kalau dia pernah menyinggung budget atau mahal);\n` +
-    `- beri harga kalau dia pernah minta dan belum dapat angkanya;\n` +
-    `- yang memutuskan orang lain (pasangan/keluarga/atasan/panitia): ringkasan singkat yang bisa langsung diteruskan;\n` +
-    `- kantor/instansi/sekolah: tawarkan quotation untuk diajukan;\n` +
-    `- berhenti di tahap booking: ringankan prosesnya (lewat chat juga bisa, aku bantu);\n` +
-    `- beri jalan keluar yang sopan ("kalau belum butuh sekarang, santai aja");\n` +
-    `- atau balas persis [DIAM] kalau tidak ada hal baru yang berguna untuknya.\n` +
-    `Aturan:\n` +
-    `- Isi harus BARU dibanding pesan Tetra sebelumnya. JANGAN ulang pertanyaan yang sudah dia lewati (lihat FAKTA); kalau info itu ` +
-    `memang perlu, beri alasan yang menguntungkan dia atau bilang boleh menyusul.\n` +
-    `- Usulan CS Mintet 69 (Rama 16 Nov): MAKSIMAL 2 kalimat berisi SATU fakta BARU yang belum pernah dikirim ke dia, lalu SATU pertanyaan penutup ` +
-    `yang paling gampang dijawab (mis. jam acara, warna backdrop yang dia sebut), bukan pertanyaan yang sudah dia lewati. Tidak ada fakta baru = [DIAM].\n` +
-    `- JANGAN ajak DP/kunci/amankan tanggal, kirim link booking atau rekening, atau urgensi ("biar nggak bentrok", "keburu") ` +
-    `kecuali dia sendiri sudah bertanya soal booking.\n` +
-    `- JANGAN menyebut atau menawarkan potongan/diskon/harga khusus apa pun, walaupun dia tampak menimbang harga — itu hanya ` +
-    `boleh keluar sebagai balasan langsung saat dia sendiri keberatan (FAQ: senjata terakhir, sekali, bukan di awal).\n` +
-    `- JANGAN mengarang detail yang tidak ada di transkrip atau system prompt: jenis acara, kategori, siapa pengambil keputusan, ` +
-    `kapasitas/angka per jam, jumlah orang per foto. Hitungan harus benar. Minta maaf hanya kalau memang Tetra yang telat atau salah.\n` +
-    `- Jangan mengaku sudah melakukan sesuatu, jangan bilang jadwal masih aman/tersedia, jangan janji promo/diskon. Harga dan fakta hanya ` +
-    `dari transkrip dan system prompt; kalau ada info Tetra yang keliru dan relevan di transkrip, luruskan dengan jujur.\n` +
-    `- Panggil "${panggilan}"${panggilan === 'Kak' ? '' : ' atau "Kak" saja'}; jangan pakai nama lain.\n` +
-    `- Link galeri hanya kalau dia ragu soal hasil atau minta contoh dan belum pernah dikirim, dengan arahan apa yang dilihat.\n` +
-    `- Gaya chat orang asli, tanpa bullet, emoji maks 1; MAKSIMAL 3 baris (follow-up 13 Nov yang 4–5 baris dibalas admin, bukan klien). Kata terlarang di system prompt tetap berlaku ` +
-    `(termasuk "follow up", "sekadar mengingatkan"). Keputusan/ucapan ADMIN di transkrip = keputusan resmi.\n` +
-    `Balas persis [DIAM] kalau dia sudah batal/bukan calon klien, bilang belum ada rencana, admin sedang menangani, ` +
-    `acaranya sudah lewat, atau kamu tidak punya hal baru yang berguna.`;
+  // 18 Nov (Rama: 100% cara Hermes): prosedur follow-up pindah ke skill cara-balas-wa bagian "Follow-up calon klien yang
+  // belum membalas" (bisa dilatih CS Mintet lewat skill_manage). Node hanya memberi FAKTA + PENILAIAN + TRANSKRIP di leadContext.
+  const prompt = `TUGAS FOLLOW-UP: tulis SATU pesan WhatsApp lanjutan untuk ${panggilan}, calon klien yang belum membalas, ` +
+    `mengikuti bagian "Follow-up calon klien yang belum membalas" di skill cara-balas-wa. ` +
+    `Panggil "${panggilan}"${panggilan === 'Kak' ? '' : ' atau "Kak" saja'}; jangan pakai nama lain. Balas HANYA pesannya, atau persis [DIAM].`;
   try {
     return await getAIResponse([], prompt, leadContext);
   } catch (e) {
@@ -250,8 +220,9 @@ async function runFollowupCycle(sock) {
 
     const transkrip = barisTranskrip(pesan.slice(-80)).join('\n');
     const ringkasan = getRingkasan(jid);
+    let nilai = null;
     if (!vendor) {
-      const n = await nilaiFollowup(transkrip, ringkasan);
+      const n = nilai = await nilaiFollowup(transkrip, ringkasan);
       console.log(`[followup] nilai ${jid}: ${n.kirim ? 'KIRIM' : 'diam'} (${n.status}) ${n.alasan || ''}`);
       if (!n.kirim) { state[jid] = now; continue; }
     }
@@ -268,6 +239,7 @@ async function runFollowupCycle(sock) {
     const leadContext = `Panggilan klien: ${panggilan}\n` +
       `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pesan terakhir klien ${jamKlien} jam lalu (jangan tulis "tadi" kalau lebih dari 6 jam); pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
       `dia ${tanyaBooking ? 'SUDAH' : 'BELUM'} pernah bertanya soal booking/DP.\n` +
+      (nilai ? `PENILAIAN (penilai follow-up Hermes): ${nilai.status || '-'} — ${nilai.alasan || '-'}\n` : '') +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
       `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${transkrip}`;
     // Penanda [KIRIM:*] dicabut sebelum pengecekan gaya (RE_SLOP memblokir "[") dan dikumpulkan dari tiap draf: dulu draf

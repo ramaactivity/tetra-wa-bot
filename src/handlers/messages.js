@@ -47,10 +47,9 @@ function konteksHandoffLama(jid) {
   const riw = getRiwayat(jid);
   const kal = [KALIMAT_KEMITRAAN, KALIMAT_PRODUK_KHUSUS].filter((k) => sudahDikirim(riw, k));
   if (!kal.length) return '';
-  return `\nSUDAH DITERUSKAN SEBELUMNYA: permintaan klien ini sudah pernah kamu oper ke owner/tim dengan kalimat "${kal.join('" dan "')}". ` +
-    'JANGAN ulang kalimat itu. Akui hal baru yang dia kirim atau tanyakan (proposal, penawaran, pertanyaan lanjutan) dengan menyebut isinya, ' +
-    'bilang masih di meja owner/admin tanpa menjanjikan waktu, lalu satu pertanyaan praktis kalau perlu (mis. tanggal acara, siapa PIC). ' +
-    'Tambahkan [INFO_ADMIN: klien menanyakan lagi soal <topik>].';
+  // 18 Nov (Rama: 100% cara Hermes): hanya fakta. Dulu instruksi "bilang masih di meja owner + [INFO_ADMIN]" tiap giliran
+  // menimpa pelajaran CS Mintet "kalimat tunggu cukup sekali" (SPARK 17 Nov: owner disebut di 13 dari 14 balasan).
+  return `\nFAKTA SISTEM: permintaan klien ini sudah pernah dioper ke owner/tim dengan kalimat "${kal.join('" dan "')}" dan admin sudah dikabari saat itu.`;
 }
 
 const wajibHermes = () => process.env.AI_OTAK === 'hermes';
