@@ -216,6 +216,14 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
 
   if (!process.argv.includes('--cepat')) {
     // ── Dengan AI (model sungguhan) ─────────────────────────────────────────
+    const anggaran = require('./src/lib/anggaranUji');
+    try {
+      anggaran.periksaDanCatat('regresi', { jumlah_kasus: 13 });
+    } catch (err) {
+      console.log(`\n⚠️  Uji AI regresi ditahan: ${err.message}`);
+      console.log("   Gunakan: npm run regresi -- --cepat (uji aturan & penjaga tanpa AI)\n");
+      process.exit(1);
+    }
     const tanya = (hist, teks, ctx = LANJUT) => ai.getAIResponse(hist, teks, ctx);
     await kasus("Sa'adah: form + minta contoh ukuran frame → dijawab + lampiran, bukan oper admin", async () => {
       const r = await tanya([{ role: 'assistant', content: 'Untuk booking, mohon dibantu isi form berikut ya kak' }],

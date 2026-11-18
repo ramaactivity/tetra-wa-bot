@@ -23,6 +23,13 @@ if (arg('riwayat')) {
   if (!Array.isArray(riwayat)) { console.log(JSON.stringify({ error: 'riwayat harus array' })); process.exit(2); }
 }
 if (process.env.AI_OTAK !== 'hermes') console.error('[uji-balasan] PERINGATAN: AI_OTAK bukan hermes, hasil bukan dari cs-wa');
+const anggaran = require('../src/lib/anggaranUji');
+try {
+  anggaran.periksaDanCatat('uji_balasan', { pesan });
+} catch (err) {
+  console.log(JSON.stringify({ error: err.message }));
+  process.exit(1);
+}
 const ai = require('../src/lib/ai');
 (async () => {
   const t = Date.now();
