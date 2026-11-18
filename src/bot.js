@@ -580,6 +580,25 @@ function startCommandPoller() {
           // send-<jenis>:{"nomor","pesan","pdf_url","nama_file"}
           const hasil = await kirimInvoice(c.command.slice(c.command.indexOf(':') + 1));
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('followup-draf:')) {
+          // Tombol Follow-up Tetra Ops: {"jid","nomor","alasan","konteks"} → draf Hermes di kolom result (belum dikirim ke klien).
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek di bawah */ }
+          const nomor = String(p.nomor || '').replace(/\D/g, '');
+          let jid = String(p.jid || '') || (nomor ? `${nomor}@s.whatsapp.net` : '');
+          if (jid && !store.getRiwayat(jid).length && jid.endsWith('@s.whatsapp.net')) {
+            const lid = await currentSock?.signalRepository?.lidMapping?.getLIDForPN?.(jid).catch(() => null);
+            if (lid && store.getRiwayat(lid).length) jid = lid;
+          }
+          const hasil = jid ? await followup.drafFollowup(jid, { alasan: p.alasan, konteks: p.konteks })
+            : { ok: false, pesan: 'jid/nomor kosong' };
+          await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('send-followup:')) {
+          // Owner klik Kirim atas draf di Tetra Ops: {"nomor","pesan"} — jalur & rem sama dengan pesan relasi (08–20 WIB, kuota harian).
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek kirimRelasi */ }
+          const hasil = await kirimRelasi(JSON.stringify({ ...p, alasan: p.alasan || 'follow-up dari Tetra Ops, disetujui owner' }));
+          if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else if (c.command.startsWith('send-relasi:')) {
           const hasil = await kirimRelasi(c.command.slice(c.command.indexOf(':') + 1));
           if (!hasil.tunda) await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);

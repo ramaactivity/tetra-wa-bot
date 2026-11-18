@@ -487,4 +487,25 @@ function start(getSock) {
   return t;
 }
 
-module.exports = { _bentukSalah: bentukSalah, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
+// Tombol "Follow-up" di halaman Leads Tetra Ops (Rama 18 Nov; spek HERMES docs/SPEC-LEADS-HERMES.md): draf ditulis Hermes cs-wa
+// dari transkrip utuh, dikembalikan ke Tetra Ops lewat hasil perintah; terkirim hanya setelah owner klik Kirim (send-followup).
+async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
+  const pesan = transkripGabungan(jid, []);
+  if (!pesan.length) return { ok: false, pesan: 'riwayat chat kontak ini kosong di bot' };
+  const panggilan = namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n')) || 'Kak';
+  const botAkhir = pesan.filter((p) => p.role === 'assistant').at(-1);
+  const hariDiam = Math.round((Date.now() - (botAkhir?.t || Date.now())) / 864e5);
+  const ringkasan = getRingkasan(jid);
+  const leadContext = `Panggilan klien: ${panggilan}\n` +
+    `FAKTA: owner meminta follow-up dari Tetra Ops (alasan: ${alasan || '-'}); pesan terakhir kita ${hariDiam} hari lalu.\n` +
+    (konteks ? `KONTEKS DARI TETRA OPS: ${String(konteks).slice(0, 800)}\n` : '') +
+    (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
+    `TRANSKRIP LENGKAP (kronologis; ADMIN = balasan manual admin, keputusan resmi):\n${barisTranskrip(pesan.slice(-80)).join('\n')}`;
+  const m = await generateFollowupMessage(panggilan, leadContext);
+  const draf = String(m || '').replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
+  if (!draf) return { ok: false, pesan: 'Hermes gagal menulis draf' };
+  if (/^\[DIAM\]$/i.test(draf)) return { ok: false, pesan: 'Hermes menilai belum ada hal baru yang berguna untuk follow-up kontak ini ([DIAM])' };
+  return { ok: true, pesan: draf };
+}
+
+module.exports = { drafFollowup, _bentukSalah: bentukSalah, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
