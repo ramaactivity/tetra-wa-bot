@@ -23,8 +23,9 @@ from . import penjaga as P
 
 log = logging.getLogger("penjaga-cs")
 FRASA_FILE = Path(__file__).resolve().parents[2] / "docs" / "FRASA-KAKU.md"
-BATAS_DTK = 75     # tulis ulang hanya kalau giliran belum selama ini (bot Node menunggu satu run maks 150 dtk)
-TIMEOUT_LLM = 40
+# Saran Hermes t_d063ba1a: 55 + 30 dtk + giliran model tetap di bawah batas tunggu bot Node (150 dtk) dan hook_callback_timeout 90.
+BATAS_DTK = 55     # tulis ulang hanya kalau giliran belum selama ini
+TIMEOUT_LLM = 30
 _catatan: dict = {}
 _kunci = threading.Lock()
 _frasa = {"mtime": None, "isi": ([], [])}
@@ -90,17 +91,25 @@ def periksa_dan_perbaiki(response_text="", session_id="", **_):
         c["selesai"] = True
         return None
     frasa, robot = _baca_frasa()
-    teks, jejak = response_text, []
+    teks, jejak, pakai = response_text, [], []
     masalah = P.periksa(teks, g, frasa, robot)
+    awal = [m[0] for m in masalah]
+    tanpa_ai = P.buang_dulu(teks, g, masalah, robot)
+    if tanpa_ai != teks:
+        teks, masalah = tanpa_ai, P.periksa(tanpa_ai, g, frasa, robot)
     while masalah and len(jejak) < 2 and time.time() - c["mulai"] < BATAS_DTK and _llm is not None:
         jejak.append([m[0] for m in masalah])
         try:
-            baru = (_llm.complete(messages=P.pesan_tulis_ulang(c["msgs"], teks, masalah), timeout=TIMEOUT_LLM,
-                                  purpose="penjaga-cs: tulis ulang balasan cs-wa").text or "").strip()
+            r = _llm.complete(messages=P.pesan_tulis_ulang(c["msgs"], teks, masalah), timeout=TIMEOUT_LLM,
+                              purpose="penjaga-cs: tulis ulang balasan cs-wa")
+            baru = (r.text or "").strip()
+            u = getattr(r, "usage", None)
+            pakai.append(u if isinstance(u, (dict, type(None))) else str(u))
         except Exception as e:
             log.warning("penjaga-cs: tulis ulang gagal (%s)", e)
             break
-        if not baru:
+        if not baru or not P.penanda_utuh(teks, baru):
+            log.info("penjaga-cs %s: tulis ulang ditolak (%s)", session_id, "kosong" if not baru else "penanda hilang")
             break
         m2 = P.periksa(baru, g, frasa, robot)
         if any(m[1] == "fatal" for m in m2) and not any(m[1] == "fatal" for m in masalah):
@@ -108,10 +117,12 @@ def periksa_dan_perbaiki(response_text="", session_id="", **_):
         teks, masalah = baru, m2
     akhir, aksi = P.selesaikan(teks, g, frasa, robot)
     c["selesai"] = True
-    _status(bool(jejak or aksi))
-    if jejak or aksi:
-        log.info("penjaga-cs %s: masalah %s, aksi %s", session_id, jejak, aksi)
-        _kejadian({"sesi": session_id, "masalah": jejak, "aksi": aksi, "situasi": g.situasi,
+    berubah = akhir != response_text
+    _status(bool(awal))
+    if awal or berubah:
+        log.info("penjaga-cs %s: masalah %s, ditulis ulang %d, aksi %s", session_id, awal, len(jejak), aksi)
+        _kejadian({"sesi": session_id, "masalah": awal, "putaran": jejak, "ditulis_ulang": len(jejak), "tanpa_ai": tanpa_ai != response_text,
+                   "aksi": aksi, "berubah": berubah, "token": pakai, "situasi": g.situasi,
                    "awal": response_text[:400], "akhir": akhir[:400]})
     return akhir if akhir != response_text else None
 

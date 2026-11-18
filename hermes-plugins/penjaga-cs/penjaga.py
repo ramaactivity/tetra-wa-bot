@@ -350,6 +350,10 @@ def masalah_gaya(teks: str, pertama: bool = False, pesan_klien: str = "", frasa:
     if (re.search(r"\[KIRIM:\s*format\b", teks, re.I) and len({x.lower() for x in re.findall(r"\b(2R|4R|polaroid)\b", isi, re.I)}) >= 2
             and len(isi) > 250):
         out.append(("ulang_lampiran", "gaya", "ilustrasi format sudah dilampirkan: jangan jelaskan tiap format di teks, cukup pengantar singkat + satu pertanyaan"))
+    baris_isi = [b for b in teks.split("\n") if b.strip()]
+    if baris_isi and re.match(r"^\s*\[KIRIM:", baris_isi[0], re.I) and isi:
+        out.append(("lampiran_duluan", "gaya", "jangan mulai pesan dengan penanda lampiran: tulis dulu kalimat yang menunjuk lampiran, lalu [KIRIM: …] di baris "
+                    "sendiri, lalu (kalau perlu) pertanyaan sesudahnya"))
     if isi.count("?") > 2:
         out.append(("tanya_banyak", "gaya", "maksimal 2 pertanyaan"))
     if RE_KOORDINASI_LAPANGAN.search(isi):
@@ -411,6 +415,8 @@ def pisah_pertanyaan(teks: str) -> str:
     baris = str(teks or "").split("\n")
     i = len(baris) - 1
     while i >= 0 and (not baris[i].strip() or re.match(r"^\s*\[[A-Z_]+", baris[i])):
+        if re.match(r"^\s*\[KIRIM:", baris[i], re.I):
+            return teks  # batas keras (saran Hermes t_d063ba1a): teks sebelum lampiran tidak diutak-atik
         i -= 1
     if i < 0 or not re.search(r"\?\s*$", baris[i]):
         return teks
@@ -566,6 +572,44 @@ def selesaikan(teks: str, g: Giliran, frasa: list[str], robot: list[str]) -> tup
     teks = re.sub(r"^\(admin\)\s*", "", teks, flags=re.I)  # jangan pernah menyamar jadi pesan admin di riwayat
     teks = beri_jarak(pisah_pertanyaan(rapikan_gaya(teks, 0)))
     return teks, aksi
+
+
+RE_PENANDA = re.compile(r"\[([A-Z_]+)(?::\s*(\w+))?[^\]]*\]")
+
+
+def penanda(teks: str) -> list[str]:
+    """Kunci penanda di teks, mis. ["KIRIM:pricelist", "INFO_ADMIN"] (isi INFO_ADMIN boleh berubah)."""
+    return [m.group(1) + (":" + m.group(2).lower() if m.group(1) == "KIRIM" and m.group(2) else "") for m in RE_PENANDA.finditer(str(teks))]
+
+
+def penanda_utuh(draf: str, baru: str) -> bool:
+    """Tulis ulang boleh MENAMBAH penanda (mis. [INFO_ADMIN] yang diminta koreksi), tapi tidak boleh menghilangkan penanda draf
+    (saran Hermes t_d063ba1a: tanpa ini urutan teks → lampiran → teks bisa rusak tanpa jejak)."""
+    sisa = penanda(baru)
+    for p in penanda(draf):
+        if p not in sisa:
+            return False
+        sisa.remove(p)
+    return True
+
+
+def buang_dulu(teks: str, g: "Giliran", masalah: list[tuple[str, str, str]], robot: list[str]) -> str:
+    """Masalah kelas "buang" diselesaikan tanpa AI kalau inti jawaban tetap ada (saran Hermes t_d063ba1a: satu tulis ulang membawa
+    seluruh konteks, mahal dan bisa memunculkan kesalahan baru). Inti hilang (sisa < separuh atau < 30 huruf) → teks asli,
+    biar tulis ulang yang memperbaiki."""
+    kode = {m[0] for m in masalah if m[1] == "buang"}
+    if not kode:
+        return teks
+    t = buang_kata_robot(teks, robot) if "kata_robot" in kode else teks
+    for k, rx in (("klaim_tersedia", RE_KLAIM_TERSEDIA), ("minta_ulang", RE_MINTA_ULANG), ("janji_kabari", RE_JANJI_KABARI)):
+        if k in kode:
+            t = buang_kalimat(t, rx)
+    a, b = len(isi_klien(teks)), len(isi_klien(t))
+    if b < 30 or b < a * 0.5:
+        return teks
+    if "janji_kabari" in kode and not re.search(r"\[INFO_ADMIN", t, re.I):
+        t += f'\n[INFO_ADMIN: klien menunggu kabar soal "{potong(g.pesan_klien)}"]'
+    return t
 
 
 def koreksi(masalah: list[tuple[str, str, str]]) -> str:

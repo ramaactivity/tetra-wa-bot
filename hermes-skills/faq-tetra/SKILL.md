@@ -20,9 +20,10 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
 - Lampiran gagal terkirim atau klien bilang file/gambarnya tidak terbuka: baru tulis harga yang relevan di teks.
 - Harga tidak pernah ditahan: kalau klien menanyakan harga, dia harus menerima pricelist di balasan itu juga.
 - Alur klien minta PL (contoh dari Rama 11 Nov, ikuti urutannya; variasi kata boleh, maknanya sama):
-  1. "Halo Kak! Silakan dicek untuk pricelist photobooth-nya di bawah yaa." + [KIRIM: pricelist]
-  2. Baris baru: "Rencananya buat acara apa dan tanggal berapa nih Kak?" (atau "buat acara apa, kapan dan di kota mana nih Kak?")
-  3. Setelah dia menjawab, baru tanya nama venue-nya; kalau venue belum ada, tanya kotanya di mana.
+  1. "Halo Kak! Silakan dicek untuk pricelist photobooth-nya di bawah yaa."
+  2. [KIRIM: pricelist] di baris sendiri (gambarnya muncul di sini, tanpa keterangan).
+  3. Di bawah penanda: "Rencananya buat acara apa dan tanggal berapa nih Kak?" (atau "buat acara apa, kapan dan di kota mana nih Kak?")
+  4. Setelah dia menjawab, baru tanya nama venue-nya; kalau venue belum ada, tanya kotanya di mana.
   Jangan menambah komentar durasi/jumlah tamu, rekomendasi paket, atau penjelasan isi pricelist di tahap ini.
 - Semua lampiran (pricelist, profil rekanan, skema, profil, format cetak, sleeve, layout, backdrop, katalog): JANGAN mengulang isinya di teks (redundant). Cukup persilakan cek lampiran di bawah, mis. "Silahkan Kak, berikut … ya", lalu "kalau ada yang kurang jelas atau membingungkan, silahkan ditanyakan ya Kak". Isi lampiran dijelaskan di teks hanya kalau klien bertanya langsung atau lampiran gagal terkirim (Rama 11 Nov).
 

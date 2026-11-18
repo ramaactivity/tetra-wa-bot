@@ -203,6 +203,29 @@ def _():
     assert P.beri_jarak(rekap) == rekap
 
 
+@kasus("kontrak posisi lampiran: [KIRIM] batas keras, pesan tidak diawali penanda, tulis ulang tidak boleh hilangkan penanda")
+def _():
+    t = "Untuk 3 jam Rp 2.500.000 ya Kak. Ini pricelistnya.\n[KIRIM: pricelist]\nAcaranya di mana Kak?"
+    assert P.pisah_pertanyaan(t) == t
+    assert P.pisah_pertanyaan("Info dulu ya Kak. Acaranya di mana Kak?\n[KIRIM: pricelist]") == "Info dulu ya Kak. Acaranya di mana Kak?\n[KIRIM: pricelist]"
+    assert "lampiran_duluan" in kode(gaya("[KIRIM: pricelist]\nSilahkan dicek ya Kak."))
+    assert "lampiran_duluan" not in kode(gaya("Silahkan dicek ya Kak.\n[KIRIM: pricelist]\nAcaranya kapan Kak?"))
+    assert P.penanda_utuh("A\n[KIRIM: pricelist]\nB", "A2\n[KIRIM: pricelist]\nB2\n[INFO_ADMIN: x]")
+    assert not P.penanda_utuh("A\n[KIRIM: pricelist]\nB", "A2 B2")
+    assert not P.penanda_utuh("A\n[KIRIM: form]", "A\n[KIRIM: pricelist]")
+
+
+@kasus("buang dulu tanpa AI kalau inti jawaban tetap ada; inti hilang -> biar ditulis ulang")
+def _():
+    g = P.Giliran(giliran("4 desember bisa kak? acaranya resepsi di Depok jam 7 malam"))
+    t = "Tanggal 4 Desember masih available ya Kak. Untuk resepsi malam di Depok biasanya enak 3 jam, cetaknya sepuasnya. Acaranya mulai jam berapa Kak?"
+    m = P.periksa(t, g, FRASA, ROBOT)
+    hasil_buang = P.buang_dulu(t, g, m, ROBOT)
+    assert "available" not in hasil_buang and "jam berapa" in hasil_buang, hasil_buang
+    pendek = "Tanggal 4 Desember masih available ya Kak."
+    assert P.buang_dulu(pendek, g, P.periksa(pendek, g, FRASA, ROBOT), ROBOT) == pendek
+
+
 @kasus("link & alamat karangan ditangkap (...2792)")
 def _():
     g = P.Giliran(giliran("boleh share lok?"))
@@ -347,6 +370,21 @@ def _():
     llm = LLM(["Untuk 4 jam Rp 3.000.000 ya Kak."])
     out = jalankan(llm, "Untuk 4 jam Rp 2.000.000 ya Kak.", giliran("4 jam berapa kak?"))
     assert out == "Untuk 4 jam Rp 3.000.000 ya Kak." and llm.n == 1, (out, llm.n)
+
+
+@kasus("alur plugin: masalah kelas buang selesai tanpa AI kalau inti jawaban tetap ada")
+def _():
+    llm = LLM([])
+    t = "Tanggal 4 Desember masih available ya Kak. Untuk resepsi malam di Depok biasanya enak 3 jam, cetaknya sepuasnya. Acaranya mulai jam berapa Kak?"
+    out = jalankan(llm, t, giliran("4 desember bisa kak? acaranya resepsi di Depok jam 7 malam"))
+    assert "available" not in out and "jam berapa" in out and llm.n == 0, (out, llm.n)
+
+
+@kasus("alur plugin: tulis ulang yang menghilangkan penanda ditolak")
+def _():
+    llm = LLM(["Untuk 4 jam Rp 3.000.000 ya Kak."])
+    out = jalankan(llm, "Untuk 4 jam Rp 2.000.000 ya Kak.\n[KIRIM: pricelist]\nAcaranya kapan Kak?", giliran("4 jam berapa kak?"))
+    assert out == P.HANDOFF and llm.n == 1, (out, llm.n)
 
 
 @kasus("alur plugin: tulis ulang tetap salah dua kali -> handoff")

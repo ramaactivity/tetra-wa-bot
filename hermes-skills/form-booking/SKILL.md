@@ -1,58 +1,25 @@
 ---
 name: form-booking
-description: Format resmi form data acara & rekap booking Tetra.
+description: Pesan tahap booking, form data acara & rekap Tetra.
 ---
 
 # Form data acara & rekap booking (format resmi Rama, 11 Nov 2026)
 
-Dipakai saat sistem meminta kamu menyusun pesan form booking atau rekap data acara untuk klien. Sistem memberi
-nilai yang sudah diketahui; kamu menyusun pesannya dengan suaramu (SOUL). Isian ini dipakai admin untuk input booking
-di Tetra Ops, jadi struktur dan label di bawah WAJIB utuh.
+Dipakai saat sistem memberi "DATA ACARA DI SISTEM" (habis DP / DP dikonfirmasi admin) atau meminta rekap data acara.
+Isian dipakai admin untuk input booking di Tetra Ops. Form resmi (label & isian) TIDAK kamu tulis: sistem yang menempelnya di
+posisi penanda [KIRIM: form] (kontrak dari Hermes, kartu t_d063ba1a; usulan CS Mintet 84, Rama 18 Nov).
 
-## Aturan
-- Pembuka satu kalimat yang nyambung ke situasi (mis. habis DP, atau dia minta proses booking), senada
-  "langsung aja kaka tolong dibantu untuk melengkapi form berikut yaa". Tanpa basa-basi.
-- Tulis SEMUA baris form di bawah, urut, label persis. Nilai yang sudah diketahui diisi persis seperti diberikan
-  sistem (jangan diubah, diringkas, atau ditebak); yang belum diketahui dibiarkan kosong sesudah titik dua.
-- "Lokasi Event" dan "Link Google Maps" dua baris terpisah. "Nama / Inisial di Frame" = inisial/nama panggilan yang
-  dicetak di frame (mis. D & R), bukan nama lengkap. Nama, tanggal, dan hashtag di frame tiga baris terpisah.
-- Paket wajib menyebut nama layanan + durasi (mis. "Photobooth Unlimited 3 jam").
-- Kalau ukuran frame/desain/backdrop belum diisi, isi petunjuknya: ukuran "2R / 4R / Polaroid (lihat gambar
-  perbandingan ukurannya di bawah)", desain "pilih dari katalog di bawah, atau custom", backdrop "pilih warna backdrop
-  basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri". Gambar/katalog dikirim sistem.
-- Tanpa harga, tanpa link selain yang diberikan sistem, tanpa penanda [..], tanpa cetak tebal.
-
-## Format form (acara wedding memakai label dalam kurung siku pertama; acara lain label kedua)
-```
-1. Data Event
-- [Nama Pengantin | Nama Acara / Instansi]:
-- Tanggal Event:
-- Jam Photobooth:
-- Lokasi Event:
-- Link Google Maps:
-- Paket yang Dipilih:
-- Jumlah Unit:            (hanya kalau sistem memberi nilainya)
-- Perkiraan Jumlah Tamu:
-- No. Kontak PIC / WO di hari H:
-- [Instagram Pengantin | Instagram Acara (opsional)]:
-
-2. Frame Foto
-- Ukuran Frame:
-- Desain:
-- Nama / Inisial di Frame:
-- Tanggal di Frame:
-- Hashtag:
-
-3. Backdrop
-- Backdrop:
-```
-
-## Data acara sudah dikirim klien (konteks "KLIEN SUDAH MENGIRIM SEBAGIAN BESAR DATA ACARANYA SENDIRI")
-Usulan CS Mintet 84 (Rama 18 Nov setuju): klien yang sudah mengirim datanya sendiri tidak dikirimi form/template lagi.
-- SATU pesan, 1–2 kalimat: tanggapi situasinya, terima kasih atas datanya, lalu minta yang masih kosong dalam satu kalimat
-  (maks 3 hal yang paling dibutuhkan sekarang; ukuran frame/desain/backdrop cukup ditunjuk ke gambar di bawah).
-- Jangan menulis form, daftar label, atau membacakan ulang isian yang sudah dia kirim. Tanpa harga, tanpa penanda [..].
-- Nada Rama di chat asli: "Baik kaka terimakasih banyak yaa. Ini untuk referensi ukuran framenya kaka".
+## Pesan tahap booking (konteks "DATA ACARA DI SISTEM")
+Tulis SATU pesan: tanggapi situasinya dulu (sesuai fakta sistem; bukti DP: admin cek ke rekening dulu, jangan bilang DP sudah
+diterima), lalu pilih satu jalan:
+- Klien belum mengirim datanya sendiri dan isian masih banyak yang kosong → satu kalimat minta dilengkapi, senada "langsung aja
+  kaka tolong dibantu untuk melengkapi form berikut yaa", lalu [KIRIM: form] di baris sendiri. Jangan menulis label/isiannya.
+- Klien sudah mengirim sendiri sebagian besar datanya (lihat riwayat & isian) → JANGAN [KIRIM: form]. Terima kasih atas datanya,
+  lalu minta yang masih kosong dalam satu kalimat (maks 3 hal yang paling dibutuhkan sekarang; ukuran frame/desain/backdrop cukup
+  ditunjuk ke gambar yang dikirim sistem sesudah pesanmu). Jangan bacakan ulang isian yang sudah dia kirim. Nada Rama di chat
+  asli: "Baik kaka terimakasih banyak yaa. Ini untuk referensi ukuran framenya kaka".
+- Data wajib sudah lengkap → tanpa form; bilang rekapnya dikirim di bawah untuk dicek.
+Tanpa harga, tanpa link selain yang diberikan sistem, tanpa cetak tebal. Penanda lain selain [KIRIM: form] tidak dipakai di sini.
 
 ## Rekap (data wajib sudah lengkap)
 - Satu kalimat pembuka (minta dicek), lalu daftar "• <label>: <nilai>" untuk SEMUA nilai yang diberikan sistem,

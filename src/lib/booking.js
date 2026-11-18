@@ -117,16 +117,18 @@ function barisForm(b) {
   ];
 }
 
-function teksForm(b, pembuka) {
+// Badan form saja (label & isian dari data sistem): ditempel di posisi [KIRIM: form] tulisan cs-wa (kontrak Hermes t_d063ba1a).
+function badanForm(b) {
   const baris = barisForm(b);
   const bagian = (n) => baris.filter((x) => x.bagian === n).map((x) => `- ${x.label}: ${x.nilai}`.trimEnd());
+  return ['1. Data Event', ...bagian(1), '', '2. Frame Foto', ...bagian(2), '', '3. Backdrop', ...bagian(3)].join('\n');
+}
+function teksForm(b, pembuka) {
   return [
     ...(pembuka ? [pembuka, ''] : []),
     // Wajib Hermes (Rama 16 Nov): permintaan mengisi form sudah ada di pembuka tulisan Hermes.
     ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Kak, tolong dibantu untuk melengkapi form berikut yaa.', '']),
-    '1. Data Event', ...bagian(1), '',
-    '2. Frame Foto', ...bagian(2), '',
-    '3. Backdrop', ...bagian(3),
+    badanForm(b),
   ].join('\n');
 }
 
@@ -272,7 +274,7 @@ const riwayatUntukEkstrak = (jid) => getRiwayat(jid).slice(-16);
 
 module.exports = {
   barisForm, barisRekap, isWedding,
-  FIELD, get, aktif, kurang, mulai, perbarui, teksForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
+  FIELD, get, aktif, kurang, mulai, perbarui, teksForm, badanForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
   teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap, sinkronOps,
   semua: () => semua, simpan,
 };

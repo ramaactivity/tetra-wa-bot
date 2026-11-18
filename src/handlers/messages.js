@@ -383,6 +383,7 @@ const RE_SOAL_BOOKING = /jadwal|\bjam\b|tanggal|\btgl\b|geser|pindah|reschedule|
 const KALIMAT_AMAN = 'Oke Kak, aku sampaikan ke admin dulu ya biar dicek jadwalnya. Nanti admin yang kabarin di sini.';
 
 const { LAMPIRAN, kirimLampiran, lampiranOtomatis } = require('../lib/lampiran');
+const SISIP = '\u2063LAMPIRAN\u2063'; // posisi [KIRIM: x] di tengah balasan cs-wa (tidak pernah terkirim ke klien)
 
 // Gambar/dokumen dianggap bukti transfer kalau KLIEN menyinggung pembayaran di
 // pesan ini atau 6 pesan terakhirnya (bukan dari tawaran DP bot sendiri).
@@ -508,9 +509,8 @@ function registerMessageHandler(sock) {
       tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
-        await mulaiBooking(jid, null, 'admin', (akhir) => (wajibHermes()
-          ? aiLib.kalimatHermes(`Admin sudah mengonfirmasi DP klien diterima (keputusan admin). Ucapkan singkat, lalu: ${akhir}`, { history: getRiwayat(jid) })
-          : 'DP-nya sudah diterima ya Kak, makasih!'),
+        await mulaiBooking(jid, null, 'admin', { situasi: 'Admin sudah mengonfirmasi DP klien diterima (keputusan admin).',
+          cadangan: 'DP-nya sudah diterima ya Kak, makasih!' },
           'DP dikonfirmasi admin — data booking').catch((e) => console.error('[booking] gagal mulai:', e.message));
       }
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
@@ -553,39 +553,29 @@ function registerMessageHandler(sock) {
     }
   };
 
-  // Mulai tahap booking: form (terisi sebagian) + katalog ke klien, rekap ke admin.
-  // pembukaUntuk(akhir) menulis kalimat situasi (DP masuk / dikonfirmasi admin) SESUDAH data acara dibaca, supaya isinya cocok
-  // dengan yang benar-benar dikirim (form / tanpa form / rekap). Dulu selalu "lengkapi form di bawah" walau form tidak dikirim.
-  const mulaiBooking = async (jid, msg, sumber, pembukaUntuk, judulAdmin) => {
+  // Mulai tahap booking: pesan + form (kalau perlu) + katalog ke klien, rekap ke admin.
+  // Usulan CS Mintet 84 (Rama 18 Nov setuju) dengan kontrak dari Hermes (kartu konsultasi t_d063ba1a): Node hanya memberi FAKTA
+  // isian; cs-wa menulis SELURUH pesan dalam satu giliran (termasuk tanggapan situasi DP) dan memutuskan perlu form atau tidak
+  // (skill form-booking); form resmi (label & isian data sistem) ditempel Node di posisi penanda [KIRIM: form]. Tanpa ambang di
+  // Node: dulu klien yang sudah mengirim datanya sendiri tetap dapat template panjang (…2977, …4035, …5611).
+  const mulaiBooking = async (jid, msg, sumber, { situasi, cadangan, pesanKlien = '' }, judulAdmin) => {
     const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
     await perbaruiBooking(jid, null, false);
-    const baris = booking.barisForm(b);
-    // Usulan CS Mintet 84 (Rama 18 Nov setuju): klien yang sudah mengirim sendiri sebagian besar data acaranya (>=5 isian) tidak
-    // dikirimi template form panjang lagi (…2977, …4035, …5611 dapat template padahal datanya sudah dikirim): satu pesan Hermes,
-    // terima kasih + yang masih kosong (skill form-booking). Klien lain tetap form lengkap (Rama 11 Nov).
-    let singkat = !b.lengkap && wajibHermes() && baris.filter((x) => x.asli).length >= 5;
-    const pembuka = await pembukaUntuk(b.lengkap
-      ? 'Data acaranya sudah lengkap dari chat; rekap untuk dia cek dikirim sistem tepat sesudah pesanmu.'
-      : singkat
-        ? `KLIEN SUDAH MENGIRIM SEBAGIAN BESAR DATA ACARANYA SENDIRI (form tidak dikirim). Masih kosong: ${baris.filter((x) => !x.asli).map((x) => x.label).join(', ')}. ` +
-          'Gambar pilihan yang masih perlu (ukuran frame, backdrop, katalog desain) ditempel sistem sesudah pesanmu. Skill form-booking bagian "Data acara sudah dikirim klien".'
-        : 'Minta dia melengkapi form data acara yang ditempel sistem tepat sesudah pesanmu.');
-    if (singkat && !pembuka) singkat = false; // Hermes gagal menulis → form data sistem
-    // Rama 11 Nov: langsung kirim form lengkap (terisi sebagian kalau sudah diketahui); yang masih kosong diminta
-    // dalam satu kalimat (konteksAI + pengingat); sudah lengkap dari chat → langsung rekap untuk dikonfirmasi.
-    let teksAwal = b.lengkap || singkat ? pembuka : booking.teksForm(b, pembuka);
-    // Wajib Hermes (Rama 16 Nov "gua mau"): form disusun Hermes (skill form-booking); penjaga memastikan semua label & nilai
-    // asli ada persis. Gagal → form data sistem (isian dipakai admin untuk input Tetra Ops).
-    if (!b.lengkap && !singkat && wajibHermes()) {
-      const isian = baris.map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
-      const form = await aiLib.susunHermes(
-        `Susun form data acara (skill form-booking) untuk acara ${booking.isWedding(b) ? 'wedding' : 'non-wedding'}. Nilai yang sudah diketahui:\n${isian}\n` +
-        (pembuka ? 'Pembuka sudah dikirim di atas form, jadi mulai langsung dengan form-nya (boleh satu kalimat singkat minta dilengkapi).' : 'Mulai dengan satu kalimat pembuka minta dilengkapi.'),
-        { history: getRiwayat(jid), wajibAda: [...baris.map((x) => x.label), ...baris.filter((x) => x.asli).map((x) => x.asli)] });
-      if (form) teksAwal = pembuka ? `${pembuka}\n\n${form}` : form;
-      else console.log(`[form] ${jid.split('@')[0]}: Hermes gagal menyusun form utuh — pakai form data sistem`);
+    const isian = booking.barisForm(b).map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
+    const ikut = [!b.lengkap && !b.data.ukuran_frame && 'gambar perbandingan ukuran frame', !b.lengkap && !b.data.backdrop && 'gambar pilihan backdrop basic',
+      !b.data.desain_frame && 'katalog desain frame', b.lengkap && 'rekap data untuk dicek klien'].filter(Boolean);
+    let teksAwal = null;
+    if (wajibHermes()) {
+      const t = await aiLib.kalimatHermes(`${situasi}\n\nDATA ACARA DI SISTEM (form belum dikirim; ${b.lengkap ? 'data wajib sudah lengkap' : 'data wajib belum lengkap'}):\n${isian}` +
+        (ikut.length ? `\nDikirim sistem sesudah pesanmu: ${ikut.join(', ')}.` : '') + '\nSkill form-booking.',
+        { history: getRiwayat(jid), pesanKlien, simpan: ['form'] });
+      const RE_FORM = /^[ \t]*\[KIRIM:\s*form\b[^\]]*\][ \t]*$/im;
+      if (t) teksAwal = RE_FORM.test(t) && !b.lengkap ? t.replace(RE_FORM, `\n${booking.badanForm(b)}\n`).replace(/\n{3,}/g, '\n\n').trim() : t.replace(/\[KIRIM:\s*form\b[^\]]*\]/gi, '').trim();
+      if (!t) console.log(`[form] ${jid.split('@')[0]}: Hermes gagal menulis pesan booking — pakai form data sistem`);
     }
+    // Hermes gagal / jalur tanpa Hermes: form data sistem (isian dipakai admin untuk input Tetra Ops).
+    if (!teksAwal) teksAwal = b.lengkap ? (wajibHermes() ? null : cadangan) : booking.teksForm(b, wajibHermes() ? null : cadangan);
     if (teksAwal) await booking.kirimTeks(sock, jid, teksAwal, 'form-booking→customer');
     // Form menanyakan ukuran frame & backdrop → ilustrasi format + pilihan backdrop basic wajib ikut (Rama 11 Nov); yang sudah pernah dikirim dilewati.
     const ilustrasiForm = [!b.data.ukuran_frame && 'format', !b.data.backdrop && 'backdrop'].filter(Boolean);
@@ -864,10 +854,9 @@ function registerMessageHandler(sock) {
               ? 'bukti bayar/pelunasan dikirim klien di tahap booking (lihat pesan yang diteruskan) — cek mutasi'
               : 'klien kirim file di tahap booking (lihat pesan yang diteruskan)');
           } else {
-            await mulaiBooking(jid, msg, 'bukti-transfer', (akhir) => (wajibHermes()
-              ? aiLib.kalimatHermes(`Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima. ${akhir}`,
-                { history: getRiwayat(jid), pesanKlien: originalText })
-              : 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.'),
+            await mulaiBooking(jid, msg, 'bukti-transfer', { situasi: 'Klien mengirim bukti transfer DP. Sistem sudah meneruskannya ke admin; admin cek ke rekening dulu, kalau sudah oke invoice dikirim di chat ini. Jangan bilang DP sudah diterima.',
+              cadangan: 'Makasih Kak, bukti transfernya udah masuk. Admin cek dulu ke rekening ya, kalau sudah oke invoice-nya dikirim ke sini.',
+              pesanKlien: originalText },
               'Bukti DP masuk — cek mutasi BCA, lalu input booking');
           }
           return;
@@ -958,6 +947,17 @@ function registerMessageHandler(sock) {
       const info = aiResponse.match(/\[INFO_ADMIN:?\s*([^\]]*)\]/);
       aiResponse = aiResponse.replace(/\[INFO_ADMIN[^\]]*\]/g, '').trim();
       aiResponse = lampiranOtomatis(aiResponse);
+      // Kontrak dari Hermes (kartu konsultasi t_d063ba1a; Rama 18 Nov, kasus …1837 Fel): [KIRIM: x] di baris sendiri yang diapit
+      // teks = posisi lampiran → teks sebelum, lampiran tanpa keterangan, teks sesudah. Penanda di baris terakhir = seperti dulu.
+      let sisip = null;
+      {
+        const RE_BARIS = /^\s*\[[A-Z_]+[^\]]*\]\s*$/;
+        const baris = aiResponse.split('\n');
+        const i = baris.findIndex((x, n) => /^\s*\[KIRIM:\s*\w+[^\]]*\]\s*$/i.test(x) &&
+          baris.slice(0, n).some((y) => y.trim() && !RE_BARIS.test(y)) && baris.slice(n + 1).some((y) => y.trim() && !RE_BARIS.test(y)));
+        const k = i >= 0 ? baris[i].match(/\[KIRIM:\s*(\w+)/i)[1].toLowerCase() : '';
+        if (k && (LAMPIRAN[k] || k === 'pricelist')) { sisip = k; baris[i] = SISIP; aiResponse = baris.join('\n'); }
+      }
       const lampiran = [...new Set([...aiResponse.matchAll(/\[KIRIM:\s*(\w+)\s*\]/gi)].map((m) => m[1].toLowerCase()))]
         .filter((k) => LAMPIRAN[k] || k === 'pricelist');
       aiResponse = aiResponse.replace(/\[KIRIM:[^\]]*\]/gi, '').trim()
@@ -1005,21 +1005,30 @@ function registerMessageHandler(sock) {
       // penanda AI selalu dihormati. Gambar harga ikut di pesan yang SAMA dengan kalimat harganya (audit Nov: 10 chat
       // menerima harga dan gambar sebagai dua bubble terpisah).
       const sudahPL = getRiwayat(jid).some((p) => String(p.content).includes('[kirim PDF pricelist]'));
-      const pakaiPL = (kirimPL && plKlienLama) || (lampiran.includes('pricelist') && !sudahPL) ||
-        janjiPricelist(aiResponse, originalText, lampiran, getRiwayat(jid));
-      // Rama 11 Nov: teks pengantar dulu, gambar pricelist tepat di bawahnya (bukan gambar ber-caption di atas teks).
-      const satuPesan = false;
+      const pakaiPL = (kirimPL && plKlienLama) || ((lampiran.includes('pricelist') || sisip === 'pricelist') && !sudahPL) ||
+        janjiPricelist(aiResponse.split(SISIP).join(' '), originalText, lampiran, getRiwayat(jid));
+      // Rama 11 & 18 Nov: teks dan lampiran selalu terpisah (lampiran tanpa keterangan, supaya kalau di-forward teksnya tidak ikut);
+      // teks pengantar di atas lampiran. Penanda di posisi (sisip) → teks-1, lampiran, teks-2.
+      const [teks1, teks2 = ''] = aiResponse.split(SISIP).map((x) => x.trim());
+      const pisah = Boolean(teks2) && (sisip === 'pricelist' ? pakaiPL : Boolean(sisip));
+      const teksUtuh = pisah ? teks1 : [teks1, teks2].filter(Boolean).join('\n\n');
+      const kirimPL1 = () => kirimPricelist(sock, jid, kirimPL ? 'auto-pricelist' : 'ai-pricelist', { pdf: plDenganPdf || !!lead });
       tambahRiwayat(jid, 'user', originalText);
-      if (aiResponse) {
-        tambahRiwayat(jid, 'assistant', aiResponse);
-        await sendReply(sock, jid, keys, { name: 'ai-reply', file: satuPesan ? path.join('assets', GAMBAR_RINGKAS) : '' }, aiResponse);
-        if (lead?.nomor) {
-          const pl = pakaiPL ? ' [+ pricelist]' : '';
-          supa.catatJawabanProspek(lead.nomor, aiResponse + pl).catch((e) => console.error('[prospek] gagal catat jawaban:', e.message));
-        }
+      if (teksUtuh) {
+        tambahRiwayat(jid, 'assistant', teksUtuh);
+        await sendReply(sock, jid, keys, { name: 'ai-reply' }, teksUtuh);
       }
-      if (pakaiPL) await kirimPricelist(sock, jid, kirimPL ? 'auto-pricelist' : 'ai-pricelist', { pdf: plDenganPdf || !!lead, tanpaGambar: satuPesan });
-      await kirimLampiran(sock, jid, lampiran, 'customer');
+      if (pisah) {
+        if (sisip === 'pricelist') await kirimPL1(); else await kirimLampiran(sock, jid, [sisip], 'customer');
+        tambahRiwayat(jid, 'assistant', teks2);
+        await sendReply(sock, jid, keys, { name: 'ai-reply-2' }, teks2);
+      }
+      if (lead?.nomor && (teksUtuh || teks2)) {
+        const pl = pakaiPL ? ' [+ pricelist]' : '';
+        supa.catatJawabanProspek(lead.nomor, [teks1, teks2].filter(Boolean).join('\n\n') + pl).catch((e) => console.error('[prospek] gagal catat jawaban:', e.message));
+      }
+      if (pakaiPL && !(pisah && sisip === 'pricelist')) await kirimPL1();
+      await kirimLampiran(sock, jid, pisah ? lampiran.filter((k) => k !== sisip) : [...new Set([...lampiran, ...(sisip && sisip !== 'pricelist' ? [sisip] : [])])], 'customer');
       if (info) {
         await notifyAdmin(sock, phoneDigits(msg), { name: 'INFO' }, getRiwayat(jid), info[1] || 'perlu dijawab admin');
       }

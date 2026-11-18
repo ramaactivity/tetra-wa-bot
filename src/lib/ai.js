@@ -221,7 +221,8 @@ async function kirimHermes(endpoint, messages) {
 // bukan teks tetap Node (Rama 16 Nov: "full hanya hermes 100%"). Node memberi situasi + fakta; data persis (link, isian
 // form) ditempel Node. Mengembalikan null kalau Hermes gagal/tidak dipakai — pemanggil yang memutuskan (wajib Hermes:
 // tanpa kalimat bawaan, admin dikabari).
-async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadContext = '' } = {}) {
+// `simpan`: kunci [KIRIM: x] yang tetap dibiarkan untuk dieksekusi pemanggil (mis. ['form'] → form resmi ditempel Node).
+async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadContext = '', simpan = [] } = {}) {
   if (process.env.AI_OTAK !== 'hermes' || !process.env.HERMES_CS_KEY) return null;
   const messages = [
     { role: 'system', content: konteksWaktu() + (leadContext ? `\n\nKONTEKS:\n${leadContext}` : '') + `\n\nSITUASI DARI SISTEM: ${situasi}` },
@@ -233,7 +234,8 @@ async function kalimatHermes(situasi, { history = [], pesanKlien = '', leadConte
   for (let coba = 1; coba <= 2; coba++) {
     try {
       const r = await kirimHermes({ ...HERMES, situasi: true }, messages);
-      return String(r.content || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').replace(/https?:\/\/\S+/g, '').trim() || null;
+      const dibiarkan = (m) => simpan.some((k) => new RegExp(`^\\[KIRIM:\\s*${k}\\b`, 'i').test(m));
+      return String(r.content || '').replace(/\[[A-Z_]+[^\]]*\]/g, (m) => (dibiarkan(m) ? m : '')).replace(/https?:\/\/\S+/g, '').trim() || null;
     } catch (e) { console.error(`[hermes-situasi] gagal (percobaan ${coba}): ${e.message}`); }
   }
   return null;
