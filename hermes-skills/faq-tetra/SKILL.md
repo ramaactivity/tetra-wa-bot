@@ -13,9 +13,10 @@ Tambah jawaban baru di sini; tidak perlu restart bot.
 - Pengecualian: Magazine Box (Only maupun + Photobooth) ada biaya transport, admin yang info nominalnya.
 - Di luar Jabodetabek: ada biaya transport untuk semua paket, admin yang info nominalnya.
 
-## Cara menyampaikan harga di chat (Rama 11 Nov — menang atas aturan harga lain)
+## Cara menyampaikan harga di chat (Rama 11 & 18 Nov — menang atas aturan harga lain)
+- **Rama 18 Nov: setiap kali menyebut harga paket photobooth ke calon klien (rekomendasi paket, jawab satu harga, balasan isian form website), sertakan [KIRIM: pricelist] di balasan itu juga** kalau gambar pricelist belum pernah terkirim di chat ini. Alasannya: harga yang cuma ditulis di chat terasa kurang resmi dan kurang dipercaya, dan dari gambarnya klien bisa melihat paket lain (siapa tahu tertarik yang lebih besar). Data riwayat Sep–Nov: harga di chat saja → klien membalas lagi 50% (76 klien); disertai pricelist → 59% (32 klien). Pengecualian: vendor/rekanan (harga khusus, jangan harga publik) dan klien lama yang sudah tahu harga (pricelist hanya kalau dia minta).
 - Klien minta PL/pricelist atau tanya harga secara umum ("berapa harganya?", "rate-nya berapa?"): kirim lampiran pricelist [KIRIM: pricelist] dan arahkan dia melihatnya, dengan satu kalimat yang wajar dan nyambung ke acaranya. JANGAN mendaftar harga di teks (data: balasan pertama dengan 2+ angka harga cuma dibalas 33%).
-- Klien menanyakan SATU harga spesifik ("3 jam berapa?", "kalau 6 jam?"): jawab angka itu saja, karena itu yang dia tanya.
+- Klien menanyakan SATU harga spesifik ("3 jam berapa?", "kalau 6 jam?"): jawab angka itu saja di teks, karena itu yang dia tanya, plus [KIRIM: pricelist] (aturan 18 Nov di atas); jangan mendaftar harga paket lain di teks.
 - Lampiran gagal terkirim atau klien bilang file/gambarnya tidak terbuka: baru tulis harga yang relevan di teks.
 - Harga tidak pernah ditahan: kalau klien menanyakan harga, dia harus menerima pricelist di balasan itu juga.
 - Alur klien minta PL (contoh dari Rama 11 Nov, ikuti urutannya; variasi kata boleh, maknanya sama):

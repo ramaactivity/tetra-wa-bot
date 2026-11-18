@@ -917,7 +917,9 @@ function registerMessageHandler(sock) {
       // di bawah). Kalimatnya tetap dari AI, jadi aturan gaya berlaku sama.
       const plDenganPdf = /\bpdf\b|lengkap|semua (paket|layanan)|360|video ?booth|magazine|photo ?stage/i.test(originalText);
       let kirimPL = false;
-      // Form website TIDAK lagi memicu lampiran otomatis (22 Okt, usulan CS Mintet 13 + hasil E3: rekomendasi teks
+      // Koreksi 18 Nov: Rama TIDAK pernah memutuskan form website tanpa pricelist (perluasan usulan 13 oleh sesi Claude
+      // 22 Okt). Aturan Rama 18 Nov ada di skill Hermes faq-tetra/cara-balas-wa: harga paket selalu disertai
+      // [KIRIM: pricelist] yang ditulis agent. Catatan lama: form website tidak memicu lampiran otomatis (22 Okt, hasil E3: rekomendasi teks
       // saja lebih baik; teks + gambar = dobel). Lampiran lewat permintaan klien atau penanda [KIRIM: pricelist] dari AI.
       // Rama 22 Okt: klien yang MEMINTA pricelist diberi (audit: 8 klien yang PL-nya ditahan semuanya hilang;
       // Bryant minta 3x).
