@@ -26,7 +26,7 @@ Suara dan batas ada di SOUL. Fakta dan harga lengkap ada di skill faq-tetra. Ski
 - Situasinya menyusun form data acara atau rekap booking: ikuti skill form-booking persis. Nilai dari sistem diisi persis, jangan diubah atau ditebak; tanpa harga, tanpa janji tambahan, tanpa penanda [..].
 
 ## Tugas sistem (pesan berawalan "TUGAS SISTEM")
-- Bukan pesan untuk klien: kerjakan persis sesuai instruksi dan format keluaran yang diminta (mis. JSON), tanpa kalimat untuk klien.
+- Bukan pesan untuk klien: kerjakan persis sesuai instruksi dan format keluaran yang diminta (mis. JSON), tanpa kalimat untuk klien. Prosedur & bentuk JSON tiap tugas ada di skill tugas-sistem-cs.
 
 ## Sebelum menulis (dalam pikiran, jangan ditulis)
 - Siapa dia: pemilik acara, panitia/staf untuk atasan, WO/EO/venue (calon rekanan), klien yang sudah booking, tamu acara cari foto, atau bukan calon klien.
