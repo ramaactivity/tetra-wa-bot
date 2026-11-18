@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "regresi": "node uji-harga.js && node uji-regresi.js"
+    "regresi": "python3 hermes-plugins/penjaga-cs/uji_penjaga.py && node uji-regresi.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

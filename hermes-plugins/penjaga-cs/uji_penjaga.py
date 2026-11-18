@@ -315,6 +315,19 @@ def _():
     assert h("Totalnya Rp 2.345.678 ya Kak"), "nominal karangan"  # angka bulat bisa terbentuk dari jumlah harga resmi (sifat penjaga asli)
 
 
+@kasus("harga: kasus uji-harga.js Node (dipindah Tahap 3C) — turunan sah lolos, karangan tertangkap")
+def _():
+    g = P.Giliran(giliran("berapa harganya kak?"))
+    h = lambda t: P.harga_asing(t, g.sumber, g.stabil, g.khusus_dari)
+    for t in ["Photomagnet Rp 650.000", "Keychain Rp 10.000/pcs", "13 jam Rp 7.500.000", "10 jam = Rp 6.000.000",
+              "Photobooth 4 jam + 360 4 jam = Rp 6.500.000", "mulai Rp 2.000.000/2 jam", "3 jam 2,5jt",
+              "Untuk 3 jam *Rp 2.500.000*/unit x 2 = *Rp 5.000.000*", "4 jam Rp2.700.000 setelah diskon 10%",
+              "2 unit 3 jam Rp 5.000.000, sisa pelunasan Rp 4.500.000", "transfer ke BCA 0954965224", "acara 12.00-15.00 untuk 200 tamu"]:
+        assert h(t) == [], f"salah tangkap: {t} -> {h(t)}"
+    for t in ["3 jam cuma Rp 2.300.000", "3 jam Rp 3.000.000", "2 jam 1,5jt", "spesial Rp 2.199.000"]:
+        assert h(t), f"lolos padahal karangan: {t}"
+
+
 @kasus("harga khusus vendor & dari admin di chat tidak dianggap karangan")
 def _():
     fakta = "KONTAK INI VENDOR REKANAN: Teh Evi.\nKESEPAKATAN KHUSUS VENDOR INI: 2 jam Rp 1.700.000"

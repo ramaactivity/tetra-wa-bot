@@ -13,6 +13,12 @@ const msgs = require('./src/handlers/messages');
 const { namaDariChat } = require('./src/lib/followupEngine');
 const klienBooking = require('./src/lib/klienBooking');
 
+const BOT_DIR = __dirname;
+// Frasa kaku Rama (docs/FRASA-KAKU.md). Penjaganya di plugin Hermes penjaga-cs (Tahap 3); di sini hanya untuk menilai jawaban uji.
+const FRASA = require('fs').readFileSync(`${BOT_DIR}/docs/FRASA-KAKU.md`, 'utf-8').split('\n').filter((l) => l.startsWith('- '))
+  .map((l) => l.slice(2).split(' #')[0].trim().toLowerCase()).filter(Boolean);
+const frasaKaku = (t) => FRASA.filter((f) => String(t).replace(/\[[A-Z_]+[^\]]*\]/g, '').toLowerCase().includes(f));
+
 const hasil = [];
 async function kasus(nama, fn) {
   try { await fn(); hasil.push(['LOLOS', nama]); } catch (e) { hasil.push(['GAGAL', nama, e.message.slice(0, 300)]); }
@@ -24,49 +30,6 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
 
 (async () => {
   // ── Deterministik (tanpa AI) ───────────────────────────────────────────────
-  await kasus('usulan 72: klaim "masih available" dikenali, kalimat biasa tidak (…1015, …4133)', () => {
-    for (const t of ['Tanggal 2 Desember masih available nih Kak Yessi.', 'Untuk 26 Desember masih available ya Kak.', 'Tanggal itu masih kosong seharian.', 'jadwalnya aman kok'])
-      assert.ok(ai.RE_KLAIM_TERSEDIA.test(t), t);
-    for (const t of ['Kalau tanggalnya sudah fix kabari ya Kak.', 'Desainnya masih bisa custom kok.', 'Masih ada yang mau ditanyain Kak?'])
-      assert.ok(!ai.RE_KLAIM_TERSEDIA.test(t), t);
-    assert.strictEqual(ai.buangKalimat('Tanggal 26 Desember masih available ya Kak. Acaranya mulai jam berapa?', ai.RE_KLAIM_TERSEDIA), 'Acaranya mulai jam berapa?');
-  });
-  await kasus('usulan 65 & 70: bot tidak mengaku ikut grup/tech meeting (…6996)', () => {
-    assert.ok(ai.masalahGaya('Boleh Kak, silakan tambahkan. Nanti di grup aku koordinasikan langsung sama WO-nya soal area photobooth, meja-kursi, dan akses loading.').some((m) => /grup WA/.test(m)));
-    assert.ok(ai.masalahGaya('Dari tim Tetra biasanya koordinasi teknis dikoordinasikan langsung via chat atau telepon dengan WO/PIC di lokasi.').some((m) => /grup WA/.test(m)));
-    for (const t of ['Kak izin tambahkan ke grup bareng WO ya🙏', 'kak tech meeting tgl 11 jam 2 di Sasono Mulyo ya', 'boleh undang adminnya ke grup vendor?'])
-      assert.ok(ai.RE_AJAK_GRUP.test(t), t);
-    assert.ok(!ai.RE_AJAK_GRUP.test('Kak frame-nya udah masuk belum?'));
-    assert.deepStrictEqual(ai.masalahGaya('Boleh Kak, undangannya aku teruskan ke admin ya.\n[INFO_ADMIN: klien mengajak ke grup WA bersama WO]'), []);
-  });
-  await kasus('usulan 62: tanya satu harga tidak ditutup pertanyaan pilihan (…3958 Maira, …7846 Said)', () => {
-    assert.ok(ai.masalahGaya('Untuk 2 jam harganya Rp 2.000.000 ya Kak.\n\nMau tetap ambil yang 2 jam atau lanjut yang 3 jam?', false, 'Kalau mau ambil yang 2 jam berapa yaa kira2?').some((m) => /penutup/.test(m)));
-    assert.deepStrictEqual(ai.masalahGaya('Iya betul Kak Said, bahan kain polos.', false, 'Oh, kain polos gt ya?'), []);
-    assert.strictEqual(ai.penutupJualan('Untuk 2 jam Rp 2.000.000 ya Kak.\nAcaranya tanggal berapa Kak?', 'berapa yang 2 jam?'), '');
-  });
-  await kasus('usulan 61: harga durasi di tabel tidak dijawab "dipegang admin" (…2152 Sandra)', () => {
-    assert.ok(ai.masalahGaya('Yang ini datanya dipegang admin, Kak. Aku terusin dulu ya.', false, 'kalau 6 jam berapa ka udah dapet soft file ka?').some((m) => /tabel FAQ/.test(m)));
-    assert.ok(!ai.masalahGaya('Untuk 6 jam Rp 4.000.000 ya Kak, iya sudah dapat softfile-nya.', false, 'kalau 6 jam berapa ka udah dapet soft file ka?').some((m) => /tabel FAQ/.test(m)));
-  });
-  await kasus('usulan 64: info backdrop basic gratis tanpa pertanyaan memilih, contoh tetap terlampir (…6793 Yessi)', () => {
-    assert.ok(ai.masalahGaya('Untuk backdrop basic kain polos jadi compliment free dari kami ya Kak.\n\nKakak lebih condong ke yang mana?').some((m) => /pertanyaan memilih/.test(m)));
-    const ok = 'Silahkan Kak, berikut pilihan warna backdrop basic yang jadi compliment free dari kami ya.';
-    assert.ok(!ai.masalahGaya(ok).some((m) => /pertanyaan memilih/.test(m)));
-    assert.ok(!ai.masalahGaya('Backdrop basic free dari kami, transport juga gratis Jabodetabek.\nMau pakai format cetak yang mana, Kak? 2R photostrip, 4R, atau Polaroid?').some((m) => /pertanyaan memilih/.test(m)));
-  });
-  await kasus('usulan 71: janji mengabari & minta kirim ulang dikenali (…5386)', () => {
-    for (const t of ['Nanti tim yang kabari jadwal dan biayanya ya Kak.', 'nanti aku kabarin lagi ya kak', 'Tim yang infoin ya Kak.']) assert.ok(ai.RE_JANJI_KABARI.test(t), t);
-    assert.ok(!ai.RE_JANJI_KABARI.test('Kabar baiknya softfile langsung bisa diunduh.'));
-    for (const t of ['Fotonya masih belum masuk ke sini Kak', 'boleh dikirim ulang Kak?']) assert.ok(ai.RE_MINTA_ULANG.test(t), t);
-  });
-  await kasus('usulan 73: 7 jam wajib dua jalan (6 jam + extend dan paket 8 jam) (…1015)', () => {
-    assert.ok(ai.durasiDuaJalan('Bisa pakai paket 6 jam ditambah extend 1 jam, totalnya Rp 4.500.000.', 'acara 7 jam'));
-    assert.ok(!ai.durasiDuaJalan('Bisa 6 jam + extend 1 jam (Rp 4.500.000) atau paket 8 jam Rp 5.000.000.', 'acara 7 jam'));
-    assert.ok(!ai.durasiDuaJalan('Paket 6 jam Rp 4.000.000.', 'kalau 6 jam berapa?'));
-    assert.ok(ai.durasiDuaJalan('12 jam 7 juta kak, paket 8 jam 5 juta + extend 4 jam', 'butuh 12 jam kak'), '12 jam tanpa paket 13 jam');
-    assert.ok(!ai.durasiDuaJalan('8 jam + extend 4 jam, atau paket 13 jam Rp 7.500.000', 'butuh 12 jam'));
-    assert.ok(!ai.masalahGaya('Halo Kak Jasmin! Buat 7 jam bisa 6 jam Rp 4.000.000 + extend 1 jam Rp 500.000, atau paket 8 jam Rp 5.000.000.', true, 'Durasi: 7 jam').some((m) => /SATU angka/.test(m)));
-  });
   await kasus('wajib Hermes: Hermes mati → error bertanda hermes, TIDAK jatuh ke jalur lama (Rama 16 Nov)', async () => {
     const simpan = { o: process.env.AI_OTAK, u: process.env.HERMES_CS_URL, k: process.env.HERMES_CS_KEY };
     Object.assign(process.env, { AI_OTAK: 'hermes', HERMES_CS_URL: 'http://127.0.0.1:9/v1', HERMES_CS_KEY: 'uji' });
@@ -102,12 +65,6 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.match(r, /\n\[KIRIM: pricelist\]$/, r);
     assert.strictEqual(ai.rapikanGaya('Siap Kak, aman.'), 'Siap Kak, aman.');
   });
-  await kasus('lokasi kantor & janji temu sepihak ditangkap, kalimat sah lolos (Rama 11 Nov)', () => {
-    for (const t of ['nanti langsung aku samperin ke sana', 'Boleh mas, ini share lok kantor kami', 'Silakan datang ke kantor kami di Bogor',
-      'Oke Kak, besok jam 10 kita ketemu di kantor ya', 'aku tunggu di lobby ya', 'nanti aku antar flashdisknya']) assert.ok(ai.RE_JANJI_TEMU.test(t), t);
-    for (const t of ['crew datang paling lambat 1 jam sebelum acara', 'Tim kami datang ke venue jam 9 buat setup',
-      'Kalau mau ketemu, admin yang atur jadwalnya ya']) assert.ok(!ai.RE_JANJI_TEMU.test(t), t);
-  });
   await kasus('mode assist tidak menjawab pemasok (…2792 kertas DNP)', () => {
     const pemasok = [{ role: 'user', content: 'Selamat pagi mas, saya temennya gilang yang jual paper dnp' },
       { role: 'assistant', content: '(admin) Harganya berapa mas?' }, { role: 'user', content: '1,1 mass satunya, kalo dua sejuta' },
@@ -123,80 +80,26 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     const lama = [{ role: 'assistant', content: '(admin) siap kak', t: now - 3 * 3600e3 }];
     assert.ok(!msgs._adminMasihPegang(lama, [{ role: 'user', content: 'oke kak', t: now - 25 * 60e3 }], now));
   });
-  await kasus('frasa kaku Rama ditangkap & instruksi V2 tidak memuatnya (docs/FRASA-KAKU.md)', () => {
-    assert.ok(ai.daftarFrasaKaku().includes('crew standby') && ai.daftarFrasaKaku().includes('paling menentukan'));
-    assert.deepStrictEqual(ai.frasaKaku('Sudah termasuk cetak sepuasnya dan crew standby ya Kak'), ['crew standby']);
-    assert.deepStrictEqual(ai.frasaKaku('Durasi yang dipilih paling menentukan, Kak'), ['paling menentukan']);
-    assert.deepStrictEqual(ai.frasaKaku('Bisa Kak, buat 150 tamu 3 jam pas. Acaranya mulai jam berapa?'), []);
-    for (const f of ['aku cekkan slotnya dulu ya', 'Siap Kak, aku kirim pricelist-nya ya', 'Untuk 25 Oktober jadwalnya masih kosong ya', 'Halo Kak, aku dari tim Tetra'])
-      assert.ok(ai.frasaKaku(f).length, f);
-    assert.deepStrictEqual(ai.frasaKaku('Masih available nih Kak, mau aku bantu proses bookingnya?'), []);
-    assert.deepStrictEqual(ai.frasaKaku('Silahkan Kak, berikut pricelistnya ya'), []);
-    for (const f of ['Maaf ya kak kejadian begini.', 'Mohon maaf atas ketidaknyamanannya Kak', 'Maaf atas kejadian ini'])
-      assert.ok(ai.frasaKaku(f).length, f);
-    assert.deepStrictEqual(ai.frasaKaku('Maaf ya Kak. Aku teruskan ke tim buat dicetak ulang, masing-masing 2 pcs ya.'), []);
-    // Instruksi (di luar contoh yang dikutip "...") tidak boleh memakai frasa kaku: kata instruksi bocor ke balasan.
-    const instruksi = ai._SYSTEM_PROMPT_V2.replace(/"[^"]*"/g, '').toLowerCase();
-    assert.deepStrictEqual(ai.daftarFrasaKaku().filter((f) => instruksi.includes(f)), []);
+  await kasus('buku instruksi (persona & cara-balas-wa) tidak memakai frasa kaku di luar kutipan (docs/FRASA-KAKU.md)', () => {
+    // Kata instruksi bocor ke balasan; contoh yang dikutip "..." boleh (penangkapan frasa di jawaban = uji_penjaga.py).
+    const fs = require('fs');
+    const buku = fs.readFileSync(`${BOT_DIR}/docs/PERSONA-CS.md`, 'utf-8') + '\n' + fs.readFileSync(`${BOT_DIR}/hermes-skills/cara-balas-wa/SKILL.md`, 'utf-8');
+    const instruksi = buku.replace(/"[^"]*"/g, '').toLowerCase();
+    assert.ok(FRASA.includes('crew standby') && FRASA.includes('semoga'));
+    assert.deepStrictEqual(FRASA.filter((f) => instruksi.includes(f)), []);
   });
   // 18 Nov (Rama: 100% buku Hermes): aturan "jangan daftar harga kalau ada pricelist" pindah ke skill faq-tetra; kode tidak boleh lagi
   // memaksa tulis ulang jawaban dua jalan (12 jam) yang benar.
-  await kasus('pricelist: aturan daftar harga di skill, jawaban dua jalan 12 jam tidak ditulis ulang kode, gambar tanpa caption', () => {
-    assert.deepStrictEqual(ai.masalahGaya('Bisa dua jalan kak: paket 8 jam Rp 5.000.000 + extend 4 jam (Rp 500.000/jam) jadi Rp 7.000.000, atau paket 13 jam Rp 7.500.000 (format 2R).\n[KIRIM: pricelist]'), []);
-    assert.deepStrictEqual(ai.masalahGaya('Silahkan Kak, berikut pricelistnya ya. Acaranya kapan?\n[KIRIM: pricelist]'), []);
+  await kasus('pricelist: gambar dikirim tanpa caption (teks & gambar terpisah, Rama 12 & 18 Nov)', () => {
     assert.strictEqual(require('./src/lib/pricelist').CAPTION_GAMBAR, '');
-  });
-  await kasus('isi lampiran tidak diulang di teks: skema rekanan & format (Rama 11 Nov, Royal Organizer)', () => {
-    const royal = 'Boleh Kak. Jadi skema rekanannya ada dua: komisi, klien bayar harga publish ke kami, komisi 10% kami transfer ke Royal Organizer setelah acara selesai; atau potongan langsung, Kakak pegang kliennya dan bebas jual berapa pun, ke kami cukup bayar harga publish dikurangi 10%. Aku kirim gambar skemanya ya, biar lebih kebayang.\n[KIRIM: skema]';
-    assert.ok(ai.masalahGaya(royal).length && ai.frasaKaku(royal).length);
-    assert.deepStrictEqual(ai.masalahGaya('Boleh Kak, silahkan berikut skema rekanannya ya. Kalau ada yang kurang jelas, silahkan ditanyakan ya Kak\n[KIRIM: skema]'), []);
-    assert.ok(ai.masalahGaya('2R itu 5 x 15 cm, 4R 10 x 15 cm, Polaroid 7,5 x 10 cm.\n[KIRIM: format]').length);
-    const sleeve = 'Soal desainnya biar jelas: cetakan fotonya sudah menyatu dengan desain frame sesuai tema acara, itu termasuk di paket. Terus tamu juga dapat sleeve, tapi yang termasuk itu sleeve basic hitam atau putih, jadi desainnya basic, bukan desain klien. Kalau sleeve-nya mau pakai desain/branding klien sendiri, itu add-on Custom Sleeve Rp 1.500.000 untuk 1.000 lembar.';
-    assert.ok(ai.masalahGaya(sleeve).length, 'penjelasan sleeve panjang tanpa ilustrasi harus ditolak');
-    assert.deepStrictEqual(ai.masalahGaya('Silahkan Kak, berikut gambaran cetakan foto dan sleeve-nya ya. Kalau ada yang kurang jelas silahkan ditanyakan\n[KIRIM: sleeve]'), []);
   });
   await kasus('data acara setelah DP: form lengkap langsung, bukan dicicil (Rama 11 Nov)', () => {
     const booking = require('./src/lib/booking');
     const f = booking.teksForm({ data: { tanggal: '22 November', paket: 'Unlimited 8 jam' }, jenis: 'wedding' }, '');
     assert.match(f, /tolong dibantu untuk melengkapi form berikut/i, f);
     assert.match(f, /Tanggal Event: 22 November/, f);
-    assert.deepStrictEqual(ai.frasaKaku(f), [], f);
-    assert.ok(ai.frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
-  });
-  await kasus('basa-basi Rama 11 Nov ditangkap penjaga kode, jawaban beralasan lolos', () => {
-    for (const x of ['Untuk 200-300 tamu, 3 jam memang pas.', 'dan durasi 3 jam memang sudah cukup untuk 200-300 tamu di resepsi.',
-      'Untuk 200-300 tamu, 3 jam sudah cukup kok.', 'Harganya Rp 2.500.000, sudah termasuk cetak sepuasnya dan crew.',
-      'Untuk 3 jam itu paketnya Rp 2.500.000, sudah termasuk cetak sepuasnya, frame custom sesuai tema acara, crew, dan transport se-Jabodetabek.',
-      'Cibubur masih masuk Jabodetabek jadi tidak ada biaya tambahan, sudah termasuk dalam harga.'])
-      assert.ok(ai.basaBasi(x).length, x);
-    assert.deepStrictEqual(ai.basaBasi('Cibubur masih free transport ya Kak.'), []);
-    assert.deepStrictEqual(ai.basaBasi('Soal pajak, harga kami aslinya belum termasuk pajak, tapi kalau ketentuan kantor mewajibkan, nanti sistemnya di-gross up 2,5%.'), []);
-    assert.ok(ai.masalahGaya('Untuk tanggal 6 Desember slotnya masih available nih Kak.').some((m) => /frasa kaku/.test(m)));
-    assert.ok(ai.masalahGaya('Biar lebih gampang, ini ada gambaran perbandingannya ya Kak. Silahkan Kak, berikut perbandingan format cetaknya ya. [KIRIM: format]').some((m) => /SATU kalimat/.test(m)));
-    assert.ok(!ai.masalahGaya('Silahkan Kak, berikut perbandingan format cetaknya ya. Rencananya untuk acara apa Kak? [KIRIM: format]').some((m) => /SATU kalimat/.test(m)));
-    assert.deepStrictEqual(ai.basaBasi('Dengan 300 tamu, 3 jam bikin semua tamu kebagian foto tanpa antre lama.'), []);
-    assert.deepStrictEqual(ai.basaBasi('Cukup Kak, soalnya 1 jam bisa melayani 100+ tamu, jadi 3 jam sudah pas buat 300 tamu.', '3 jam cukup ga buat 300 tamu?'), []);
-    assert.ok(ai.frasaKaku('Paham, Kak. Tanggal 19 Desember sendiri masih kosong di jam itu.').length >= 2);
-  });
-  await kasus('pertanyaan pindah ke baris baru', () => {
-    assert.strictEqual(ai.pisahPertanyaan('Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya. Lokasi acaranya di mana?'),
-      'Untuk 3 jam paketnya Rp 2.500.000, cetaknya sepuasnya.\nLokasi acaranya di mana?'); // 16 Nov: baris baru tanpa baris kosong (admin 1% paragraf berjarak)
-    assert.strictEqual(ai.pisahPertanyaan('Siap Kak. Tanggal berapa?'), 'Siap Kak. Tanggal berapa?');
-    // Tahap 3B: lampiran otomatis (format/backdrop) & janji pricelist pindah ke plugin penjaga-cs (uji_penjaga.py).
-  });
-  await kasus('link & alamat karangan ditangkap (…2792)', () => {
-    assert.ok(ai.tautanAsing('share lok https://maps.app.goo.gl/w132t81yQ9kZ7dLLA', ai._sumberHarga()).length);
-    assert.ok(ai.tautanAsing('Kawasan Niaga Citra Indah Blok A1 Sentul ya mas', ai._sumberHarga()).length);
-    assert.deepStrictEqual(ai.tautanAsing('booking di https://booking.tetraphoto.com ya Kak', ai._sumberHarga()), []);
-  });
-  await kasus('12 jam dijawab "paket 8 jam Rp 5.000.000" ditangkap (…2553)', () => {
-    assert.ok(ai.durasiKurang('Untuk 12 jam pakai paket 8 jam *Rp 5.000.000*', 'acaranya 12 jam kak'));
-    assert.ok(!ai.durasiKurang('8 jam Rp 5.000.000 + extend 4 jam Rp 2.000.000', 'acaranya 12 jam kak'));
-  });
-  await kasus('harga extend "4 jam tambahan × Rp 500.000" tidak dianggap harga paket 4 jam', () => {
-    assert.deepStrictEqual(ai.hargaAsing('8 jam *Rp 5.000.000* + 4 jam tambahan × Rp 500.000 = *Rp 7.000.000*', ai._sumberHarga()), []);
-    assert.deepStrictEqual(ai.hargaAsing('paket *8 jam Rp 5.000.000* + extend 4 jam (*Rp 500.000*/jam) jadi *Rp 7.000.000*', ai._sumberHarga()), []);
-    assert.ok(ai.hargaAsing('4 jam Rp 2.000.000', ai._sumberHarga()).length);
+    assert.deepStrictEqual(frasaKaku(f), [], f);
+    assert.ok(frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
   });
   await kasus('tanggal acara: jam tidak terbaca tahun/tanggal (audit 18 Nov, "8 agustus 13.30" → 2013)', () => {
     const lead = require('./src/lib/smartLead');
@@ -230,9 +133,6 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
       try { require('fs').unlinkSync(file); } catch {}
       delete require.cache[require.resolve('./src/lib/anggaranUji')];
     }
-  });
-  await kasus('janji "nanti aku kabari" tercatat ke admin (…4324)', () => {
-    assert.ok(ai.RE_JANJI_ADMIN.test('Siap Kak, nanti aku kabari ya'));
   });
   await kasus('klien bilang pricelist belum masuk → dikirim ulang (pemulihan pengiriman tetap di Node)', () => {
     assert.ok(msgs._janjiPricelist('Aduh maaf Kak', 'kak pricelistnya ga masuk', [], [{ role: 'assistant', content: 'Silahkan Kak, berikut pricelistnya ya' }]));
@@ -281,7 +181,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     await kasus('…2792 pemasok minta share lok → tanpa link/alamat karangan', async () => {
       const r = await tanya([{ role: 'user', content: 'saya temennya gilang yang jual paper dnp' }, { role: 'assistant', content: '(admin) Mauu order bang' }],
         'Mau diantar siang ini gk mas? boleh minta share loknya?');
-      assert.deepStrictEqual(ai.tautanAsing(r, ai._sumberHarga()), [], r);
+      assert.ok(!/https?:\/\/(?!(?:[\w-]+\.)?tetraphoto\.com)/i.test(r) && !/maps\.app|goo\.gl|\bblok\s+[a-z]?\d/i.test(r), r); // link/alamat karangan
     });
     await kasus('…2553 butuh 12 jam → 8 jam + extend atau paket 13 jam', async () => {
       const r = await tanya([], 'kak kalau photobooth 12 jam berapa ya?');
@@ -319,7 +219,7 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
       assert.match(r, /\[KIRIM:\s*pricelist\]/i, r);
       const isi = r.replace(/\[[^\]]*\]/g, '');
       assert.ok((isi.match(/Rp ?\d/g) || []).length <= 1, `daftar harga di teks: ${isi}`);
-      assert.deepStrictEqual(ai.frasaKaku(isi), [], isi);
+      assert.deepStrictEqual(frasaKaku(isi), [], isi);
     });
   }
 
