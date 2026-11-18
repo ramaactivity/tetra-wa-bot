@@ -66,3 +66,32 @@ Setiap kali Rama menandai frasa baru, cukup tambah satu baris di sini (tidak per
 - memang agak mahal  # idem
 - mahal  # Rama 11 Nov: jangan pernah mengucapkan kata mahal/murah; fokus tunjukkan kualitas (+ galeri)
 - murah  # idem
+
+## Kata robot (dibuang kalau tetap muncul sesudah ditulis ulang)
+Pindahan daftar "DILARANG kata robot" dari prompt Node lama (Tahap 3, 18 Nov 2026). Penjaga Hermes (plugin penjaga-cs) meminta
+tulis ulang; kalau kata ini tetap ada, kalimatnya dibuang. Frasa di atas judul ini hanya diminta tulis ulang.
+- semoga  # doa/harapan penutup (Rama 10 Okt: "ai slop dan robot")
+- terima kasih kembali
+- senang membantu
+- ada yang bisa saya bantu
+- kami informasikan
+- demikian kami sampaikan
+- form booking
+- follow up  # "izin followup" (tanpa spasi) boleh untuk follow-up dokumen, bahasa Rama 18 Nov
+- sekadar mengingatkan
+- ramaikan
+- keseruan
+- berkesan
+- momen spesial
+- siap bantu
+- btw
+- selamat menikmati
+- sehat selalu
+- sukses selalu
+- salam sehat
+- kontak kami selalu terbuka
+- lancar-lancar
+- bisa banget
+- boleh banget
+- pas banget
+- nggak apa-apa banget

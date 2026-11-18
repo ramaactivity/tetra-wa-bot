@@ -1,0 +1,8 @@
+name: penjaga-cs
+version: "1.0.0"
+description: "Penjaga balasan WhatsApp agent cs-wa Tetra: klaim palsu, bocor pikiran, harga/link karangan, janji temu, gaya kaku. Pindahan penjaga kode Node (Tahap 3, 18 Nov 2026)."
+author: "Tim support Claude untuk Hermes Rama"
+provides_hooks:
+  - transform_llm_output
+provides_middleware:
+  - llm_request
