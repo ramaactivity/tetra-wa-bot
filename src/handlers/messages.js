@@ -558,13 +558,15 @@ function registerMessageHandler(sock) {
   const mulaiBooking = async (jid, msg, sumber, { situasi, cadangan, pesanKlien = '' }, judulAdmin) => {
     const b = booking.mulai(jid, sumber, msg?.pushName, nomorDari(jid)); // null kalau nomor HP belum diketahui, bukan digit LID
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
+    // Urutan Hermes t_8843a9c1 A3.3: dokumen Tetra Ops dulu, lalu ekstraksi chat (yang boleh mengoreksi).
+    const dariOps = await booking.isiDariOps(jid).catch((e) => { console.error('[booking←ops] gagal:', e.message); return ''; });
     await perbaruiBooking(jid, null, false);
     const isian = booking.barisForm(b).map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
     const ikut = [!b.lengkap && !b.data.ukuran_frame && 'gambar perbandingan ukuran frame', !b.lengkap && !b.data.backdrop && 'gambar pilihan backdrop basic',
       !b.data.desain_frame && !booking.sudahKatalog(jid) && 'katalog desain frame', b.lengkap && 'rekap data untuk dicek klien'].filter(Boolean);
     let teksAwal = null;
     if (wajibHermes()) {
-      const t = await aiLib.kalimatHermes(`${situasi}\n\nJENIS ACARA: ${booking.NAMA_JENIS[booking.jenisGrup(b)]}\n` +
+      const t = await aiLib.kalimatHermes(`${situasi}\n\nJENIS ACARA: ${booking.NAMA_JENIS[booking.jenisGrup(b)]}\n${dariOps ? `${dariOps}\n` : ''}` +
         `DATA ACARA DI SISTEM (form belum dikirim; ${b.lengkap ? 'data wajib sudah lengkap' : 'data wajib belum lengkap'}):\n${isian}` +
         (ikut.length ? `\nDikirim sistem sesudah pesanmu: ${ikut.join(', ')}.` : '') + '\nSkill form-booking.',
         { history: getRiwayat(jid), pesanKlien, simpan: ['form'] });

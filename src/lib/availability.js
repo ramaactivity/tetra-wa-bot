@@ -98,15 +98,15 @@ function summarize(result) {
   return out;
 }
 
-// Endpoint bot lain di Tetra Ops (/api/bot/booking, /api/bot/quotation): origin
-// dan token sama dengan cek jadwal. Tidak pernah melempar error; pemanggil cek ok.
+// Endpoint bot lain di Tetra Ops (/api/bot/booking, /api/bot/quotation, /api/bot/klien): origin
+// dan token sama dengan cek jadwal. Tidak pernah melempar error; pemanggil cek ok. Tanpa body = GET.
 const opsBase = () => new URL(BASE_URL).origin;
 async function postOps(path, body) {
   try {
     const res = await fetch(opsBase() + path, {
-      method: 'POST',
+      method: body === undefined ? 'GET' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(20000),
     });
     const json = await res.json().catch(() => ({}));

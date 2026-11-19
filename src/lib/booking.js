@@ -264,6 +264,48 @@ async function sinkronOps(jid) {
   console.log(`[booking→ops] ${jid.split('@')[0]}: ${r.json.status || 'ok'} ${b.opsUrl || ''}`);
 }
 
+// Isian dari dokumen resmi Tetra Ops (quotation/invoice klien ini) sebelum form dikirim — Hermes t_8843a9c1 A1.2/A1.3, GET
+// /api/bot/klien (tanpa nominal uang). Hanya mengisi kolom yang masih kosong; ekstraksi chat sesudahnya (isi-data-booking) melihatnya
+// sebagai DATA SAAT INI, jadi koreksi klien di chat tetap bisa menimpa. Endpoint belum ada / klien tak ditemukan → '' (dicatat).
+// Kembalian: satu baris fakta untuk cs-wa ('' kalau tidak ada yang diisi).
+async function isiDariOps(jid) {
+  const b = semua[jid];
+  const wa = nomorDari(jid);
+  if (!b || !wa) return '';
+  const r = await postOps(`/api/bot/klien?wa=${wa}`);
+  if (!r.ok || !r.json.ditemukan) {
+    console.log(`[booking←ops] ${wa}: ${r.ok ? 'klien tidak ditemukan' : `HTTP ${r.status}`}`);
+    return '';
+  }
+  const { klien = {}, acara = {}, layanan = [], backdrop = null, dokumen = [] } = r.json;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(acara.tanggal || '') ? acara.tanggal : null;
+  const jam = (s) => String(s || '').slice(0, 5).replace(':', '.');
+  const menit = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 60 + (m || 0); };
+  const unit = Math.max(0, ...layanan.map((l) => Number(l.qty) || 0));
+  const durasi = Math.max(0, ...layanan.map((l) => Number(l.jam) || 0));
+  // Rentang acara lebih panjang dari durasi paket = jam ACARA (Yessi: 16–21, photobooth 2 jam di dua sesi), bukan jam photobooth.
+  const jamBooth = acara.jam_mulai && (!acara.jam_selesai || !durasi || (menit(acara.jam_selesai) - menit(acara.jam_mulai)) / 60 <= durasi);
+  const isian = {
+    nama_acara: acara.judul, instansi: klien.instansi, jumlah_tamu: acara.jumlah_tamu, backdrop, tanggal_iso: iso,
+    tanggal: iso ? new Date(`${iso}T12:00:00+07:00`).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : acara.tanggal,
+    jam: jamBooth ? [jam(acara.jam_mulai), jam(acara.jam_selesai)].filter(Boolean).join('–') : null,
+    lokasi: [acara.venue, acara.kota].filter(Boolean).join(', '),
+    paket: layanan.map((l) => [l.nama || l.kategori, l.jam && `${l.jam} jam`].filter(Boolean).join(' ')).join(' + '),
+    jumlah_unit: unit > 1 ? String(unit) : null,
+    ukuran_frame: layanan.map((l) => l.format).filter(Boolean).join(' / '),
+    jenis: jenisGrup({ data: { jenis: acara.jenis } }) !== 'lainnya' ? acara.jenis : null, // "event" (belum dipilih) dilewati
+  };
+  const diisi = Object.keys(isian).filter((k) => isian[k] && !b.data[k]);
+  for (const k of diisi) b.data[k] = String(isian[k]).trim();
+  b.nama = b.nama || klien.nama || null;
+  b.lengkap = kurang(b).length === 0;
+  simpan();
+  console.log(`[booking←ops] ${wa}: ${diisi.length} kolom dari ${dokumen.map((d) => d.nomor).join(', ') || 'Tetra Ops'}`);
+  const label = { ...Object.fromEntries(FIELD.map(([k, l]) => [k, l])), ...labelJenis(b) };
+  return diisi.length ? `DARI DOKUMEN RESMI TETRA OPS (${dokumen.map((d) => d.nomor).join(', ')}; sudah disepakati, jangan ditanya ulang): ` +
+    `${diisi.filter((k) => k !== 'tanggal_iso').map((k) => label[k] || k).join(', ')}.` : '';
+}
+
 // Rekap siap-input Tetra Ops. `judul` menjelaskan kenapa dikirim sekarang.
 function teksRekap(jid, judul) {
   const b = semua[jid];
@@ -317,6 +359,6 @@ function konteksAI(jid) {
 module.exports = {
   barisForm, barisRekap, jenisGrup, NAMA_JENIS, sudahKatalog,
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, badanForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
-  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, teksRekap, sinkronOps,
+  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, teksRekap, sinkronOps, isiDariOps,
   semua: () => semua, simpan,
 };
