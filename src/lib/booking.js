@@ -39,7 +39,8 @@ const FIELD = [
   ['pic', 'PIC hari H (nama & no. HP)', true],
   ['kontak_wo', 'Kontak WO/EO', false],
   ['instagram', 'Instagram', false],
-  ['ukuran_frame', 'Ukuran frame', true],
+  // Rama 19 Nov: "Ukuran apapun kan harganya sama selama durasinya sama. jadi jangan jadikan ukuran sebagai penghambat" → tidak wajib.
+  ['ukuran_frame', 'Ukuran frame', false],
   ['orientasi', 'Orientasi frame', false],
   ['desain_frame', 'Desain frame', true],
   // Rama 11 Nov: teks frame dipisah. Nama di frame = inisial/nama panggilan yang dicetak (bukan nama lengkap di atas).
