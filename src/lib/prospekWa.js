@@ -70,8 +70,18 @@ async function balasanProspek(sock, msg) {
   return nomor && baca().pernah.includes(nomor) ? nomor : null;
 }
 // Pesan sambutan otomatis akun bisnis (bukan manusia): dicatat, status prospek tidak berubah.
-// 19 Nov: sambutan Agave Hall "list plan ini mohon dibantu untuk diisi dulu ya: [WEDDING / BIRTHDAY …" lolos → dianggap balasan manusia.
-const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|mohon dibantu (untuk )?(di)?isi|please let us know how we can|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
+// Daftar polanya = DATA di docs/SAMBUTAN-OTOMATIS.md (audit Bruno t_951a932f N6): ditambah tanpa mengubah kode.
+function muatPolaOtomatis() {
+  try {
+    const pola = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'SAMBUTAN-OTOMATIS.md'), 'utf-8').split('\n')
+      .filter((l) => l.startsWith('- ')).map((l) => l.slice(2).split(' #')[0].trim()).filter(Boolean);
+    return new RegExp(pola.join('|'), 'i');
+  } catch (e) {
+    console.error('[prospek] docs/SAMBUTAN-OTOMATIS.md tidak terbaca, pakai pola minimal:', e.message);
+    return /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)/i;
+  }
+}
+const RE_OTOMATIS = muatPolaOtomatis();
 const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
 
 // Lead yang membalas sapaan sales (Bruno). Segmen dari tabel prospek Tetra Ops (paket perbaikan Bruno, Rama 22 Okt):
@@ -80,12 +90,45 @@ const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
 const SEGMEN_REKANAN = ['venue', 'eo_wo'];
 const rekanan = (p) => !p?.segmen || SEGMEN_REKANAN.includes(p.segmen);
 
-// 18 Nov (Rama: "bener-bener native semua dihandle oleh hermes"): cara menanggapi lead klien/rekanan — termasuk aturan jujur,
-// skema 10%, dasbor rekanan — ada di skill Hermes mode-kontak-khusus. Node hanya memberi fakta siapa lead ini.
-function konteksLead(p) {
+// Blok FAKTA lead (audit Bruno t_951a932f §4.1; Rama 19 Nov: follow-up "kebanyakan salah"). Dulu Node menulis "LEAD … membalas sapaan"
+// untuk SEMUA lead (juga yang belum pernah membalas) dan tidak memberi tahu file apa yang sudah terkirim → cs-wa mengarang ("pricelist yang
+// kemarin sudah dilihat", perkenalan ulang). Sekarang hanya fakta; cara menanggapi = skill Hermes mode-kontak-khusus.
+// Dipakai balasan chat lead, susulan, dan tombol Follow-up Tetra Ops. riw = riwayat gabungan orang ini; pr = baris prospek Tetra Ops.
+const tglWib = (t) => (t ? new Date(t).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-');
+const RE_PESAN_SISTEM = /^\((admin|catatan sistem)\)/;
+const RE_MINTA_PIC = /\bPIC\b|nomor WA|e-?mail|kontak (yang|orang)/i;
+const RE_MINTA_WAKTU = /sebentar ya|tampung dulu|periode (awal|akhir)|belum buka (rekanan|vendor)|nanti\s+(kami|kita|saya|aku)?\s*(kabari|kabarin|hubungi|info)|diskusi(kan)?\s+dulu|tanya(in)?\s+(dulu|atasan|ke)|pikir(-pikir)?\s+dulu|kabar(i|in)\s+(lagi|nanti)/i;
+function fileTerkirim(riw) {
+  const { LAMPIRAN } = require('./lampiran'); // di dalam fungsi: hindari require melingkar
+  const tanda = riw.map((x) => ({ t: x.t, c: (String(x.content).match(/\[kirim (PDF|dokumen:)[^\]]*\]/gi) || []).join(' ') })).filter((x) => x.c);
+  return [['pricelist', /pricelist/i], ...Object.values(LAMPIRAN).map((l) => [l.label, l.pernah])]
+    .map(([label, re]) => { const x = tanda.filter((y) => y.c.includes(`[kirim PDF ${label}]`) || re.test(y.c)).at(-1); return x && `${label} (${tglWib(x.t)})`; })
+    .filter(Boolean);
+}
+function faktaLead(p, riw = [], pr = null) {
   if (!p) return '';
-  if (!rekanan(p)) return `\nLEAD KLIEN: ${p.nama || 'kontak ini'} (${p.segmen}) membalas sapaan Rama (Tetra Photobooth) yang menawarkan photobooth untuk acara mereka.`;
-  return `\nLEAD REKANAN: ${p.nama || 'kontak ini'} membalas sapaan Rama (Tetra Photobooth) yang mengajak kerja sama sebagai vendor photobooth rekanan.`;
+  const kita = riw.filter((x) => x.role === 'assistant' && !RE_PESAN_SISTEM.test(String(x.content)));
+  const masuk = riw.filter((x) => x.role === 'user');
+  const manusia = masuk.filter((x) => !otomatis(x.content));
+  const oto = masuk.filter((x) => otomatis(x.content));
+  const iManusia = riw.findLastIndex((x) => x.role === 'user' && !otomatis(x.content));
+  const takDibalas = riw.slice(iManusia + 1).filter((x) => x.role === 'assistant' && !RE_PESAN_SISTEM.test(String(x.content))).length;
+  const file = fileTerkirim(riw);
+  const mintaPic = kita.slice(1).filter((x) => RE_MINTA_PIC.test(String(x.content))).at(-1); // sapaan pertama tidak dihitung
+  const mintaWaktu = manusia.filter((x) => RE_MINTA_WAKTU.test(String(x.content))).at(-1);
+  const catatan = (String(pr?.catatan || '').split('\n').filter((l) => l.trim() && !/^\s*cmd\s+\S+\s*$/i.test(l)).at(-1) || '').trim().slice(0, 140);
+  return ['', 'FAKTA LEAD (dari sistem; jangan menyebut hal di luar fakta ini dan transkrip):',
+    `LEAD: ${p.nama || '-'} | segmen: ${p.segmen || pr?.segmen || '-'} (${rekanan(p) ? 'calon rekanan' : 'calon klien'}) | nomor: ${p.nomor || '-'}`,
+    `SAPAAN PERTAMA: ${kita[0] ? `${tglWib(kita[0].t)} lewat WA` : 'belum ada di WA'}`,
+    `BALASAN MANUSIA: ${manusia.length ? `${manusia.length}× (terakhir ${tglWib(manusia.at(-1).t)})` : 'belum pernah'}`,
+    `BALASAN OTOMATIS: ${oto.length ? `${oto.length}× (terakhir ${tglWib(oto.at(-1).t)})` : 'tidak ada'}`,
+    `PESAN KITA: ${kita.length}× (terakhir ${tglWib(kita.at(-1)?.t)}) | belum dibalas manusia: ${takDibalas}`,
+    `FILE TERKIRIM: ${file.length ? file.join(', ') : 'belum ada'}`,
+    `PIC: ${pr?.pic ? `${pr.pic} (tercatat di Tetra Ops)` : 'belum tercatat'}`,
+    `STATUS TETRA OPS: ${pr?.status || '-'}${catatan ? ` | catatan terakhir: ${catatan}` : ''}`,
+    `KITA MINTA PIC: ${mintaPic ? `ya (${tglWib(mintaPic.t)})` : 'belum'}`,
+    `LEAD MINTA WAKTU: ${mintaWaktu ? `ya ("${String(mintaWaktu.content).replace(/\s+/g, ' ').slice(0, 60)}", ${tglWib(mintaWaktu.t)})` : 'tidak'}`,
+  ].join('\n');
 }
 // Persen rekanan maksimal 10% (Rama 8 Okt): kalimat dengan persen lain dibuang. Sejak 22 Okt harga publish (rupiah)
 // boleh disebut ke lead (harga rekanan = publish − 10%); kebenaran nominalnya dijaga penjaga harga di ai.js.
@@ -96,18 +139,39 @@ function tanpaAngka(teks) {
     .map((l) => l.split(/(?<=[.!?])\s+/).filter((k) => !RE_ANGKA_LEAD.test(k)).join(' '))
     .filter((l) => l.trim()).join('\n').trim();
 }
-module.exports = { cek, catat, MAKS_PER_HARI, nomorPengirim, balasanProspek, otomatis, konteksLead, tanpaAngka, rekanan };
+module.exports = { cek, catat, MAKS_PER_HARI, nomorPengirim, balasanProspek, otomatis, faktaLead, tanpaAngka, rekanan };
 
 if (require.main === module) {
   // Uji cepat: node src/lib/prospekWa.js
   const assert = require('assert');
-  assert.ok(konteksLead({ nama: 'PT X', segmen: 'corporate' }).includes('LEAD KLIEN'));
-  assert.ok(konteksLead({ nama: 'SMA Y', segmen: 'kampus' }).includes('LEAD KLIEN'));
-  assert.ok(konteksLead({ nama: 'Gedung Z', segmen: 'venue' }).includes('LEAD REKANAN'));
-  assert.ok(konteksLead({ nama: 'WO lama' }).includes('LEAD REKANAN')); // penanda lama tanpa segmen
-  assert.ok(konteksLead({ segmen: 'eo_wo' }).length < 300); // aturan di skill mode-kontak-khusus; Node hanya fakta
+  const K = (c, t) => ({ role: 'assistant', content: c, t }), L = (c, t) => ({ role: 'user', content: c, t });
+  const t0 = Date.parse('2026-11-10T03:00:00Z');
+  // Pindy 19 Nov: belum pernah dibalas manusia, sambutan otomatis bertanda tangan "Merry", tanpa file terkirim.
+  const pindy = faktaLead({ nama: 'Pindy Organizer', segmen: 'eo_wo', nomor: '6281283320730' }, [
+    K('[sapaan dari tim sales] Halo Kak, saya Rama dari Tetra Photobooth', t0), L('Thank you for contacting Pindy Organizer! Cheers, Merry', t0 + 2e3),
+    K('Boleh minta kontak PIC yang pegang kerja sama vendor?', t0 + 864e5), L('Terima kasih telah menghubungi kami, kami akan segera membalas', t0 + 864e5 + 2e3)],
+  { status: 'disapa', catatan: 'cmd 123' });
+  assert.match(pindy, /calon rekanan/);
+  assert.match(pindy, /BALASAN MANUSIA: belum pernah/);
+  assert.match(pindy, /BALASAN OTOMATIS: 2×/);
+  assert.match(pindy, /PESAN KITA: 2× .*belum dibalas manusia: 2/);
+  assert.match(pindy, /FILE TERKIRIM: belum ada/);
+  assert.match(pindy, /KITA MINTA PIC: ya/);
+  assert.match(pindy, /PIC: belum tercatat/);
+  assert.doesNotMatch(pindy, /membalas sapaan/, 'fakta palsu lama tidak boleh kembali');
+  // Lead yang membalas manusia + sudah dikirimi pricelist & profil rekanan; minta waktu.
+  const violetta = faktaLead({ nama: 'Violetta Wedding', segmen: 'eo_wo' }, [
+    K('[sapaan dari tim sales] Halo', t0), L('Ok. Boleh minta PL nya ka', t0 + 6e4), K('[kirim PDF pricelist] + gambar ringkas paket unlimited', t0 + 12e4),
+    K('[kirim PDF profil rekanan]\nProfil rekanan', t0 + 13e4), L('sebentar ya kak, kita tampung dulu', t0 + 864e5)], null);
+  assert.match(violetta, /BALASAN MANUSIA: 2×/);
+  assert.match(violetta, /FILE TERKIRIM: pricelist \(.*\), profil rekanan/);
+  assert.match(violetta, /belum dibalas manusia: 0/);
+  assert.match(violetta, /LEAD MINTA WAKTU: ya \("sebentar ya kak/);
+  assert.match(faktaLead({ nama: 'PT X', segmen: 'corporate' }, [], null), /calon klien/);
+  assert.ok(otomatis('Sebelumnya, list plan ini mohon dibantu untuk diisi dulu ya: [WEDDING / BIRTHDAY]'));
+  assert.ok(!otomatis('ini form datanya kak, sudah saya isi'), 'form data dari manusia bukan sambutan');
   assert.strictEqual(tanpaAngka('Paket 3 jam Rp 2.500.000. Rekanan dapat 10%.'), 'Paket 3 jam Rp 2.500.000. Rekanan dapat 10%.');
   assert.strictEqual(tanpaAngka('Bisa 15% kok. Kabari ya.'), 'Kabari ya.');
-  assert.strictEqual(konteksLead(null), '');
+  assert.strictEqual(faktaLead(null), '');
   console.log('UJI PROSPEK WA LOLOS');
 }

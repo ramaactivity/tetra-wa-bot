@@ -943,8 +943,10 @@ function registerMessageHandler(sock) {
         await perbaruiBooking(jid, originalText);
       }
       const kBooking = lead || vendor ? '' : await klienBooking.konteks(phoneDigits(msg));
+      // Lead sales: blok FAKTA (berapa kali disapa, file yang sudah terkirim, status Tetra Ops) — audit Bruno t_951a932f §4.1.
+      const faktaLead = lead ? prospekWa.faktaLead(lead, getRiwayat(jid), await supa.cariProspek(lead.nomor || nomorDari(jid) || '').catch(() => null)) : '';
       let aiResponse = await getAIResponse(getRiwayat(jid), originalText,
-        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksHandoffLama(jid) + konteksTamu(jid) + prospekWa.konteksLead(lead) + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
+        buildLeadContext(fullText, jid, originalText, msg.pushName, vendor) + konteksKlienLama(jid) + konteksHandoffLama(jid) + konteksTamu(jid) + faktaLead + vendorLib.konteks(vendor) + booking.konteksAI(jid) + kBooking);
 
       if (aiResponse.includes('[DIAM]')) {
         // Ucapan/broadcast/auto-reply: dicatat, tidak dibalas.
