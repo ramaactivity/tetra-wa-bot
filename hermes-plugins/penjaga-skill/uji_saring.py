@@ -52,6 +52,7 @@ plugin.HERMES_SKILLS, plugin.CS_SKILLS = HS, CS
 plugin.FAQ_FILE, plugin.FAQ_DOK, plugin.USULAN = HS / "faq-tetra" / "SKILL.md", FAQ_DOK, USULAN
 plugin.RIWAYAT, plugin.ALLOWLIST = RIWAYAT, TMP / "ok.json"
 plugin.AKAR = (HS, CS, TMP / "profil-skills")
+plugin._kejadian = lambda rec: None  # uji tidak boleh mengisi log blokir asli (18–19 Nov: 162 baris uji mengubur kejadian sungguhan)
 P = CS / "cs-mintet-pelajaran" / "SKILL.md"   # skill pelajaran tinggal di cs-skills (symlink profil → sini)
 
 hasil = []
