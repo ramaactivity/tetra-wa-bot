@@ -593,6 +593,12 @@ function startCommandPoller() {
           const hasil = jid ? await followup.drafFollowup(jid, { alasan: p.alasan, konteks: p.konteks })
             : { ok: false, pesan: 'jid/nomor kosong' };
           await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
+        } else if (c.command.startsWith('booking-perbarui:')) {
+          // Tombol "Perbarui dari chat" di Booking Masuk Tetra Ops: {"jid"} (= wa_jid booking) → isi ulang data dari seluruh chat.
+          let p = {};
+          try { p = JSON.parse(c.command.slice(c.command.indexOf(':') + 1)); } catch (_) { /* dicek di bawah */ }
+          const hasil = await require('./handlers/messages').perbaruiBookingDariChat(String(p.jid || ''));
+          await supa.markCommand(c.id, hasil.ok ? 'done' : 'error', hasil.pesan);
         } else if (c.command.startsWith('send-followup:')) {
           // Owner klik Kirim atas draf di Tetra Ops: {"nomor","pesan"} — jalur & rem sama dengan pesan relasi (08–20 WIB, kuota harian).
           let p = {};

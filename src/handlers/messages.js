@@ -418,6 +418,16 @@ const gagalBuka = new Map(); // jid -> { sejak, dilapor }
 const PULIH_MS = 10 * 60 * 1000;
 const LAPOR_ULANG_MS = 6 * 3600 * 1000;
 let sockTerakhir = null;
+let perbaruiBookingAktif = null; // diisi registerMessageHandler (butuh sock)
+// Tombol "Perbarui dari chat" di Booking Masuk Tetra Ops (perintah booking-perbarui di bot.js): baca ulang seluruh chat, isi data,
+// sinkron balik ke Tetra Ops. Tanpa pesan ke klien (konfirmasi=false); rekap ke admin hanya kalau data jadi lengkap/berubah.
+async function perbaruiBookingDariChat(jid) {
+  if (!jid || !booking.get(jid)) return { ok: false, pesan: `tidak ada booking di bot untuk ${jid || '(jid kosong)'}` };
+  if (!perbaruiBookingAktif) return { ok: false, pesan: 'bot belum siap' };
+  if (!(await perbaruiBookingAktif(jid, null, false))) return { ok: false, pesan: 'gagal membaca chat (lihat log bot)' };
+  const b = booking.get(jid);
+  return { ok: true, pesan: `${Object.keys(b.data).length} kolom terisi${b.lengkap ? ', data wajib lengkap' : ''}` };
+}
 // JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
 // dibuka itu urusan sesi perangkat sendiri, bukan pesan klien yang terlewat.
 function milikSendiri(jid) {
@@ -538,17 +548,22 @@ function registerMessageHandler(sock) {
     try {
       const b = booking.get(jid);
       const sebelum = b.lengkap;
-      const pesan = getRiwayat(jid).slice(-24);
+      // Seluruh chat (≤120 pesan, sisanya sudah jadi ringkasan), sama dengan ekstrakQuotation: detail acara sering disebut di awal.
+      // Yessi 19 Nov: jeda photobooth 16–17 & 20–21 ada di pesan ke-2 dari 50 → tidak terbaca dari 16/24 pesan terakhir.
+      const pesan = [...getRiwayat(jid)];
       if (teksBaru) pesan.push({ role: 'user', content: teksBaru });
       // Ringkasan = fakta klien dari chat lama, blok terpisah (dulu bubble TETRA "CATATAN KLIEN:" → dianggap catatan bot, form Yessi kosong).
       booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD, getRingkasan(jid)));
       await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
       if (konfirmasi) await booking.kirimKonfirmasi(sock, jid, pembukaRekap(jid));
+      return true;
     } catch (e) {
       console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
+      return false;
     }
   };
+  perbaruiBookingAktif = perbaruiBooking;
 
   // Mulai tahap booking: pesan + form (kalau perlu) + katalog ke klien, rekap ke admin.
   // Usulan CS Mintet 84 (Rama 18 Nov setuju) dengan kontrak dari Hermes (kartu konsultasi t_d063ba1a): Node hanya memberi FAKTA
@@ -1192,4 +1207,4 @@ function registerMessageHandler(sock) {
   });
 }
 
-module.exports = { _sudahDikirim: sudahDikirim, _KALIMAT_KEMITRAAN: KALIMAT_KEMITRAAN, registerMessageHandler, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _adminMasihPegang: adminMasihPegang, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
+module.exports = { _sudahDikirim: sudahDikirim, _KALIMAT_KEMITRAAN: KALIMAT_KEMITRAAN, registerMessageHandler, perbaruiBookingDariChat, buildLeadContext, _unikkan: unikkan, _kirimUlang: kirimUlang, _urusanKlien: urusanKlien, _adminMasihPegang: adminMasihPegang, _teksPesan: teksPesan, _janjiPricelist: janjiPricelist, _RE_STOP: RE_STOP, periksaGagalBuka, _gagalBuka: gagalBuka, _assist: () => jalankanAssist(), _KONTEKS_ASSIST: KONTEKS_ASSIST };
