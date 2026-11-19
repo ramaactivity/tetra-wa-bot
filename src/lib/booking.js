@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 const live = require('./liveConfig');
-const { loadJson, saveJson, tambahRiwayat, nomorDari } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, getRiwayat, nomorDari } = require('./store');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
 const { sendDocument } = require('./sender');
@@ -24,6 +24,9 @@ const simpan = () => saveJson(FILE, semua);
 // dan kerja crew; sisanya membantu tapi tidak menahan status "lengkap".
 const FIELD = [
   ['nama_acara', 'Nama pengantin / acara', true],
+  // Kunci baru dari peta Hermes t_8843a9c1 A2 (Tetra Ops menerimanya di Booking Masuk).
+  ['jenis', 'Jenis acara: Wedding, Lamaran, Keluarga, Korporat, Sekolah/Kampus/Wisuda, Keagamaan/Komunitas, atau Lainnya', false],
+  ['instansi', 'Instansi / perusahaan / sekolah / gereja / penyelenggara', false],
   ['tanggal', 'Tanggal acara', true],
   ['jam', 'Jam photobooth', true],
   ['lokasi', 'Lokasi / venue', true],
@@ -44,6 +47,9 @@ const FIELD = [
   ['tanggal_frame', 'Tanggal yang dicetak di frame', false],
   ['hashtag', 'Hashtag acara', false],
   ['teks_frame', 'Teks lain di frame', false],
+  ['tema', 'Tema / warna / karakter acara', false],
+  ['logo', 'Logo di frame (ada / nama file)', false],
+  ['pose', 'Jumlah pose / layout frame', false],
   ['backdrop', 'Backdrop', true],
   ['catatan', 'Catatan lain', false],
 ];
@@ -59,7 +65,8 @@ function aktif(jid) {
 }
 
 function kurang(b) {
-  return FIELD.filter(([k, , wajib]) => wajib && !b.data[k]).map(([k, label]) => ({ k, label }));
+  const label = labelJenis(b);
+  return FIELD.filter(([k, , wajib]) => wajib && !b.data[k]).map(([k, l]) => ({ k, label: label[k] || l }));
 }
 
 function mulai(jid, sumber, nama, phone) {
@@ -88,33 +95,66 @@ function teksUnit(d) {
   if (!d.jumlah_unit || n === 1) return '';
   return n ? `${n} (${n} spot photobooth)` : d.jumlah_unit;
 }
-const isWedding = (b) => /wedding|nikah|pengantin|resepsi|akad|lamaran|engagement/i.test(`${b.data.nama_acara || ''} ${b.data.catatan || ''} ${b.jenis || ''}`);
+// Form per jenis acara (peta Hermes t_8843a9c1 A2/A3, Rama 19 Nov: "setiap event tentu memerlukan form isian yang berbeda-beda" —
+// form Natal Yessi berisi "Nama Pengantin"). Kunci tetap kunci FIELD (sinkron Tetra Ops); yang beda label & isian yang ditanyakan.
+// [bagian, kunci, label, petunjuk kalau kosong]. Bagian: 1 Data Event, 2 Frame Foto, 3 Backdrop.
+const UKURAN = [2, 'ukuran_frame', 'Ukuran Frame', '2R / 4R / Polaroid (lihat gambar perbandingan ukurannya di bawah)'];
+const DESAIN = [2, 'desain_frame', 'Desain', 'pilih dari katalog di bawah, atau custom'];
+const BACKDROP = [3, 'backdrop', 'Backdrop', 'pilih warna backdrop basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri'];
+const ACARA = (tamu, pic) => [[1, 'tanggal', 'Tanggal Event'], [1, 'jam', 'Jam Photobooth'], [1, 'lokasi', 'Lokasi Event'],
+  [1, 'maps', 'Link Google Maps'], [1, 'paket', 'Paket yang Dipilih'], [1, 'jumlah_unit', 'Jumlah Unit'], [1, 'jumlah_tamu', tamu], [1, 'pic', pic]];
+const PIC = 'PIC hari H (nama & no. HP)', PANITIA = 'PIC Panitia (nama & no. HP)', TAMU = 'Perkiraan Jumlah Tamu';
+const JENIS = {
+  wedding: [[1, 'nama_acara', 'Nama Pengantin'], ...ACARA(TAMU, 'No. Kontak PIC / WO di hari H'), [1, 'instagram', 'Instagram Pengantin'],
+    UKURAN, DESAIN, [2, 'nama_frame', 'Nama / Inisial di Frame'], [2, 'tanggal_frame', 'Tanggal di Frame'], [2, 'hashtag', 'Hashtag'], BACKDROP],
+  keluarga: [[1, 'nama_acara', 'Nama Acara (mis. Ultah Arka ke-5)'], ...ACARA(TAMU, PIC), UKURAN, DESAIN, [2, 'tema', 'Tema / Karakter'],
+    [2, 'nama_frame', 'Nama di Frame'], [2, 'tanggal_frame', 'Tanggal di Frame'], [2, 'teks_frame', 'Teks di Frame (mis. Happy 5th Birthday)'], BACKDROP],
+  korporat: [[1, 'instansi', 'Nama Perusahaan / Instansi'], [1, 'nama_acara', 'Nama Acara'],
+    ...ACARA('Perkiraan Jumlah Peserta', 'PIC hari H (nama, jabatan & no. HP)'), UKURAN, DESAIN, [2, 'logo', 'Logo Perusahaan'],
+    [2, 'tema', 'Warna / Tema Brand'], [2, 'teks_frame', 'Teks di Frame (nama acara / tagline)'], [2, 'hashtag', 'Hashtag'], [2, 'pose', 'Jumlah Pose'], BACKDROP],
+  sekolah: [[1, 'instansi', 'Nama Sekolah / Kampus'], [1, 'nama_acara', 'Nama Acara'], ...ACARA('Perkiraan Jumlah Siswa / Tamu', PANITIA),
+    UKURAN, DESAIN, [2, 'logo', 'Logo Sekolah / Kampus'], [2, 'teks_frame', 'Teks di Frame (angkatan / tahun)'], [2, 'tanggal_frame', 'Tanggal di Frame'],
+    [2, 'pose', 'Jumlah Pose'], BACKDROP],
+  keagamaan: [[1, 'instansi', 'Gereja / Komunitas / Penyelenggara'], [1, 'nama_acara', 'Nama Acara / Tema'],
+    ...ACARA('Perkiraan Jumlah Tamu / Jemaat', PANITIA), UKURAN, DESAIN, [2, 'tema', 'Tema / Ayat'], [2, 'teks_frame', 'Teks di Frame'],
+    [2, 'logo', 'Logo / Ornamen'], [2, 'tanggal_frame', 'Tanggal di Frame'], BACKDROP],
+  lainnya: [[1, 'nama_acara', 'Nama Acara'], [1, 'instansi', 'Penyelenggara'], ...ACARA(TAMU, PIC), UKURAN, DESAIN,
+    [2, 'teks_frame', 'Teks di Frame'], [2, 'tanggal_frame', 'Tanggal di Frame'], [2, 'logo', 'Logo / Visual'], BACKDROP],
+};
+const NAMA_JENIS = { wedding: 'Wedding / Lamaran', keluarga: 'Keluarga (ulang tahun, khitan, aqiqah, tasyakuran)', korporat: 'Korporat',
+  sekolah: 'Sekolah / Kampus / Wisuda', keagamaan: 'Keagamaan / Komunitas', lainnya: 'Lainnya / belum jelas' };
+// Jenis dari isian Hermes (isi-data-booking memetakan ke 6 grup) → deteksi kata kunci chat (smartLead) → nama acara/catatan.
+const POLA_JENIS = [
+  ['wedding', /\b(wedding|pernikahan|nikahan|nikah|pengantin|resepsi|akad|pemberkatan|lamaran|tunangan|engagement)\b/i],
+  ['keagamaan', /\b(keagamaan|natal|natalan|christmas|xmas|paskah|easter|gereja|jemaat|ibadah|pengajian|halal\s*bi\s*halal|halalbihalal|maulid|komunitas|arisan|sosial)\b/i],
+  ['sekolah', /\b(sekolah|kampus|wisuda|graduation|kelulusan|universitas|fakultas|himpunan|ospek|prom\s*night|angkatan|smp|sma|smk)\b/i],
+  ['korporat', /\b(korporat|corporate|kantor|perusahaan|company|gathering|outing|grand\s*opening|peresmian|launching|seminar|workshop|gala|awarding|festival|bazaa?r|expo|pameran)\b/i],
+  ['keluarga', /\b(keluarga|ulang\s*tahun|ultah|birthday|sweet\s*(17|seventeen)|khitanan|khitan|sunatan|sunat|aqiqah|akikah|tasyakk?uran|syukuran|baby\s*shower)\b/i],
+];
+function jenisGrup(b) {
+  for (const s of [b.data.jenis, b.jenis, b.data.nama_acara, b.data.catatan]) {
+    const g = s && POLA_JENIS.find(([, re]) => re.test(s));
+    if (g) return g[0];
+  }
+  return 'lainnya';
+}
+const labelJenis = (b) => Object.fromEntries(JENIS[jenisGrup(b)].map(([, k, label]) => [k, label]));
 
-// Form untuk klien, format form admin Tetra (Rama 11 Nov: "langsung aja: kaka tolong dibantu untuk melengkapi form berikut yaa",
-// bukan ditanya dicicil). Yang sudah diketahui langsung terisi supaya klien tinggal cek.
-// Satu sumber baris form: dipakai form data sistem (teksForm) DAN penjaga form susunan Hermes (semua label + nilai asli wajib ada).
+// Form untuk klien (Rama 11 Nov: form lengkap sekali, bukan ditanya dicicil). Kalimat pengantarnya milik skill form-booking
+// (Rama 19 Nov: tanpa "langsung aja" — itu perintah Rama ke bot, bukan isi pesan). Yang sudah diketahui langsung terisi.
+// Satu sumber baris form: dipakai form data sistem (teksForm), rekap klien & admin, DAN fakta isian ke Hermes.
 function barisForm(b) {
-  const w = isWedding(b);
   const d = b.data;
-  const r = (bagian, label, asli, petunjuk = '') => ({ bagian, label, asli: asli ? String(asli) : '', nilai: asli ? String(asli) : petunjuk });
-  return [
-    r(1, w ? 'Nama Pengantin' : 'Nama Acara / Instansi', d.nama_acara),
-    r(1, 'Tanggal Event', d.tanggal),
-    r(1, 'Jam Photobooth', d.jam),
-    r(1, 'Lokasi Event', d.lokasi),
-    r(1, 'Link Google Maps', d.maps),
-    r(1, 'Paket yang Dipilih', d.paket),
-    ...(teksUnit(d) ? [r(1, 'Jumlah Unit', teksUnit(d))] : []),
-    r(1, 'Perkiraan Jumlah Tamu', d.jumlah_tamu),
-    r(1, 'No. Kontak PIC / WO di hari H', d.pic || d.kontak_wo),
-    r(1, w ? 'Instagram Pengantin' : 'Instagram Acara (opsional)', d.instagram),
-    r(2, 'Ukuran Frame', d.ukuran_frame, '2R / 4R / Polaroid (lihat gambar perbandingan ukurannya di bawah)'),
-    r(2, 'Desain', d.desain_frame, 'pilih dari katalog di bawah, atau custom'),
-    r(2, 'Nama / Inisial di Frame', d.nama_frame),
-    r(2, 'Tanggal di Frame', d.tanggal_frame),
-    r(2, 'Hashtag', d.hashtag),
-    r(3, 'Backdrop', d.backdrop, 'pilih warna backdrop basic (compliment free dari kami, lihat gambar di bawah) atau pakai dekorasi sendiri'),
-  ];
+  const nilai = (k) => String((k === 'jumlah_unit' ? teksUnit(d) : k === 'pic' ? d.pic || d.kontak_wo : d[k]) || '');
+  return JENIS[jenisGrup(b)].filter(([, k]) => k !== 'jumlah_unit' || teksUnit(d))
+    .map(([bagian, kunci, label, petunjuk = '']) => ({ bagian, kunci, label, asli: nilai(kunci), nilai: nilai(kunci) || petunjuk }));
+}
+// Isian form dengan label jenis acara, lalu kunci lain yang sudah terisi (WO, orientasi, catatan, …) dengan label FIELD.
+function barisAdmin(b) {
+  const form = barisForm(b);
+  const ada = new Set(form.map((x) => x.kunci));
+  return [...form.map((x) => ({ label: x.label, nilai: x.asli })),
+    ...FIELD.filter(([k]) => !ada.has(k) && k !== 'jumlah_unit' && k !== 'jenis' && b.data[k]).map(([k, label]) => ({ label, nilai: String(b.data[k]) }))];
 }
 
 // Badan form saja (label & isian dari data sistem): ditempel di posisi [KIRIM: form] tulisan cs-wa (kontrak Hermes t_d063ba1a).
@@ -134,8 +174,7 @@ function teksForm(b, pembuka) {
 
 // Setelah data wajib lengkap (dari form atau chat), rekap dikirim ke klien untuk dicek ulang (Rama 22 Okt).
 function barisRekap(b) {
-  return FIELD.filter(([k]) => b.data[k] && (k !== 'jumlah_unit' || teksUnit(b.data)))
-    .map(([k, label]) => ({ label, nilai: String(k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k]) }));
+  return barisAdmin(b).filter((x) => x.nilai);
 }
 function teksKonfirmasi(b, pembuka = null) {
   const isi = barisRekap(b).map((x) => `• ${x.label}: ${x.nilai}`);
@@ -155,9 +194,9 @@ async function kirimKonfirmasi(sock, jid, buatPembuka = null) {
   await kirimTeks(sock, jid, teksH || teksKonfirmasi(b), 'rekap-booking→customer');
   return true;
 }
-const CAPTION_KATALOG =
-  'Ini katalog desain frame Tetra. Tinggal screenshot yang Kak suka atau sebut halamannya.\n\n' +
-  'Belum ada yang cocok? Desain custom juga bisa, gratis. Kirim aja brief atau contoh desainnya.';
+// Kalimat Rama 19 Nov (dipakai hanya kalau otak bukan Hermes; jalur Hermes: skill form-booking).
+const CAPTION_KATALOG = 'Silahkan bisa pilih salah satu dari template katalog yang ada. Kalau belum ada yang cocok atau mau desain custom ' +
+  'frame sesuai acara kaka juga bisa yaa. Nanti tim tetra yang buatkan desainnya, dan ini gratis ya kak tidak ada biaya charge tambahan.';
 
 async function kirimTeks(sock, jid, teks, label) {
   const sent = await sock.sendMessage(jid, { text: teks });
@@ -166,14 +205,20 @@ async function kirimTeks(sock, jid, teks, label) {
   tambahRiwayat(jid, 'assistant', teks);
 }
 
+// Sekali per klien (Hermes t_8843a9c1 A3.3): katalog yang pernah terkirim lewat bot, lampiran, atau admin manual tidak diulang.
+// Penanda sama dengan lampiran.js ("[kirim PDF katalog desain frame]" / "[kirim dokumen: KATALOG DESAIN …]").
+const sudahKatalog = (jid) => getRiwayat(jid).some((p) => /\[kirim (PDF|dokumen:)[^\]]*katalog desain/i.test(String(p.content)));
 async function kirimKatalog(sock, jid, buatPembuka = null) {
   if (!fs.existsSync(KATALOG)) { console.error('[booking] katalog tidak ada:', KATALOG); return; }
-  const pengantar = buatPembuka ? await buatPembuka().catch(() => null) : null;
-  const caption = pengantar || (process.env.AI_OTAK === 'hermes' ? '' : CAPTION_KATALOG);
-  const sent = await sendDocument(sock, jid, KATALOG, caption);
+  if (sudahKatalog(jid)) return;
+  const pengantar = (buatPembuka && await buatPembuka().catch(() => null)) || (process.env.AI_OTAK === 'hermes' ? '' : CAPTION_KATALOG);
+  // Teks dan PDF gelembung terpisah, tanpa caption (Rama: "teks jangan digabung satu gelembung nempel ke gambar… biar waktu gua
+  // forward teksnya ga kebawa"; berlaku juga untuk katalog).
+  if (pengantar) await kirimTeks(sock, jid, pengantar, 'katalog→customer');
+  const sent = await sendDocument(sock, jid, KATALOG, '');
   rememberBotMsg(sent);
   deliveryLog.track(sent, 'katalog→customer');
-  tambahRiwayat(jid, 'assistant', `[kirim PDF katalog desain frame]\n${caption}`);
+  tambahRiwayat(jid, 'assistant', '[kirim PDF katalog desain frame]');
 }
 
 // Teruskan pesan asli klien (mis. foto bukti transfer) ke admin.
@@ -193,7 +238,7 @@ async function sinkronOps(jid) {
   // Hanya kunci yang terisi (Hermes t_8843a9c1: null tidak boleh menimpa data yang sudah ada di Tetra Ops) + jenis acara.
   const data = {};
   for (const k of [...FIELD.map(([x]) => x), 'tanggal_iso']) if (b.data[k]) data[k] = b.data[k];
-  if (b.jenis) data.jenis = b.jenis;
+  if (!data.jenis && b.jenis) data.jenis = b.jenis;
   const body = {
     external_id: `wa:${jid}:${b.mulai}`,
     wa_jid: jid,
@@ -223,8 +268,7 @@ async function sinkronOps(jid) {
 function teksRekap(jid, judul) {
   const b = semua[jid];
   const num = String(b.phone || jid).split('@')[0];
-  const isi = FIELD.filter(([k]) => k !== 'jumlah_unit' || teksUnit(b.data))
-    .map(([k, label]) => `${label}: ${k === 'jumlah_unit' ? teksUnit(b.data) : b.data[k] || '-'}`);
+  const isi = [`Jenis acara: ${NAMA_JENIS[jenisGrup(b)]}`, ...barisAdmin(b).map((x) => `${x.label}: ${x.nilai || '-'}`)];
   const k = kurang(b);
   return [
     `📋 *${judul}*`,
@@ -271,7 +315,7 @@ function konteksAI(jid) {
 }
 
 module.exports = {
-  barisForm, barisRekap, isWedding,
+  barisForm, barisRekap, jenisGrup, NAMA_JENIS, sudahKatalog,
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, badanForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
   teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, teksRekap, sinkronOps,
   semua: () => semua, simpan,

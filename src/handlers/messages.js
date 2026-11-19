@@ -59,7 +59,7 @@ const pembukaRekap = (jid) => (wajibHermes() ? (b) => {
     { history: require('../lib/store').getRiwayat(jid), wajibAda: baris.map((x) => x.nilai) });
 } : null);
 const pembukaKatalog = (jid) => (wajibHermes() ? () => require('../lib/ai').kalimatHermes(
-  'Sistem mengirim katalog desain frame (PDF) tepat sesudah pesanmu. Dia bisa pilih dari katalog (screenshot atau sebut halamannya), atau desain custom gratis dengan kirim brief/contoh.',
+  'Sistem mengirim katalog desain frame (PDF) tepat sesudah pesanmu.', // fakta saja; kalimatnya milik skill form-booking (Rama 19 Nov)
   { history: require('../lib/store').getRiwayat(jid) }) : null);
 // Voice note → teks lewat mesin STT Hermes (skrip profil cs-wa: tools.transcription_tools.transcribe_audio).
 const csWaHome = () => require('path').join(process.env.HOME || '/home/ubuntu', '.hermes', 'profiles', 'cs-wa');
@@ -505,8 +505,10 @@ function registerMessageHandler(sock) {
       tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
-        await mulaiBooking(jid, null, 'admin', { situasi: 'Admin sudah mengonfirmasi DP klien diterima (keputusan admin).',
-          cadangan: 'DP-nya sudah diterima ya Kak, makasih!' },
+        // Fakta, bukan perintah (Hermes t_8843a9c1 A3.4): dulu "Admin sudah mengonfirmasi DP…" → cs-wa mengulang "DPnya sudah masuk"
+        // tepat di bawah kalimat admin (Yessi 19 Nov). Cadangan hanya terkirim kalau Hermes gagal.
+        await mulaiBooking(jid, null, 'admin', { situasi: 'Admin sudah mengirim konfirmasi DP di chat ini; kalimat itu pesan terakhir sebelum pesanmu.',
+          cadangan: 'Boleh dibantu untuk dilengkapi formnya Kak' },
           'DP dikonfirmasi admin — data booking').catch((e) => console.error('[booking] gagal mulai:', e.message));
       }
       // Bubble klien yang masih menunggu dibuang: admin sudah pegang percakapan ini.
@@ -559,10 +561,11 @@ function registerMessageHandler(sock) {
     await perbaruiBooking(jid, null, false);
     const isian = booking.barisForm(b).map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
     const ikut = [!b.lengkap && !b.data.ukuran_frame && 'gambar perbandingan ukuran frame', !b.lengkap && !b.data.backdrop && 'gambar pilihan backdrop basic',
-      !b.data.desain_frame && 'katalog desain frame', b.lengkap && 'rekap data untuk dicek klien'].filter(Boolean);
+      !b.data.desain_frame && !booking.sudahKatalog(jid) && 'katalog desain frame', b.lengkap && 'rekap data untuk dicek klien'].filter(Boolean);
     let teksAwal = null;
     if (wajibHermes()) {
-      const t = await aiLib.kalimatHermes(`${situasi}\n\nDATA ACARA DI SISTEM (form belum dikirim; ${b.lengkap ? 'data wajib sudah lengkap' : 'data wajib belum lengkap'}):\n${isian}` +
+      const t = await aiLib.kalimatHermes(`${situasi}\n\nJENIS ACARA: ${booking.NAMA_JENIS[booking.jenisGrup(b)]}\n` +
+        `DATA ACARA DI SISTEM (form belum dikirim; ${b.lengkap ? 'data wajib sudah lengkap' : 'data wajib belum lengkap'}):\n${isian}` +
         (ikut.length ? `\nDikirim sistem sesudah pesanmu: ${ikut.join(', ')}.` : '') + '\nSkill form-booking.',
         { history: getRiwayat(jid), pesanKlien, simpan: ['form'] });
       const RE_FORM = /^[ \t]*\[KIRIM:\s*form\b[^\]]*\][ \t]*$/im;

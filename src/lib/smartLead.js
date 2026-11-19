@@ -11,6 +11,8 @@ const EVENT_PATTERNS = [
   /\b(ulang\s*tahun|ultah|birthday|sweet\s*seventeen|sweet\s*17)\b/i,
   /\b(wisuda|graduation|kelulusan)\b/i,
   /\b(acara\s*kampus|kampus|ospek|himpunan|fakultas|universitas|sekolah|prom\s*night)\b/i,
+  // Rama 19 Nov (Yessi, acara Natal): keagamaan/komunitas dulu tidak terdeteksi sama sekali → form wedding.
+  /\b(natal|natalan|christmas|xmas|paskah|easter|gereja|ibadah|halal\s*bi\s*halal|halalbihalal|maulid|komunitas)\b/i,
   /\b(gathering|corporate|kantor|perusahaan|company|employee|outing|family\s*gathering)\b/i,
   /\b(peresmian|grand\s*opening|launching|opening|soft\s*opening|pembukaan)\b/i,
   /\b(festival|bazaar|bazar|expo|pameran|exhibition|car\s*free\s*day)\b/i,

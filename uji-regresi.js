@@ -101,6 +101,17 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.deepStrictEqual(frasaKaku(f), [], f);
     assert.ok(frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
   });
+  await kasus('form per jenis acara: Natal → form keagamaan, bukan "Nama Pengantin" (Rama 19 Nov, Yessi; peta Hermes t_8843a9c1 A2)', () => {
+    const booking = require('./src/lib/booking');
+    const b = { data: { nama_acara: 'Natal 2026', tanggal: '2 Desember 2026', lokasi: 'Grand Wisata' }, jenis: 'natal' };
+    assert.strictEqual(booking.jenisGrup(b), 'keagamaan');
+    const f = booking.badanForm(b);
+    assert.match(f, /Gereja \/ Komunitas \/ Penyelenggara:/, f);
+    assert.match(f, /Lokasi Event: Grand Wisata/, f);
+    assert.doesNotMatch(f, /Pengantin/, f);
+    assert.strictEqual(booking.jenisGrup({ data: { jenis: 'Korporat', catatan: 'minta promo' } }), 'korporat');
+    assert.strictEqual(booking.jenisGrup({ data: { catatan: 'ada promo segala' } }), 'lainnya', 'promo/segala bukan prom/gala');
+  });
   await kasus('tanggal acara: jam tidak terbaca tahun/tanggal (audit 18 Nov, "8 agustus 13.30" → 2013)', () => {
     const lead = require('./src/lib/smartLead');
     const ref = new Date('2026-07-01T00:00:00+07:00');

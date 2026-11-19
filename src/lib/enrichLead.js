@@ -82,6 +82,9 @@ const EVENT_LABEL = {
   anniversary: 'Gala/Awarding', 'annual meeting': 'Gala/Awarding',
   arisan: 'Sosial', pengajian: 'Sosial', seminar: 'Seminar/Workshop',
   workshop: 'Seminar/Workshop',
+  natal: 'Natal', natalan: 'Natal', christmas: 'Natal', xmas: 'Natal', paskah: 'Paskah', easter: 'Paskah',
+  gereja: 'Keagamaan', ibadah: 'Keagamaan', maulid: 'Keagamaan', 'halal bi halal': 'Halal Bihalal', halalbihalal: 'Halal Bihalal',
+  komunitas: 'Komunitas',
 };
 
 function normalizeEvent(raw) {
