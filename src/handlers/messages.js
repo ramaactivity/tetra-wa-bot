@@ -427,8 +427,10 @@ async function perbaruiBookingDariChat(jid) {
   const hasil = await perbaruiBookingAktif(jid, null, false);
   if (!hasil) return { ok: false, pesan: 'gagal membaca chat (lihat log bot)' };
   const b = booking.get(jid);
+  // Jangan bilang berhasil kalau Tetra Ops menolak (sinkronOps mengulang kiriman yang gagal; sudah sama = langsung true):
+  // ucapan bot = tindakannya (Yessi 19 Nov 10:37 dilaporkan "9 kolom terisi" padahal sinkron ditolak 400).
   const kolom = Object.keys(b.data).length;
-  if (!hasil.sinkron) return { ok: false, pesan: `${kolom} kolom terbaca dari chat, TAPI sinkron ke Booking Masuk gagal (lihat log bot)` };
+  if (!hasil.sinkron) return { ok: false, pesan: `${kolom} kolom terbaca dari chat, tapi gagal dikirim ke Tetra Ops (lihat log bot)` };
   return { ok: true, pesan: `${kolom} kolom terisi${b.lengkap ? ', data wajib lengkap' : ''}` };
 }
 // JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
