@@ -26,8 +26,11 @@ const kasus = async (nama, fn) => { try { await fn(); hasil.push(['LOLOS', nama]
 
 (async () => {
   await kasus('bukti klien → draft client_only dengan gambar & isian cs-wa; nominal tak terbaca = null (bukan 0)', async () => {
-    await bb.dariKlien(J, pesan('A1'), { nominal: 700000, nama_pengirim: 'AGRET ANGGRAINI', bank_tujuan: 'BCA 0954965224', confidence: 0.93 }, B64);
+    await bb.dariKlien(J, pesan('A1'), { nominal: 700000, nama_pengirim: 'AGRET ANGGRAINI', bank_tujuan: 'BCA 0954965224', confidence: 0.93, waktu_transfer: '2026-11-19T08:29' }, B64);
     const b = kiriman.at(-1).b;
+    // Tetra Ops menolak waktu tanpa zona (400): WIB ditandai +07:00
+    assert.strictEqual(b.waktu_transfer, '2026-11-19T08:29:00+07:00');
+    assert.match(b.waktu_pesan, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
     assert.strictEqual(kiriman.at(-1).p, '/api/bot/pembayaran/draft');
     assert.deepStrictEqual([b.pesan_id_wa, b.sumber, b.auto_confirm, b.nominal, b.nama_pengirim, b.client_wa, b.gambar],
       ['A1', 'client_only', false, 700000, 'AGRET ANGGRAINI', '6281298116793', B64]);

@@ -52,13 +52,19 @@ async function dariKlien(jid, msg, bukti, gambarB64) {
   fs.writeFileSync(gambar, Buffer.from(gambarB64, 'base64'), { mode: 0o600 });
   const b = bukti || {};
   const angka = (x) => (Number.isFinite(Number(x)) && Number(x) > 0 ? Math.round(Number(x)) : null); // tak terbaca = null, bukan 0
+  // Tetra Ops menolak waktu tanpa zona (400). cs-wa menulis "YYYY-MM-DDTHH:MM" WIB → tambahkan +07:00; bentuk lain = null.
+  const wib = (s) => {
+    const m = String(s || '').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(:\d{2})?(Z|[+-]\d{2}:\d{2})?$/);
+    return m ? `${m[1]}T${m[2]}${m[3] || ':00'}${m[4] || '+07:00'}` : null;
+  };
+  const isoWib = (ms) => `${new Date(ms + 7 * 3600e3).toISOString().slice(0, 19)}+07:00`;
   semua[id] = {
     jid, t: Date.now(), gambar,
     body: {
       pesan_id_wa: id, wa_jid: jid, client_wa: nomorDari(jid), nama_klien: msg.pushName || null, invoice_no: null,
       nominal: angka(b.nominal), nama_pengirim: b.nama_pengirim || null, bank_pengirim: b.bank_pengirim || null,
-      bank_tujuan: b.bank_tujuan || null, waktu_transfer: b.waktu_transfer || null,
-      waktu_pesan: new Date((Number(msg.messageTimestamp) || Date.now() / 1000) * 1000).toISOString(),
+      bank_tujuan: b.bank_tujuan || null, waktu_transfer: wib(b.waktu_transfer),
+      waktu_pesan: isoWib((Number(msg.messageTimestamp) || Date.now() / 1000) * 1000),
       confidence: Number.isFinite(Number(b.confidence)) ? Number(b.confidence) : null, teks_mentah: b.teks_mentah || null,
       sumber: 'client_only', auto_confirm: false, gambar_mime: msg.message?.imageMessage?.mimetype || 'image/jpeg',
     },
