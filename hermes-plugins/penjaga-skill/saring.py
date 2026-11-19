@@ -127,3 +127,50 @@ def baris_baru(baru: str, lama: str = "") -> list[str]:
 
 def periksa(baru: str, lama: str, faq: set[int], kutipan: Kutipan | None, faq_teks: str = "") -> list[tuple[str, list[str]]]:
     return [(b, m) for b in baris_baru(baru, lama) if (m := masalah_baris(b, faq, kutipan, faq_teks))]
+
+
+# ---------------------------------------------------------------- buku resmi (FAQ Klien)
+# SOUL: "FAQ hanya boleh diubah atas persetujuan Rama". Penjaga tidak bisa bertanya, jadi buktinya diambil dari catatan usulan:
+# hanya teks yang memang tertulis di usulan berstatus disetujui/diterapkan (cs-mintet-usulan.md) yang boleh masuk FAQ.
+RE_USULAN = re.compile(r"^##\s*\d+\.")
+RE_USULAN_SETUJU = re.compile(r"status:\s*(disetujui|diterapkan)", re.I)
+
+
+def usulan_disetujui(teks: str) -> str:
+    """Gabungan isi usulan yang statusnya disetujui/diterapkan (dinormalkan untuk pencocokan kutipan)."""
+    blok, simpan = [], []
+    for baris in str(teks).splitlines():
+        if RE_USULAN.match(baris):
+            if blok and RE_USULAN_SETUJU.search(blok[0]):
+                simpan.append("\n".join(blok))
+            blok = [baris]
+        else:
+            blok.append(baris)
+    if blok and RE_USULAN_SETUJU.search(blok[0]):
+        simpan.append("\n".join(blok))
+    return normal("\n".join(simpan))
+
+
+def terkutip(baris: str, blob: str) -> bool:
+    """Baris (tanpa penanda daftar/tebal) tertulis di blob usulan disetujui: utuh, atau potongan 120/80/60/40 huruf pertama/akhir."""
+    b = normal(re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", str(baris))).strip("* ")
+    if not b:
+        return True
+    if b in blob:
+        return True
+    for n in (120, 80, 60, 40):
+        if len(b) >= n and (b[:n] in blob or b[-n:] in blob):
+            return True
+    return False
+
+
+def masalah_setuju(baru: str, lama: str, blob: str, penuh: bool = True) -> list[tuple[str, list[str]]]:
+    """Saringan buku resmi (faq-tetra / docs/FAQ-KLIEN.md): setiap baris yang DITAMBAHKAN harus tertulis di usulan yang sudah
+    disetujui Rama, dan isi aturan lama tidak boleh hilang tanpa tambahan pengganti (hapus aturan = butuh usulan juga).
+    penuh=False: baru hanya potongan (patch yang tidak bisa direkonstruksi) → pemeriksaan penghapusan dilewati."""
+    out = [(b, ["teks tidak ada di usulan yang sudah disetujui Rama"]) for b in baris_baru(baru, lama) if not terkutip(b, blob)]
+    if penuh and not baris_baru(baru, lama):
+        hilang = [b for b in str(lama).splitlines() if b.strip() and b.strip() not in {x.strip() for x in str(baru).splitlines()}]
+        if hilang:
+            out.append((hilang[0], [f"{len(hilang)} baris aturan dihapus tanpa usulan yang disetujui Rama"]))
+    return out

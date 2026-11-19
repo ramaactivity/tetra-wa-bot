@@ -1,6 +1,6 @@
 name: penjaga-skill
-version: "1.0.0"
-description: "Saringan isi skill cs-mintet-pelajaran sebelum ditulis (nominal di luar FAQ, persen, rekening/nomor, link, injeksi, keringanan, kutipan admin palsu). Rekomendasi Hermes t_e35d4cc7."
+version: "1.1.0"
+description: "Saringan isi skill yang dibaca cs-wa sebelum ditulis: cs-mintet-pelajaran (blok penuh), faq-tetra + docs/FAQ-KLIEN.md (blok kecuali teks dari usulan yang disetujui Rama), form-booking/cara-balas-wa/tugas-sistem-cs/mode-kontak-khusus/strategi-cs (saring nominal di luar FAQ, persen, rekening/nomor, link, injeksi, keringanan, kutipan admin palsu). Jalur: skill_manage, write_file, patch, terminal (daftar-putih baca-saja), execute_code/browser_exec yang menyebut skill. Rekomendasi Hermes t_e35d4cc7 + t_2642f0a1."
 author: "Tim support Claude untuk Hermes Rama"
 provides_hooks:
   - pre_tool_call
