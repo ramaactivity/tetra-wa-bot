@@ -489,8 +489,23 @@ def lampiran_kurang(teks: str, g: "Giliran") -> list[str]:
 RE_SLOP_FU = re.compile(r"sekadar mengingatkan|keduluan|amankan|sudah (aku|kami) (koordinasi|cek|catat|teruskan)|masih (aman|tersedia|kosong)|masih tertarik", re.I)
 RE_FOLLOWUP = re.compile(r"follow.?up", re.I)
 RE_DESAK = re.compile(r"\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|potongan|diskon|harga\s+khusus", re.I)
+# Lead ikut dijaga (audit Bruno 19 Nov): "harga khusus"/komisi lolos ke lead karena penjaga lama hanya untuk klien/vendor.
+# "potongan langsung" = skema rekanan resmi, bukan desakan -> dikecualikan.
+RE_DESAK_LEAD = re.compile(r"\bDP\b|\bkunci\b|dikunci|amankan|booking\.tetraphoto|rekening|bentrok|keburu|sebelum\s+diambil|"
+                           r"potongan(?!\s+langsung)|diskon|harga\s+khusus", re.I)
+# Klaim file yang belum tentu terkirim (Violetta 19 Nov: "pricelist yang kemarin sudah dilihat", "skema yang kemarin aku kirim").
+# Boleh HANYA kalau baris FAKTA "FILE TERKIRIM" menyebut file itu beserta tanggalnya. Node versi lama tidak mengirim baris itu -> tertahan.
+RE_KLAIM_KIRIM = re.compile(
+    r"\b(pricelist|price ?list|daftar harga|skema|profil|pdf|file|materi|katalog|catalog)\b[^.?!\n]{0,40}"
+    r"\b(kemarin|sudah|udah|telah|waktu itu|beberapa waktu lalu|dulu)\b[^.?!\n]{0,30}"
+    r"\b((?:di)?kirim(?:kan|in)?|terkirim|masuk|dilihat|dibaca|diterima)\b", re.I)
+RE_FILE_TERKIRIM = re.compile(r"FILE TERKIRIM:([^\n]*)", re.I)
+# Follow-up = melanjutkan obrolan; perkenalan ulang dilarang (Rose Water 19 Nov: "Halo Kak, aku Rama dari Tetra Photobooth").
+RE_PERKENALAN = re.compile(r"\b(?:aku|saya)\s+(?:rama|dari\s+tetra)\b|\bnama\s+(?:aku|saya)\s+rama\b|\bkenalin,?\s+(?:aku|saya)\b", re.I)
 TOPIK_TANYA = {"tanggal": r"tanggal|tgl|kapan", "jam": r"jam\s+berapa|mulai\s+jam|jam\s+(mulai|acara|selesai)",
-               "lokasi": r"lokasi|venue|di\s?mana|daerah|kota", "tamu": r"tamu|undangan|berapa\s+orang", "format": r"2R|4R|polaroid|format"}
+               "lokasi": r"lokasi|venue|di\s?mana|daerah|kota", "tamu": r"tamu|undangan|berapa\s+orang", "format": r"2R|4R|polaroid|format",
+               # Lead: "boleh minta kontak PIC vendor-nya?" diulang tiap susulan (audit Bruno 19 Nov).
+               "pic": r"\bpic\b|kontak\s+(yang\s+)?(vendor|kerja\s?sama|marketing)|nomor\s+(wa|whatsapp)|e-?mail"}
 
 
 def bentuk_salah(teks: str) -> bool:
@@ -502,6 +517,40 @@ def bentuk_salah(teks: str) -> bool:
 def ulang_tanya(lama: str, baru: str) -> bool:
     q = " ".join(re.findall(r"[^.!?\n]*\?", str(baru or "")))
     return bool(lama and q) and any(re.search(rx, lama, re.I) and re.search(rx, q, re.I) for rx in TOPIK_TANYA.values())
+
+
+def _kanon_file(kata: str) -> str:
+    """'price list'/'daftar harga' -> pricelist, 'catalog' -> katalog (nama file yang sama di FAKTA & di teks)."""
+    k = normal(kata).replace("price list", "pricelist").replace("daftar harga", "pricelist")
+    return k.replace("catalog", "katalog")
+
+
+def file_terkirim(fakta: str) -> set[str]:
+    """Nama file di baris FAKTA 'FILE TERKIRIM: pricelist 7 Okt 2026 | skema –' yang benar-benar terkirim (ada tanggalnya)."""
+    m = RE_FILE_TERKIRIM.search(str(fakta))
+    if not m:
+        return set()
+    out = set()
+    for bagian in m.group(1).split("|"):
+        b = normal(bagian)
+        if not re.search(r"\d", b):
+            continue
+        label = re.sub(r"\d.*$", "", b).strip()
+        if label:
+            out.add(_kanon_file(label.split()[0]))
+    return out
+
+
+def klaim_kirim(teks: str, g: "Giliran") -> str:
+    """Klaim 'sudah/kemarin aku kirim file …' yang tidak didukung FAKTA FILE TERKIRIM. Kembalikan kutipannya."""
+    isi = isi_klien(teks)
+    terkirim = file_terkirim(g.fakta)
+    for m in RE_KLAIM_KIRIM.finditer(isi):
+        kata = _kanon_file(m.group(1) or "")
+        if kata and kata in terkirim:
+            continue
+        return m.group(0)
+    return ""
 
 
 def periksa_followup(teks: str, g: "Giliran", frasa: list[str], robot: list[str]) -> list[tuple[str, str, str]]:
@@ -521,13 +570,22 @@ def periksa_followup(teks: str, g: "Giliran", frasa: list[str], robot: list[str]
     lain = [p for p in penanda(teks) if not p.startswith("KIRIM") and p != "DIAM"]
     if lain:
         out.append(("penanda_followup", "tahan", "follow-up tidak memakai penanda selain [KIRIM: …]; kalau perlu admin, balas persis [DIAM]"))
-    if g.followup in ("klien", "vendor"):
-        if not g.tanya_booking and RE_DESAK.search(isi):
+    if g.followup in ("klien", "vendor", "lead"):
+        desak = RE_DESAK_LEAD if g.followup == "lead" else RE_DESAK
+        if not g.tanya_booking and desak.search(isi):
             out.append(("desak", "tahan", "dia belum pernah bertanya soal booking/DP: follow-up jangan mendorong DP, mengunci tanggal, rekening, atau diskon"))
         if ulang_tanya(g.tanya_akhir, isi):
             out.append(("ulang_tanya", "tahan", f'jangan ulang topik pertanyaan terakhir yang belum dia jawab ("{g.tanya_akhir}"); bawa hal lain yang berguna buat acaranya'))
-    if g.followup == "klien" and bentuk_salah(teks):
-        out.append(("bentuk", "tahan", "follow-up calon klien maks 2 kalimat lalu SATU pertanyaan penutup"))
+    if g.followup in ("klien", "lead") and bentuk_salah(teks):
+        out.append(("bentuk", "tahan", "follow-up maks 3 kalimat lalu SATU pertanyaan penutup; lead yang tidak perlu dikirimi pesan → persis [DIAM]"))
+    klaim = klaim_kirim(teks, g)
+    if klaim:
+        out.append(("klaim_kirim", "tahan", f'kamu mengaku pernah mengirim file ("{klaim}") padahal FAKTA FILE TERKIRIM tidak menyebutnya '
+                    "terkirim: sebut file hanya kalau faktanya ada; kalau memang perlu mengirim sekarang, pakai [KIRIM: …], atau balas [DIAM]"))
+    p = RE_PERKENALAN.search(isi)
+    if p:
+        out.append(("perkenalan", "tahan", f'follow-up = melanjutkan obrolan: jangan perkenalkan diri ulang ("{p.group(0)}") dan jangan '
+                    "menjelaskan lagi siapa Tetra"))
     return out
 
 

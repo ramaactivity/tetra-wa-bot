@@ -1,5 +1,9 @@
 # Strategi AI Sales & CS — Tetra WA Bot
 
+> **ARSIP (19 Nov 2026).** Dokumen era Claude. Tidak dibaca kode maupun agent mana pun — aturan yang berlaku sekarang
+> ada di `hermes-skills/` (CS Mintet) dan di skill profil `sales` (Bruno: `prospek-korporat`, `bruno-pelajaran`).
+> Simpan hanya sebagai jejak keputusan; jangan dipakai sebagai acuan.
+
 Tujuan: ubah bot dari **order-taker yang pukul rata template** menjadi **consultative seller** —
 membaca konteks, paham siapa yang ngobrol, dan menggiring percakapan sampai deal tanpa
 terasa seperti robot.

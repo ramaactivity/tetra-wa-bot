@@ -249,7 +249,50 @@ def _():
     assert t == "[DIAM]" and aksi and aksi[0].startswith("diam:"), (t, aksi)
     gl = P.Giliran(giliran("TUGAS FOLLOW-UP LEAD (lanjut): Hotel X, calon rekanan — ikuti skill mode-kontak-khusus.", FU_FAKTA))
     assert gl.followup == "lead" and "slop_followup" in kode(P.periksa("Halo Kak, masih tertarik kerja sama?", gl, FRASA, ROBOT))
-    assert "bentuk" not in kode(P.periksa("Halo Kak, ini profil kerja sama rekanan kami ya.", gl, FRASA, ROBOT))
+    # audit 19 Nov: bentuk juga berlaku untuk lead (tanpa pertanyaan penutup = tidak dikirim)
+    assert "bentuk" in kode(P.periksa("Halo Kak, ini profil kerja sama rekanan kami ya.", gl, FRASA, ROBOT))
+
+
+FU_LEAD = ('KONTEKS LEAD (fakta dari bot WA):\n'
+           'LEAD: Pindy Organizer | segmen: eo_wo | nomor: 6281283320730\n'
+           'BALASAN MANUSIA: belum pernah\n'
+           'BALASAN OTOMATIS: 5x (terakhir 19 Nov 10:41, sambutan "tidak di tempat")\n'
+           'PESAN KITA: 4x (terakhir 19 Nov 10:41) | belum pernah dibalas manusia\n'
+           'FILE TERKIRIM: pricelist – | skema – | profil rekanan – | katalog –\n'
+           'PIC: belum ada (nama "Merry" hanya di tanda tangan sambutan otomatis)\n'
+           'KITA MINTA PIC: ya (16 Okt) | belum\n'
+           'LEAD MINTA WAKTU: tidak\n'
+           'STATUS TETRA OPS: disapa | catatan: -\n'
+           'pertanyaan terakhir kita yang belum dia jawab: "Boleh minta kontak PIC vendor-nya Kak?"\n'
+           'dia BELUM pernah bertanya soal booking/DP.')
+FU_LEAD_PESAN = 'TUGAS FOLLOW-UP LEAD: tulis SATU pesan lanjutan untuk lead ini, atau [DIAM].'
+
+
+@kasus("audit Bruno 19 Nov (4.3): lead ikut dijaga, klaim file, perkenalan ulang, potongan langsung sah")
+def _():
+    g = P.Giliran(giliran(FU_LEAD_PESAN, FU_LEAD))
+    assert g.followup == "lead" and P.file_terkirim(g.fakta) == set(), P.file_terkirim(g.fakta)
+    k = lambda t: kode(P.periksa(t, g, FRASA, ROBOT))
+    # RE_DESAK berlaku untuk lead (dulu hanya klien/vendor)
+    assert "desak" in k("Kak, tanggalnya bisa dikunci pakai DP sekarang biar aman.")
+    assert "desak" in k("Kak, harga khusus buat kerja sama ini masih bisa kita obrolin kok. Mau?")
+    assert "desak" in k("Kak, aku kasih diskon kalau deal minggu ini. Lanjut?")
+    assert "desak" not in k("Kak, skema rekanan kami bisa komisi atau potongan langsung per acara. Mau aku kirim detailnya ke tim Kakak?")
+    assert "ulang_tanya" in k("Kak, jadi boleh minta kontak PIC vendor-nya?")
+    # klaim file yang tidak didukung FAKTA FILE TERKIRIM
+    assert "klaim_kirim" in k("Kak, pricelist Tetra yang kemarin sudah dilihat timnya ya, ada yang mau ditanyakan?")
+    assert "klaim_kirim" in k("Kak, skema yang kemarin aku kirim sudah masuk semua kan?")
+    assert "klaim_kirim" not in k("Kak, soal kerja sama, tim mana yang pegang vendor di sana? Boleh minta kontak PIC-nya?")
+    # FAKTA menyebut file terkirim + tanggal -> klaim sah
+    gf = P.Giliran(giliran(FU_LEAD_PESAN, FU_LEAD.replace("FILE TERKIRIM: pricelist –", "FILE TERKIRIM: pricelist 7 Okt 2026")))
+    assert P.file_terkirim(gf.fakta) == {"pricelist"}, P.file_terkirim(gf.fakta)
+    assert "klaim_kirim" not in kode(P.periksa("Kak, pricelist yang kemarin aku kirim masih kepakai? Ada yang mau ditanyakan?", gf, FRASA, ROBOT))
+    assert "klaim_kirim" in kode(P.periksa("Kak, skema yang kemarin aku kirim masih dipakai? Ada yang kurang?", gf, FRASA, ROBOT))
+    # perkenalan ulang dilarang di mode follow-up
+    assert "perkenalan" in k("Halo Kak, aku Rama dari Tetra Photobooth. Boleh minta kontak PIC-nya?")
+    assert "perkenalan" not in k("Halo Kak, soal kerja sama, tim mana yang pegang vendor di sana? Boleh minta kontak PIC-nya?")
+    t, aksi = P.selesaikan("Halo Kak, aku Rama dari Tetra Photobooth. Boleh minta kontak PIC-nya?", g, FRASA, ROBOT)
+    assert t == "[DIAM]" and aksi and "diam:" in aksi[0] and "perkenalan" in aksi[0], (t, aksi)
 
 
 @kasus("[DIAM] / penanda saja tidak diperiksa, tidak ditulis ulang (temuan Hermes t_231fdd55)")
