@@ -239,6 +239,9 @@ async function sinkronOps(jid) {
   const data = {};
   for (const k of [...FIELD.map(([x]) => x), 'tanggal_iso']) if (b.data[k]) data[k] = b.data[k];
   if (!data.jenis && b.jenis) data.jenis = b.jenis;
+  // Tetra Ops menolak data.catatan > 300 karakter (zod too_big → HTTP 400) dan SELURUH sinkron gagal — Yessi 19 Nov:
+  // catatan 416 karakter membuat Booking Masuk tidak pernah terisi. Potong di 300, tandai dengan elipsis.
+  if (data.catatan && data.catatan.length > 300) data.catatan = `${data.catatan.slice(0, 299).trimEnd()}…`;
   const body = {
     external_id: `wa:${jid}:${b.mulai}`,
     wa_jid: jid,
