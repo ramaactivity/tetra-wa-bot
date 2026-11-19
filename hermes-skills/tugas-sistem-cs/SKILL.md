@@ -23,6 +23,15 @@ Isi data booking photobooth dari chat WhatsApp. Keluaran HANYA objek JSON tanpa 
 BOLEH" di data tugas.
 - Isi hanya kolom yang dinyatakan jelas oleh klien, atau yang disepakati klien di chat (paket/jam yang ia setujui). Jangan
   menebak; kalau tidak ada, jangan tulis kuncinya. Nilai ringkas apa adanya. Klien mengoreksi nilai lama → pakai nilai terbaru.
+- CATATAN LAMA / ringkasan chat sebelumnya = FAKTA yang sudah dicatat (bukan catatanmu sendiri): boleh dan WAJIB dipakai mengisi
+  kolom (tanggal, lokasi, jenis, nama acara), jangan dilewatkan. Kalau klien mengoreksinya di chat sesudah catatan dibuat, koreksi
+  klien yang dipakai.
+- jenis: salah satu dari Wedding, Lamaran, Keluarga (ulang tahun/khitan/aqiqah/tasyakuran), Korporat, Sekolah/Kampus/Wisuda,
+  Keagamaan/Komunitas (Natal/Paskah/pengajian/arisan), Lainnya. "Acara Natal" → Keagamaan/Komunitas; "ultah Arka ke-5" → Keluarga.
+- lokasi: daerah yang disebut klien juga lokasi ("di daerah Grand Wisata" → "Grand Wisata"); jangan kosongkan hanya karena tidak
+  ada nama gedung.
+- instansi, logo, tema, pose: isi kalau kunci itu ada di daftar KUNCI YANG BOLEH dan nilainya disebut klien (logo cukup "ada" atau
+  nama file; pose = jumlah pose/layout).
 - paket: SELALU sertakan nama layanannya (Photobooth, Videobooth 360, Photo Stage, Magazine Box, atau gabungannya) + durasi,
   mis. "Photobooth Unlimited 3 jam"; chat yang membahas photobooth tapi hanya menulis "unlimited 3 jam" → "Photobooth Unlimited 3 jam".
 - jumlah_unit: angka saja (mis. "2"), hanya kalau klien menyebut jumlah booth/unit/spot ("2 booth", "dua unit", "2 spot",
