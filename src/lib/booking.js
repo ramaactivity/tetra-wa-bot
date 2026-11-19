@@ -167,7 +167,8 @@ function teksForm(b, pembuka) {
   return [
     ...(pembuka ? [pembuka, ''] : []),
     // Wajib Hermes (Rama 16 Nov): permintaan mengisi form sudah ada di pembuka tulisan Hermes.
-    ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Kak, tolong dibantu untuk melengkapi form berikut yaa.', '']),
+    // Kalimat cadangan sama dengan skill form-booking (Rama 19 Nov: bukan "langsung aja"/"tolong dibantu"; temuan Hermes t_91ca1ca3).
+    ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Boleh dibantu untuk dilengkapi formnya Kak', '']),
     badanForm(b),
   ].join('\n');
 }
