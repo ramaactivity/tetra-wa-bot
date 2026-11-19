@@ -429,6 +429,8 @@ async function perbaruiBookingDariChat(jid) {
   if (!perbaruiBookingAktif) return { ok: false, pesan: 'bot belum siap' };
   if (!(await perbaruiBookingAktif(jid, null, false))) return { ok: false, pesan: 'gagal membaca chat (lihat log bot)' };
   const b = booking.get(jid);
+  // Jangan bilang berhasil kalau Tetra Ops menolak (sinkronOps mengulang kiriman yang gagal; sudah sama = langsung true).
+  if (!(await booking.sinkronOps(jid))) return { ok: false, pesan: `${Object.keys(b.data).length} kolom terbaca dari chat, tapi gagal dikirim ke Tetra Ops (lihat log bot)` };
   return { ok: true, pesan: `${Object.keys(b.data).length} kolom terisi${b.lengkap ? ', data wajib lengkap' : ''}` };
 }
 // JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
