@@ -20,6 +20,7 @@ const aiLib = require('../lib/ai');
 const { postOps } = require('../lib/availability');
 const crypto = require('crypto');
 const booking = require('../lib/booking');
+const buktiBayar = require('../lib/buktiBayar');
 const prospekWa = require('../lib/prospekWa');
 const timWa = require('../lib/timWa');
 const portal = require('../lib/portal');
@@ -388,6 +389,8 @@ const RE_BAYAR = /\b(dp|down ?payment|transfer|tf|trf|bukti|bayar|pembayaran|lun
 const RE_DOK_BAYAR = /bukti|transfer|\btf\b|struk|mutasi|kwitansi|kuitansi|invoice|pembayaran|receipt/i;
 // Admin mengonfirmasi DP manual → mulai tahap booking juga.
 const RE_DP_ADMIN = /\b(dp|down ?payment|pembayaran|transfer)(nya)?\b[^\n]{0,40}\b(diterima|terima|masuk|terverifikasi|dikonfirmasi|konfirmasi|aman)\b/i;
+// Konfirmasi pembayaran apa pun dari admin (DP atau pelunasan) → draft bukti chat ini disetujui (buktiBayar.konfirmasiAdmin).
+const RE_BAYAR_ADMIN = /\b(dp|down ?payment|pembayaran|transfer|pelunasan|lunas)(nya)?\b[^\n]{0,40}\b(diterima|terima|masuk|terverifikasi|dikonfirmasi|konfirmasi|aman)\b/i;
 
 // ── Chat lama dari HP (history sync on-demand) ──────────────────────────────
 // Bot hanya melihat pesan sejak ia tertaut. Supaya jawabannya berdasar seluruh
@@ -513,6 +516,8 @@ function registerMessageHandler(sock) {
       // tahu apa yang sudah admin janjikan dan bisa bertentangan.
       const teksAdmin = teksPesan(msg.message) || '[pesan non-teks]';
       tambahRiwayat(jid, 'assistant', `(admin) ${teksAdmin}`);
+      // Nomor WA Tetra hanya dipegang Rama (19 Nov): konfirmasi bayar di chat = persetujuan → draft bukti chat ini naik (gerbang di Tetra Ops).
+      if (RE_BAYAR_ADMIN.test(teksAdmin)) buktiBayar.konfirmasiAdmin(jid).catch((e) => console.error('[bukti-bayar] konfirmasi gagal:', e.message));
       await supa.upsertPause(jid, Date.now() + adminPauseMs, 'admin');
       if (!booking.get(jid) && RE_DP_ADMIN.test(teksAdmin)) {
         // Fakta, bukan perintah (Hermes t_8843a9c1 A3.4): dulu "Admin sudah mengonfirmasi DP…" → cs-wa mengulang "DPnya sudah masuk"
@@ -830,16 +835,19 @@ function registerMessageHandler(sock) {
         const gbr = media.find((m) => m.message?.imageMessage);
         let gambarB64 = null;
         let lihat = null;
-        if (gbr && !booking.aktif(jid)) {
+        const bayarTeks = RE_BAYAR.test(t) || getRiwayat(jid).slice(-6).some((p) => p.role === 'user' && RE_BAYAR.test(p.content));
+        // Tahap booking: gambar juga dibaca kalau obrolannya soal bayar (bukti pelunasan → draft pembayaran Tetra Ops).
+        if (gbr && (!booking.aktif(jid) || bayarTeks)) {
           const buf = await downloadMediaMessage(gbr, 'buffer', {}).catch((e) => { console.error('[gambar] unduh gagal:', e.message); return null; });
           if (buf) {
             gambarB64 = buf.toString('base64');
             lihat = await ekstrakGaleri(konteksGaleri(jid, originalText), gambarB64).catch((e) => { console.error('[gambar] baca gagal:', e.message); return null; });
           }
         }
+        // Bukti transfer → draft pembayaran di Tetra Ops (alur DP Rama 19 Nov). Tidak menunggu: balasan ke klien jangan tertahan.
+        if (lihat?.bukti_bayar && gambarB64) buktiBayar.dariKlien(jid, gbr, lihat.bukti, gambarB64).catch((e) => console.error('[bukti-bayar] gagal:', e.message));
         const namaDok = media.filter((m) => !m.message?.imageMessage).map((m) => teksPesan(m.message)).join(' ');
-        const soalBayar = RE_BAYAR.test(t) || !!lihat?.bukti_bayar || RE_DOK_BAYAR.test(namaDok) ||
-          getRiwayat(jid).slice(-6).some((p) => p.role === 'user' && RE_BAYAR.test(p.content));
+        const soalBayar = bayarTeks || !!lihat?.bukti_bayar || RE_DOK_BAYAR.test(namaDok);
         // Tahap booking: file (desain pilihan, grand design, bukti pelunasan) diteruskan
         // ke admin, bot tetap melayani.
         if (booking.aktif(jid) || soalBayar) {

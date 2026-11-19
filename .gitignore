@@ -15,3 +15,5 @@ PAIRING-CODE.txt
 data/*.jsonl
 data/kutipan-admin-ok.json
 data/eksperimen.jsonl
+# gambar bukti transfer klien (data finansial) — sementara sampai terkirim ke Tetra Ops
+data/bukti-bayar/
