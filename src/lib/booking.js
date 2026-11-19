@@ -254,17 +254,18 @@ async function sinkronOps(jid) {
     data,
   };
   const kunci = JSON.stringify(body);
-  if (b.disinkron === kunci) return;
+  if (b.disinkron === kunci) return true;
   const r = await postOps('/api/bot/booking', body);
   if (!r.ok) {
     console.error(`[booking→ops] ${jid.split('@')[0]}: HTTP ${r.status} ${JSON.stringify(r.json).slice(0, 200)}`);
-    return;
+    return false;
   }
   const url = String(r.json.url || '');
   b.opsUrl = url.startsWith('/') ? opsBase() + url : url || b.opsUrl;
   b.disinkron = kunci;
   simpan();
   console.log(`[booking→ops] ${jid.split('@')[0]}: ${r.json.status || 'ok'} ${b.opsUrl || ''}`);
+  return true;
 }
 
 // Isian dari dokumen resmi Tetra Ops (quotation/invoice klien ini) sebelum form dikirim — Hermes t_8843a9c1 A1.2/A1.3, GET

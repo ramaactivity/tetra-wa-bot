@@ -424,9 +424,12 @@ let perbaruiBookingAktif = null; // diisi registerMessageHandler (butuh sock)
 async function perbaruiBookingDariChat(jid) {
   if (!jid || !booking.get(jid)) return { ok: false, pesan: `tidak ada booking di bot untuk ${jid || '(jid kosong)'}` };
   if (!perbaruiBookingAktif) return { ok: false, pesan: 'bot belum siap' };
-  if (!(await perbaruiBookingAktif(jid, null, false))) return { ok: false, pesan: 'gagal membaca chat (lihat log bot)' };
+  const hasil = await perbaruiBookingAktif(jid, null, false);
+  if (!hasil) return { ok: false, pesan: 'gagal membaca chat (lihat log bot)' };
   const b = booking.get(jid);
-  return { ok: true, pesan: `${Object.keys(b.data).length} kolom terisi${b.lengkap ? ', data wajib lengkap' : ''}` };
+  const kolom = Object.keys(b.data).length;
+  if (!hasil.sinkron) return { ok: false, pesan: `${kolom} kolom terbaca dari chat, TAPI sinkron ke Booking Masuk gagal (lihat log bot)` };
+  return { ok: true, pesan: `${kolom} kolom terisi${b.lengkap ? ', data wajib lengkap' : ''}` };
 }
 // JID akun Tetra sendiri (LID & nomor): salinan pesan dari HP/WA Web admin yang gagal
 // dibuka itu urusan sesi perangkat sendiri, bukan pesan klien yang terlewat.
@@ -554,10 +557,12 @@ function registerMessageHandler(sock) {
       if (teksBaru) pesan.push({ role: 'user', content: teksBaru });
       // Ringkasan = fakta klien dari chat lama, blok terpisah (dulu bubble TETRA "CATATAN KLIEN:" → dianggap catatan bot, form Yessi kosong).
       booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD, getRingkasan(jid)));
-      await booking.sinkronOps(jid);
+      const sinkron = await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
       if (konfirmasi) await booking.kirimKonfirmasi(sock, jid, pembukaRekap(jid));
-      return true;
+      // sinkron=false → ekstraksi jalan tapi Tetra Ops menolak/gagal; tombol "Perbarui dari chat" harus lapor gagal, bukan
+      // "N kolom terisi" (Yessi 19 Nov 10:37: catatan 416 karakter ditolak 400 tapi perintah dilaporkan done).
+      return { sinkron: sinkron !== false };
     } catch (e) {
       console.error(`[booking] ${jid.split('@')[0]}: gagal perbarui data:`, e.message);
       return false;
