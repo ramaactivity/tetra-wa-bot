@@ -70,7 +70,8 @@ async function balasanProspek(sock, msg) {
   return nomor && baca().pernah.includes(nomor) ? nomor : null;
 }
 // Pesan sambutan otomatis akun bisnis (bukan manusia): dicatat, status prospek tidak berubah.
-const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
+// 19 Nov: sambutan Agave Hall "list plan ini mohon dibantu untuk diisi dulu ya: [WEDDING / BIRTHDAY …" lolos → dianggap balasan manusia.
+const RE_OTOMATIS = /thank you for (contacting|reaching)|terima ?kasih (sudah|telah|atas) (menghubungi|pesan)|we will (reply|get back)|selamat datang di|wilujeng sumping|(mohon|silakan) (kirim|isi)\b.{0,40}(tanggal|nama|data)|mohon dibantu (untuk )?(di)?isi|please let us know how we can|jam (operasional|kerja) kami|sedang (tidak|di luar)/i;
 const otomatis = (teks) => RE_OTOMATIS.test(String(teks || ''));
 
 // Lead yang membalas sapaan sales (Bruno). Segmen dari tabel prospek Tetra Ops (paket perbaikan Bruno, Rama 22 Okt):

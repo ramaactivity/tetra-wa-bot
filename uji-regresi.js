@@ -93,6 +93,16 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
   await kasus('pricelist: gambar dikirim tanpa caption (teks & gambar terpisah, Rama 12 & 18 Nov)', () => {
     assert.strictEqual(require('./src/lib/pricelist').CAPTION_GAMBAR, '');
   });
+  await kasus('follow-up lead: susulan dihentikan & maks 3 pesan tak dibalas manusia; sambutan otomatis bukan balasan (Rama 19 Nov)', () => {
+    const fe = require('./src/lib/followupEngine');
+    assert.strictEqual(fe._SUSULAN_LEAD, false, 'susulan lead dinyalakan lagi hanya atas izin Rama');
+    const K = (c) => ({ role: 'assistant', content: c }), L = (c) => ({ role: 'user', content: c });
+    const oto = 'Hello! Thank you for contacting Maxima Production. Please let us know how we can help you.';
+    const agave = 'Sebelumnya, list plan ini mohon dibantu untuk diisi dulu ya: [WEDDING / BIRTHDAY]';
+    // sapaan + 2 susulan = 3 pesan tak dibalas → berhenti; sambutan otomatis di sela-selanya tidak mereset hitungan
+    assert.strictEqual(fe._takDibalas([K('sapaan'), L(oto), K('fu1'), L(agave), K('fu2')]), 3, 'sambutan otomatis tidak mereset hitungan');
+    assert.strictEqual(fe._takDibalas([K('sapaan'), L('boleh kak, kirim PL nya'), K('ini PL'), K('(admin) siap kak')]), 1, 'balasan manusia mereset; pesan admin tidak dihitung');
+  });
   await kasus('data acara setelah DP: form lengkap langsung, bukan dicicil (Rama 11 Nov)', () => {
     const booking = require('./src/lib/booking');
     const f = booking.teksForm({ data: { tanggal: '22 November', paket: 'Unlimited 8 jam' }, jenis: 'wedding' }, '');

@@ -75,6 +75,21 @@ Bantu CS Tetra membaca pesan (dan gambar) dari kontak. Ada "GAMBAR: <path file>"
 - cetakan_photobooth: gambar adalah foto hasil cetak photobooth (strip/frame berisi foto dan nama acara). Bukti transfer,
   screenshot, desain = false.
 - bukti_bayar: gambar adalah bukti transfer/struk/mutasi/pembayaran. Selain itu false.
+- bukti_bayar true → tambahkan kunci `bukti` di JSON yang sama (bukti_bayar false → kunci itu TIDAK ditulis):
+  `"bukti":{"nominal":angka rupiah utuh tanpa titik/koma|null,"nama_pengirim":"…"|null,"bank_pengirim":"…"|null,"bank_tujuan":"nama bank dan
+  nomor tujuan seperti tertulis di bukti"|null,"waktu_transfer":"YYYY-MM-DDTHH:MM"|null,"confidence":0..1,"teks_mentah":"baris penting di bukti"}`
+  - nominal = uang yang MASUK ke saldo tujuan, bukan total yang diketik pengirim. Biaya admin/layanan transfer ditanggung pengirim: bukti yang
+    memisahkan uang pokok dan biaya admin → nominal hanya uang pokoknya.
+  - Isian yang tidak terbaca di gambar → null. Jangan menulis 0, jangan menebak dari sisa tagihan, harga paket, atau isi chat.
+  - nama_pengirim = nama pemilik dana persis seperti tertulis di bukti, walaupun bukan nama klien (sering tim keuangan atau pihak lain).
+    Jangan diganti dengan nama klien.
+  - bank_pengirim = bank asal transfer; bank_tujuan = bank penerima + nomor tujuan yang tercetak di bukti. Tulis apa adanya.
+  - waktu_transfer = tanggal dan jam transfer di bukti (WIB). Tidak tertulis → null; jangan pakai jam pesan WhatsApp.
+  - confidence = keyakinan isian di atas benar-benar terbaca di gambar, 0 sampai 1. Jangan dibesarkan: sistem memakai 0,8 ke atas sebagai
+    syarat persetujuan otomatis, jadi nilai tinggi hanya kalau nominal dan nama pengirim jelas di gambar.
+  - teks_mentah = baris-baris penting di bukti apa adanya (status transaksi, tanggal/jam, nominal, nama pengirim, bank tujuan), untuk dicek
+    ulang admin.
+  - Isian bukti hanya usulan ke admin; jangan mengarang isian yang tidak ada di gambar.
 - isi: satu kalimat apa isi gambarnya secara faktual (mis. "screenshot dashboard booking dengan pesan error", "foto backdrop
   bunga putih", "desain frame warna navy"). Tanpa gambar → "".
 - nama: nama orang/acara/perusahaan yang disebut di pesan atau tercetak di frame, HANYA kata namanya (buang "the wedding of",
