@@ -19,7 +19,7 @@ const fs = require('fs');
 const live = require('./liveConfig');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
-const { loadJson, saveJson, tambahRiwayat, getRiwayat, getRingkasan, getProspek, semuaProspek } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, getRiwayat, getRingkasan, getProspek, semuaProspek, nomorDari } = require('./store');
 const prospekWa = require('./prospekWa');
 const { kirimPricelist } = require('./pricelist');
 const { kirimTelegram } = require('./notify');
@@ -217,7 +217,8 @@ async function runFollowupCycle(sock) {
     const jamKlien = Math.round((now - (pesan.filter((p) => p.role === 'user').at(-1)?.t || now)) / 36e5);
     const panggilan = namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n')) || cleanName(last.name) || 'Kak';
     const leadContext = `Panggilan klien: ${panggilan}\n` +
-      `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pesan terakhir klien ${jamKlien} jam lalu (jangan tulis "tadi" kalau lebih dari 6 jam); pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
+      // N5 audit Bruno: aturan gaya ("jangan tulis 'tadi'…") pindah ke skill cara-balas-wa; Node hanya fakta waktu.
+      `FAKTA: pesan terakhir kita ${hariDiam} hari lalu; pesan terakhir klien ${jamKlien} jam lalu; pertanyaan terakhir kita yang belum dia jawab: "${tanyaAkhir || '-'}"; ` +
       `dia ${tanyaBooking ? 'SUDAH' : 'BELUM'} pernah bertanya soal booking/DP.\n` +
       (nilai ? `PENILAIAN (penilai follow-up Hermes): ${nilai.status || '-'} — ${nilai.alasan || '-'}\n` : '') +
       (ringkasan ? `CATATAN KLIEN (chat lama):\n${ringkasan}\n` : '') +
@@ -264,11 +265,9 @@ async function runFollowupCycle(sock) {
 }
 
 // ── Lead sales (venue/WO/korporat) yang membalas sapaan ─────────────────────
-// Keputusan Rama 7 Okt 2026: lead tidak boleh mati. (1) Balasan lead yang belum
-// terjawab (bot restart, dsb.) dijawab di sini. (2) Lead manusia yang diam setelah
-// kita jawab: SATU follow-up di hari kerja ke-3 sejak pesan terakhirnya (aturan follow-up lintas agent, Rama 22 Okt:
-// maks 1 susulan per kanal, tanpa pindah kanal).
-// (3) Hanya auto-reply (tak ada manusia): satu follow-up minta PIC setelah 2 hari kerja.
+// (1) Balasan lead manusia yang belum terjawab (bot restart, dsb.) dijawab di sini (Rama 7 Okt: lead tidak boleh mati).
+// (2) Susulan ke lead yang diam: DIMATIKAN sejak 19 Nov (SUSULAN_LEAD) sampai syarat audit Bruno t_951a932f §6 terpenuhi dan Rama
+//     setuju; kalau dinyalakan, Hermes yang memutuskan perlu-tidaknya dari blok FAKTA (maks 1 susulan per kanal ada di skill).
 // Percakapan yang dipegang admin (ada balasan admin sesudah pesan terakhir lead) dilewati.
 function hariKerja(dariMs, keMs) {
   let n = 0;
@@ -279,6 +278,10 @@ function hariKerja(dariMs, keMs) {
   return n;
 }
 
+// Kandidat (cek murah sebelum AI). Perlu-tidaknya & isi pesan diputuskan Hermes dari blok FAKTA ([DIAM] boleh) — audit Bruno
+// t_951a932f N2/N4: dulu Node memutuskan jenis "lanjut"/"minta-pic" dan menulisnya sebagai perintah ke cs-wa.
+// 'balas'   : ada pesan lead yang belum kita jawab (20 menit – 3 hari) dan tidak sedang dipegang admin.
+// 'susulan' : lead diam sesudah pesan kita; jeda ≥ 3 hari kerja sejak pesan kita terakhir (rem jeda).
 function jenisProspek(riw, s, now) {
   const user = riw.filter((p) => p.role === 'user');
   if (!user.length || s.stop || user.some((p) => RE_TOLAK.test(p.content))) return null;
@@ -286,15 +289,7 @@ function jenisProspek(riw, s, now) {
   const sesudah = riw.slice(riw.lastIndexOf(user.at(-1)) + 1);
   if (sesudah.some((p) => String(p.content).startsWith('(admin)'))) return null;
   if (!sesudah.length) return now - lastUserT > 20 * 60e3 && now - lastUserT < 3 * 864e5 ? 'balas' : null;
-  const manusia = user.some((p) => !prospekWa.otomatis(p.content));
-  if (manusia) {
-    const hk = hariKerja(lastUserT, now);
-    return s.n === 0 && hk >= 3 ? 'lanjut' : null;
-  }
-  // Balasan kita ke auto-reply biasanya sudah minta PIC: jangan minta lagi (audit 22 Okt: dua kali minta PIC).
-  const sudahMinta = riw.some((p) => p.role === 'assistant' && /\bPIC\b|nomor WA|e-?mail|kontak (yang|orang)/i.test(String(p.content)) &&
-    !/sapaan dari tim sales/.test(String(p.content)));
-  return !sudahMinta && s.n === 0 && hariKerja(riw.at(-1).t || 0, now) >= 2 ? 'minta-pic' : null;
+  return hariKerja(riw.at(-1).t || 0, now) >= 3 ? 'susulan' : null;
 }
 
 // Dua rem keputusan Rama 19 Nov, diperiksa SEBELUM AI dipanggil (cek murah, tabel Hermes A2). Isi & prosedur follow-up tetap milik
@@ -306,6 +301,7 @@ const SUSULAN_LEAD = false;
 //    lead. Sambutan otomatis akun bisnis bukan balasan: dulu sambutan yang masuk 2 detik setelah follow-up mereset hitungan, sehingga
 //    follow-up berputar tiap 3 hari kerja tanpa henti.
 const MAKS_TAK_DIBALAS = 3;
+const MAKS_SUSULAN_HARI = 10; // N9 audit Bruno: semua lead digabung
 function takDibalas(riw) {
   const i = riw.findLastIndex((p) => p.role === 'user' && !prospekWa.otomatis(p.content));
   return riw.slice(i + 1).filter((p) => p.role === 'assistant' && !/^\((admin|catatan sistem)\)/.test(String(p.content))).length;
@@ -315,44 +311,62 @@ async function followupProspek(sock, paused, sudah) {
   const now = Date.now();
   const w = new Date(now + 7 * 3600e3);
   if ([0, 6].includes(w.getUTCDay()) || w.getUTCHours() < 9 || w.getUTCHours() >= 17) return 0;
-  const state = loadJson(PROSPEK_FILE); // { jid: { sejak: t pesan lead terakhir, n, stop } }
+  // { <nomor HP | jid>: { sejak: t pesan MANUSIA terakhir, stop }, _susulan: t siklus susulan terakhir, _hari: { tgl, n } }
+  const state = loadJson(PROSPEK_FILE);
+  const tglHariIni = new Date(now + 7 * 3600e3).toISOString().slice(0, 10);
+  const hari = state._hari?.tgl === tglHariIni ? state._hari : { tgl: tglHariIni, n: 0 };
+  // N9: susulan tidak dipicu restart (siklus pertama jalan 2 menit setelah start) — paling cepat sekali per TICK_MS, maks per hari.
+  const bolehSusulan = SUSULAN_LEAD && now - (state._susulan || 0) >= TICK_MS - 60e3;
+  if (bolehSusulan) state._susulan = now;
+  // N1: state lama per jid (LID & "62…@s.whatsapp.net") dipindah ke satu kunci per orang (nomor HP); stop dari kunci mana pun ikut.
+  for (const k of Object.keys(state)) {
+    const o = k.startsWith('_') ? k : nomorDari(k) || k;
+    if (o === k) continue;
+    state[o] = { ...(state[o] || {}), ...state[k], stop: !!(state[o]?.stop || state[k]?.stop) };
+    delete state[k];
+  }
+  const orangDilihat = new Set();
   let sent = 0;
   for (const jid of semuaProspek()) {
     if (sudah + sent >= MAKS_PER_SIKLUS) break;
     if (paused && paused[jid] > now) continue;
-    const riw = getRiwayat(jid);
-    const lastUserT = riw.filter((p) => p.role === 'user').at(-1)?.t || 0;
-    const s = state[jid]?.sejak === lastUserT ? state[jid] : { sejak: lastUserT, n: 0 };
+    // N1: satu orang = satu hitungan (dulu LID & nomor HP punya state sendiri-sendiri: 31 orang dobel, Yulia n=2 di LID & n=1 di HP).
+    const orang = nomorDari(jid) || jid;
+    if (orangDilihat.has(orang)) continue;
+    orangDilihat.add(orang);
+    const riw = getRiwayat(jid); // gabungan LID + nomor HP
+    const lastManusiaT = riw.filter((p) => p.role === 'user' && !prospekWa.otomatis(p.content)).at(-1)?.t || 0;
+    const lama = state[orang];
+    // N2: hitungan mulai dari pesan MANUSIA terakhir; sambutan otomatis tidak mereset apa pun.
+    const s = lama?.sejak === lastManusiaT ? lama : { sejak: lastManusiaT };
     const jenis = jenisProspek(riw, s, now);
     if (!jenis) continue;
     // 'balas' yang isinya hanya sambutan otomatis = susulan juga (bukan menjawab manusia).
     const menjawabManusia = jenis === 'balas' && riw.slice(riw.findLastIndex((x) => x.role !== 'user') + 1).some((x) => !prospekWa.otomatis(x.content));
-    if (!menjawabManusia && (!SUSULAN_LEAD || takDibalas(riw) >= MAKS_TAK_DIBALAS)) continue;
+    if (!menjawabManusia && (!bolehSusulan || hari.n >= MAKS_SUSULAN_HARI || takDibalas(riw) >= MAKS_TAK_DIBALAS)) continue;
     const p0 = getProspek(jid);
-    const nomor = p0.nomor || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
+    const nomor = p0.nomor || nomorDari(jid) || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
     const pr = await supa.cariProspek(nomor).catch(() => null);
-    const p = { ...p0, segmen: p0.segmen || pr?.segmen };
-    if (pr && (['tolak', 'jangan_hubungi'].includes(pr.status) || /DIPEGANG RAMA/.test(pr.catatan || '') ||
-      (jenis !== 'balas' && /dialihkan ke/.test(pr.catatan || '')))) {
-      state[jid] = { ...s, stop: true }; // PIC sudah disapa / lead menolak: jangan dikejar lagi
+    const p = { ...p0, nomor, segmen: p0.segmen || pr?.segmen };
+    if (pr && (['tolak', 'jangan_hubungi', 'berhenti'].includes(pr.status) || /DIPEGANG RAMA/.test(pr.catatan || '') ||
+      (!menjawabManusia && /dialihkan ke/.test(pr.catatan || '')))) {
+      state[orang] = { ...s, stop: true }; // PIC sudah disapa / lead menolak / berhenti: jangan dikejar lagi
       continue;
     }
+    // N4: tanpa label jenis sebagai perintah — hanya blok FAKTA; isi & perlu-tidaknya = skill mode-kontak-khusus.
+    const fakta = prospekWa.faktaLead(p, riw, pr);
     let msg;
     try {
-      if (jenis === 'balas') {
+      if (menjawabManusia) {
         const i = riw.findLastIndex((x) => x.role !== 'user');
-        msg = await getAIResponse(riw.slice(0, i + 1), riw.slice(i + 1).map((x) => x.content).join('\n'), prospekWa.konteksLead(p));
+        msg = await getAIResponse(riw.slice(0, i + 1), riw.slice(i + 1).map((x) => x.content).join('\n'), fakta);
       } else {
-        // 18 Nov: aturan follow-up lead ada di skill mode-kontak-khusus bagian "Follow-up khusus"; Node hanya fakta.
-        const hari = Math.max(0, Math.round((now - (riw.filter((x) => x.role !== 'user').at(-1)?.t || now)) / 864e5));
-        const tugas = `TUGAS FOLLOW-UP LEAD (${jenis === 'lanjut' ? 'lanjut' : 'balasan otomatis'}): ${p.nama || 'lead ini'}, ` +
-          `${prospekWa.rekanan(p) ? 'calon rekanan' : 'calon klien'} — ikuti skill mode-kontak-khusus bagian "Follow-up khusus".`;
-        msg = await getAIResponse(riw.slice(-30), `${tugas}\nFAKTA: pesan terakhir kita ${hari} hari lalu.`, prospekWa.konteksLead(p));
+        msg = await getAIResponse(riw.slice(-30), 'TUGAS: tulis SATU pesan lanjutan untuk lead ini, atau [DIAM].', fakta);
       }
     } catch (e) { console.error(`[followup-lead] gagal generate ${jid}:`, e.message); continue; }
     msg = String(msg || '');
     if (!msg.trim() || /\[(DIAM|ADMIN_HANDOFF)\]/.test(msg)) { // "masih tertarik"/"follow up" ditahan penjaga Hermes → [DIAM]
-      state[jid] = { ...s, stop: true };
+      state[orang] = { ...s, stop: true };
       console.log(`[followup-lead] ${jid}: ${jenis} tidak dikirim (${msg.replace(/\s+/g, ' ').slice(0, 80)})`);
       continue;
     }
@@ -379,13 +393,15 @@ async function followupProspek(sock, paused, sudah) {
       if (infoUndang) await kirimTelegram(`🤝 ${infoUndang} — wa.me/${nomor}`).catch(() => {});
       if (pr) await supa.catatJawabanProspek(nomor, msg + (pl ? ' [+ pricelist]' : '')).catch(() => {});
       if (info) await kirimTelegram(`🤝 Lead ${p.nama || jid.split('@')[0]}: ${info}`).catch(() => {});
-      state[jid] = { ...s, n: s.n + (jenis === 'balas' ? 0 : 1) };
+      state[orang] = s;
+      if (!menjawabManusia) hari.n++;
       sent++;
-      console.log(`[followup-lead] ${jenis} terkirim ke ${jid} (${p.nama || '-'})`);
+      console.log(`[followup-lead] ${menjawabManusia ? 'balas' : 'susulan'} terkirim ke ${jid} (${p.nama || '-'})`);
     } catch (e) {
       console.error(`[followup-lead] gagal kirim ke ${jid}:`, e.message);
     }
   }
+  state._hari = hari;
   saveJson(PROSPEK_FILE, state);
   if (sent) console.log(`[followup-lead] ${sent} pesan lead terkirim.`);
   return sent;
@@ -462,6 +478,22 @@ function start(getSock) {
 // dari transkrip utuh, dikembalikan ke Tetra Ops lewat hasil perintah; terkirim hanya setelah owner klik Kirim (send-followup).
 async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
   const pesan = transkripGabungan(jid, []);
+  // N8 audit Bruno: lead sales pakai blok FAKTA lead (bukan prosedur follow-up klien); lead berhenti/menolak tidak dibuatkan draf.
+  const p0 = getProspek(jid);
+  if (p0) {
+    const nomor = p0.nomor || nomorDari(jid) || '';
+    const pr = await supa.cariProspek(nomor).catch(() => null);
+    if (pr && ['berhenti', 'jangan_hubungi', 'tolak'].includes(pr.status)) return { ok: false, pesan: `lead ini berstatus ${pr.status} di Tetra Ops — tidak dibuatkan follow-up` };
+    const riw = getRiwayat(jid);
+    if (takDibalas(riw) >= MAKS_TAK_DIBALAS) return { ok: false, pesan: `sudah ${takDibalas(riw)} pesan kita tidak dibalas manusia — aturan Rama: jangan di-follow-up lagi` };
+    const fakta = prospekWa.faktaLead({ ...p0, nomor, segmen: p0.segmen || pr?.segmen }, riw, pr) +
+      `\nFAKTA: owner meminta follow-up dari Tetra Ops (alasan: ${alasan || '-'}).` + (konteks ? `\nKONTEKS DARI TETRA OPS: ${String(konteks).slice(0, 800)}` : '');
+    const m = await getAIResponse(riw.slice(-30), 'TUGAS: tulis SATU pesan lanjutan untuk lead ini, atau [DIAM].', fakta).catch(() => null);
+    const draf = String(m || '').replace(/\[KIRIM:[^\]]*\]/gi, '').trim();
+    if (!draf) return { ok: false, pesan: 'Hermes gagal menulis draf' };
+    if (/\[DIAM\]/i.test(draf)) return { ok: false, pesan: 'Hermes menilai belum ada hal baru yang berguna untuk follow-up lead ini ([DIAM])' };
+    return { ok: true, pesan: draf };
+  }
   // Klien lama dari Tetra Ops (mis. korporat sebelum bot ada, Juni 2026) belum punya riwayat: boleh menyapa dari konteks saja.
   if (!pesan.length && !konteks) return { ok: false, pesan: 'riwayat chat kontak ini kosong di bot; kirim konteks (acara terakhir) untuk menyapa ulang' };
   const panggilan = (pesan.length && namaDariChat(pesan.filter((p) => p.role === 'user').map((p) => p.content).join('\n'))) || 'Kak';
