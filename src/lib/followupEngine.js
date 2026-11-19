@@ -303,6 +303,7 @@ const SUSULAN_LEAD = false;
 //    follow-up berputar tiap 3 hari kerja tanpa henti.
 const MAKS_TAK_DIBALAS = 3;
 const MAKS_SUSULAN_HARI = 10; // N9 audit Bruno: semua lead digabung
+const MAKS_TANYA_KONFIRMASI = 2; // follow-up booking yang hanya menanyakan konfirmasi (nama acara / alamat+Maps) per booking
 function takDibalas(riw) {
   const i = riw.findLastIndex((p) => p.role === 'user' && !prospekWa.otomatis(p.content));
   return riw.slice(i + 1).filter((p) => p.role === 'assistant' && !/^\((admin|catatan sistem)\)/.test(String(p.content))).length;
@@ -430,10 +431,13 @@ async function followupBooking(sock, paused, sudahTerkirim) {
   let sent = 0;
   for (const [jid, b] of Object.entries(booking.semua())) {
     if (sudahTerkirim + sent >= MAKS_PER_SIKLUS) break;
-    if (!booking.aktif(jid) || b.lengkap) continue;
+    // Kontrak Hermes t_0dfeee40 §3: booking lengkap tetap disusul kalau masih ada yang perlu dikonfirmasi (nama acara umum, alamat tanpa
+    // Maps) — tapi paling banyak MAKS_TANYA_KONFIRMASI kali (dulu booking lengkap tidak pernah disusul; jangan jadi tagihan tanpa ujung).
+    const pk = booking.perluKonfirmasi(b);
+    if (!booking.aktif(jid) || (b.lengkap && (!pk.length || (b.konfirmasiDitanya || 0) >= MAKS_TANYA_KONFIRMASI))) continue;
     const sisaHari = b.data.tanggal_iso ? (Date.parse(`${b.data.tanggal_iso}T00:00:00+07:00`) - now) / 864e5 : null;
 
-    if (sisaHari !== null && sisaHari <= 3 && !b.h3) {
+    if (!b.lengkap && sisaHari !== null && sisaHari <= 3 && !b.h3) {
       await booking.laporAdmin(sock, jid, 'H-3 tapi data booking belum lengkap');
       b.h3 = true; booking.simpan();
     }
@@ -445,7 +449,8 @@ async function followupBooking(sock, paused, sudahTerkirim) {
 
     const k = booking.kurang(b).map((x) => x.label);
     const prompt =
-      `TUGAS FOLLOW-UP DATA BOOKING: klien sudah DP; data acara yang masih kurang: ${k.join(', ')}.` +
+      `TUGAS FOLLOW-UP DATA BOOKING: klien sudah DP; ${k.length ? `data acara yang masih kurang: ${k.join(', ')}` : 'data wajib sudah lengkap'}.` +
+      (pk.length ? ` Perlu dikonfirmasi: ${pk.join('; ')}.` : '') +
       (sisaHari !== null ? ` Acaranya ${Math.max(0, Math.ceil(sisaHari))} hari lagi.` : '') +
       ' Ikuti skill mode-kontak-khusus bagian "Follow-up khusus".';
     let msg;
@@ -462,9 +467,11 @@ async function followupBooking(sock, paused, sudahTerkirim) {
       rememberBotMsg(sentMsg);
       deliveryLog.track(sentMsg, 'followup-booking→customer');
       tambahRiwayat(jid, 'assistant', msg);
-      b.terakhirTanya = now; booking.simpan();
+      b.terakhirTanya = now;
+      if (b.lengkap) b.konfirmasiDitanya = (b.konfirmasiDitanya || 0) + 1;
+      booking.simpan();
       sent++;
-      console.log(`[followup-booking] terkirim ke ${jid} (kurang: ${k.join(', ')})`);
+      console.log(`[followup-booking] terkirim ke ${jid} (kurang: ${k.join(', ') || '-'}; konfirmasi: ${pk.join(', ') || '-'})`);
     } catch (e) {
       console.error(`[followup-booking] gagal kirim ke ${jid}:`, e.message);
     }

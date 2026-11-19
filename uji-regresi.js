@@ -112,6 +112,12 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
     assert.deepStrictEqual(frasaKaku(f), [], f);
     assert.ok(frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
   });
+  await kasus('perlu dikonfirmasi: nama acara umum & lokasi tanpa Maps (Rama 19 Nov uji Yessi; kontrak Hermes t_0dfeee40)', () => {
+    const booking = require('./src/lib/booking');
+    assert.deepStrictEqual(booking.perluKonfirmasi({ data: { nama_acara: 'Acara Natal', lokasi: 'Grand Wisata' } }), ['nama resmi acara', 'alamat lengkap + Google Maps']);
+    assert.deepStrictEqual(booking.perluKonfirmasi({ data: { nama_acara: 'Natal 2026', lokasi: 'Grand Wisata, Bekasi', maps: 'https://maps.app.goo.gl/x' } }), ['nama resmi acara']);
+    assert.deepStrictEqual(booking.perluKonfirmasi({ data: { nama_acara: 'Natal Keluarga Besar Samudra', lokasi: 'Gedung X, Bogor', maps: 'https://x' } }), []);
+  });
   await kasus('form per jenis acara: Natal → form keagamaan, bukan "Nama Pengantin" (Rama 19 Nov, Yessi; peta Hermes t_8843a9c1 A2)', () => {
     const booking = require('./src/lib/booking');
     const b = { data: { nama_acara: 'Natal 2026', tanggal: '2 Desember 2026', lokasi: 'Grand Wisata' }, jenis: 'natal' };

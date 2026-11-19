@@ -350,20 +350,34 @@ async function laporBilaBerubah(sock, jid, sebelumLengkap) {
   await laporAdmin(sock, jid, sebelumLengkap ? 'Update data booking' : 'Data booking lengkap');
 }
 
+// Hal yang perlu dikonfirmasi klien walau kolom wajib sudah terisi (kontrak Hermes t_0dfeee40 §2–3; Rama 19 Nov uji Yessi: "Acara Natal"
+// terlalu umum, lokasi tanpa alamat lengkap & Google Maps). Hanya fakta; cara & kapan bertanya = skill form-booking/mode-kontak-khusus.
+const RE_NAMA_UMUM = /^(acara\s+)?(natal|natalan|paskah|gathering|ulang tahun|ultah|wedding|pernikahan|nikahan|khitan|khitanan|aqiqah|akikah|syukuran|tasyakuran|reuni|wisuda|lamaran|seminar|launching)(\s+\d{4})?\s*$/i;
+// Link pencarian biasa (tanpa API Google berbayar, aturan Rama); penjaga-cs menerima link yang tertulis di fakta Node.
+const linkMaps = (lokasi) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lokasi)}`;
+function perluKonfirmasi(b) {
+  const d = b?.data || {};
+  return [RE_NAMA_UMUM.test(String(d.nama_acara || '').trim()) && 'nama resmi acara', d.lokasi && !d.maps && 'alamat lengkap + Google Maps']
+    .filter(Boolean);
+}
+
 // Konteks untuk AI balasan: apa yang sudah terisi & yang masih perlu ditanya.
 function konteksAI(jid) {
   const b = semua[jid];
   if (!b || !aktif(jid)) return '';
   const k = kurang(b);
+  const pk = perluKonfirmasi(b);
   const terisi = FIELD.filter(([key]) => b.data[key]).map(([key, label]) => `${label}=${b.data[key]}`).join('; ');
   // 18 Nov: cara menanggapi tahap booking ada di skill Hermes mode-kontak-khusus; Node hanya fakta.
   return `\n\nTAHAP BOOKING: klien sudah DP; form data sudah dikirim.\nSudah terisi: ${terisi || '-'}\n` +
     (b.dikonfirmasi && Date.now() - b.dikonfirmasi < 5 * 60e3 ? 'REKAP DATA BARU SAJA DIKIRIM ke klien (≤ 5 menit lalu).\n' : '') +
-    (k.length ? `Masih kosong: ${k.map((x) => x.label).join(', ')}.` : 'Data wajib sudah lengkap.');
+    (k.length ? `Masih kosong: ${k.map((x) => x.label).join(', ')}.` : 'Data wajib sudah lengkap.') +
+    (pk.length ? `\nPerlu dikonfirmasi: ${pk.join('; ')}.` : '') +
+    (b.data.lokasi && !b.data.maps ? `\nPERLU KONFIRMASI ALAMAT: lokasi tersimpan "${b.data.lokasi}". Link pencarian Google Maps yang boleh dikirim apa adanya: ${linkMaps(b.data.lokasi)}` : '');
 }
 
 module.exports = {
-  barisForm, barisRekap, jenisGrup, NAMA_JENIS, sudahKatalog,
+  barisForm, barisRekap, jenisGrup, NAMA_JENIS, sudahKatalog, perluKonfirmasi,
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, badanForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
   teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, teksRekap, sinkronOps, isiDariOps,
   semua: () => semua, simpan,
