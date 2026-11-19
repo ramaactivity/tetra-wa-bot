@@ -167,7 +167,8 @@ function teksForm(b, pembuka) {
   return [
     ...(pembuka ? [pembuka, ''] : []),
     // Wajib Hermes (Rama 16 Nov): permintaan mengisi form sudah ada di pembuka tulisan Hermes.
-    ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Kak, tolong dibantu untuk melengkapi form berikut yaa.', '']),
+    // Kalimat cadangan sama dengan skill form-booking (Rama 19 Nov: bukan "langsung aja"/"tolong dibantu"; temuan Hermes t_91ca1ca3).
+    ...(pembuka && process.env.AI_OTAK === 'hermes' ? [] : ['Boleh dibantu untuk dilengkapi formnya Kak', '']),
     badanForm(b),
   ].join('\n');
 }
@@ -231,17 +232,17 @@ async function teruskanKeAdmin(sock, msg) {
 
 // Kirim ke "Booking Masuk" Tetra Ops (POST /api/bot/booking, idempoten per
 // external_id). Hanya kalau isinya berubah sejak kiriman terakhir. Gagal = dicatat,
-// tidak menghentikan alur ke klien; kiriman berikutnya mencoba lagi.
+// tidak menghentikan alur ke klien; kiriman berikutnya mencoba lagi. Kembalian: true = Tetra Ops sudah sama dengan data bot.
 async function sinkronOps(jid) {
   const b = semua[jid];
-  if (!b) return;
+  if (!b) return false;
   // Hanya kunci yang terisi (Hermes t_8843a9c1: null tidak boleh menimpa data yang sudah ada di Tetra Ops) + jenis acara.
   const data = {};
   for (const k of [...FIELD.map(([x]) => x), 'tanggal_iso']) if (b.data[k]) data[k] = b.data[k];
   if (!data.jenis && b.jenis) data.jenis = b.jenis;
-  // Tetra Ops menolak data.catatan > 300 karakter (zod too_big → HTTP 400) dan SELURUH sinkron gagal — Yessi 19 Nov:
-  // catatan 416 karakter membuat Booking Masuk tidak pernah terisi. Potong di 300, tandai dengan elipsis.
-  if (data.catatan && data.catatan.length > 300) data.catatan = `${data.catatan.slice(0, 299).trimEnd()}…`;
+  // Tetra Ops menolak teks > 300 karakter di kolom data mana pun (zod txt max 300 → HTTP 400) dan SELURUH sinkron gagal — Yessi 19 Nov:
+  // catatan 416 karakter membuat Booking Masuk tidak pernah terisi (temuan Hermes afb7af8). Potong di 300, tandai dengan elipsis.
+  for (const k of Object.keys(data)) if (String(data[k]).length > 300) data[k] = `${String(data[k]).slice(0, 299).trimEnd()}…`;
   const body = {
     external_id: `wa:${jid}:${b.mulai}`,
     wa_jid: jid,

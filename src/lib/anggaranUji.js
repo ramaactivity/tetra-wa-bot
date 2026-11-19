@@ -12,7 +12,18 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE_ANGGARAN = process.env.ANGGARAN_UJI_FILE || path.join(__dirname, '..', '..', 'data', 'anggaran-uji.json');
+// Satu berkas jatah untuk semua salinan repo: worktree uji (mis. ../tetra-wa-bot-uji) memakai berkas jatah repo UTAMA (temuan Hermes
+// t_91ca1ca3: tiap worktree punya penghitung sendiri → batas harian bisa terlewati tanpa terlihat).
+function akarRepoUtama() {
+  try {
+    const umum = require('child_process').execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { cwd: __dirname, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return path.dirname(umum);
+  } catch {
+    return path.join(__dirname, '..', '..');
+  }
+}
+const FILE_ANGGARAN = process.env.ANGGARAN_UJI_FILE || path.join(akarRepoUtama(), 'data', 'anggaran-uji.json');
 const FILE_SALDO = process.env.SALDO_SUMOPOD_FILE || path.join(process.env.HOME || '/home/ubuntu', '.hermes', 'profiles', 'tetra-wa-bot', 'saldo-sumopod.json');
 
 // uji_balasan_cron (temuan Hermes t_769ccf81): cron "Belajar cepat CS Mintet" (4×/hari) menguji ±12× per putaran → ±48/hari, 3× jatah

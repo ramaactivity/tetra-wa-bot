@@ -106,7 +106,8 @@ const BAKU_ADMIN = /dipegang admin|aku cek dulu ke admin ya\. Nanti dibalas/i;
   await kasus('data acara setelah DP: form lengkap langsung, bukan dicicil (Rama 11 Nov)', () => {
     const booking = require('./src/lib/booking');
     const f = booking.teksForm({ data: { tanggal: '22 November', paket: 'Unlimited 8 jam' }, jenis: 'wedding' }, '');
-    assert.match(f, /tolong dibantu untuk melengkapi form berikut/i, f);
+    assert.match(f, /Boleh dibantu untuk dilengkapi formnya Kak/, f);
+    assert.doesNotMatch(f, /langsung aja|tolong dibantu/i, f);
     assert.match(f, /Tanggal Event: 22 November/, f);
     assert.deepStrictEqual(frasaKaku(f), [], f);
     assert.ok(frasaKaku('Kak, biar desain frame-nya bisa mulai dikerjakan, aku butuh nama acara. Sisanya boleh nyusul, dicicil juga nggak masalah.').length);
