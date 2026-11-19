@@ -297,6 +297,20 @@ function jenisProspek(riw, s, now) {
   return !sudahMinta && s.n === 0 && hariKerja(riw.at(-1).t || 0, now) >= 2 ? 'minta-pic' : null;
 }
 
+// Dua rem keputusan Rama 19 Nov, diperiksa SEBELUM AI dipanggil (cek murah, tabel Hermes A2). Isi & prosedur follow-up tetap milik
+// skill Hermes (mode-kontak-khusus "Follow-up khusus").
+// 1. "pesan followup nya juga kebanyakan salah" → susulan ke lead (lanjut / minta-pic / menjawab sambutan otomatis) DIHENTIKAN sampai
+//    isinya dibereskan Hermes dan Rama setuju. Balasan ke lead yang membalas sungguhan tetap jalan. Nyalakan lagi hanya atas izin Rama.
+const SUSULAN_LEAD = false;
+// 2. "kalau udah 3x ga dibalas yaudah jangan di followup lagi. takutnya malah spam" → maks 3 pesan kita sesudah pesan MANUSIA terakhir
+//    lead. Sambutan otomatis akun bisnis bukan balasan: dulu sambutan yang masuk 2 detik setelah follow-up mereset hitungan, sehingga
+//    follow-up berputar tiap 3 hari kerja tanpa henti.
+const MAKS_TAK_DIBALAS = 3;
+function takDibalas(riw) {
+  const i = riw.findLastIndex((p) => p.role === 'user' && !prospekWa.otomatis(p.content));
+  return riw.slice(i + 1).filter((p) => p.role === 'assistant' && !/^\((admin|catatan sistem)\)/.test(String(p.content))).length;
+}
+
 async function followupProspek(sock, paused, sudah) {
   const now = Date.now();
   const w = new Date(now + 7 * 3600e3);
@@ -311,6 +325,9 @@ async function followupProspek(sock, paused, sudah) {
     const s = state[jid]?.sejak === lastUserT ? state[jid] : { sejak: lastUserT, n: 0 };
     const jenis = jenisProspek(riw, s, now);
     if (!jenis) continue;
+    // 'balas' yang isinya hanya sambutan otomatis = susulan juga (bukan menjawab manusia).
+    const menjawabManusia = jenis === 'balas' && riw.slice(riw.findLastIndex((x) => x.role !== 'user') + 1).some((x) => !prospekWa.otomatis(x.content));
+    if (!menjawabManusia && (!SUSULAN_LEAD || takDibalas(riw) >= MAKS_TAK_DIBALAS)) continue;
     const p0 = getProspek(jid);
     const nomor = p0.nomor || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
     const pr = await supa.cariProspek(nomor).catch(() => null);
@@ -464,4 +481,4 @@ async function drafFollowup(jid, { alasan = '', konteks = '' } = {}) {
   return { ok: true, pesan: draf };
 }
 
-module.exports = { drafFollowup, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, generateFollowupMessage, cleanName, namaDariChat };
+module.exports = { drafFollowup, start, runFollowupCycle, followupBooking, followupProspek, _jenisProspek: jenisProspek, _takDibalas: takDibalas, _SUSULAN_LEAD: SUSULAN_LEAD, generateFollowupMessage, cleanName, namaDariChat };
