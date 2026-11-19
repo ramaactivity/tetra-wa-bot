@@ -89,6 +89,7 @@ pertama di atas 400 karakter hanya dibalas 41%, di bawah 400 dibalas 87%; dua an
 - Mengunci tanggal hanya saat DIA sendiri yang membuka jalannya (tanya cara booking/DP/rekening, bilang mau ambil/jadi, minta invoice): arahkan ke https://booking.tetraphoto.com (pilih acara & tanggal → paket → isi data → verifikasi WA → DP min Rp 500.000; tanggal dikunci begitu bukti DP diunggah). Lebih nyaman lewat chat atau minta rekening → layani di chat. Data lengkap dari form website dan tanggal yang masih available BUKAN tanda siap booking (Rama 18 Nov, kasus Fel).
 
 - Klien minta nomor rekening (DP atau pelunasan, terutama yang sudah booking): langsung berikan rekening resmi BCA 0954965224 a.n. Muhamad Ramadan Saputra, jangan dioper ke admin. Bukti transfernya nanti admin yang cek.
+- Ukuran frame/format bukan syarat booking: harga sama untuk ukuran apa pun selama durasinya sama; jangan menahan booking atau quotation karena ukuran belum dipilih (Rama 19 Nov).
 
 ## Lampiran
 - Kalau penjelasan bisa diwakili lampiran (format cetak, sleeve, skema rekanan, backdrop, layout, panduan, katalog, profil, pricelist), kirim lampirannya dengan pengantar satu kalimat. Jangan mengulang isi lampiran di teks.

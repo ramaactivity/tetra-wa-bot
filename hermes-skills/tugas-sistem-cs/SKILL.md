@@ -28,8 +28,16 @@ BOLEH" di data tugas.
   klien yang dipakai.
 - jenis: salah satu dari Wedding, Lamaran, Keluarga (ulang tahun/khitan/aqiqah/tasyakuran), Korporat, Sekolah/Kampus/Wisuda,
   Keagamaan/Komunitas (Natal/Paskah/pengajian/arisan), Lainnya. "Acara Natal" → Keagamaan/Komunitas; "ultah Arka ke-5" → Keluarga.
+- nama_acara: pakai nama RESMI acara yang klien sebut (mis. "Natal Keluarga Besar Samudra", "Gathering Tahunan PT Maju"). Klien baru
+  menyebut jenisnya ("acara natal", "gathering", "ulang tahun") → tulis jenisnya apa adanya, jangan mengarang nama resmi. Klien
+  mengonfirmasi nama resmi sesudahnya → nilai baru itu yang dipakai (menimpa yang umum).
 - lokasi: daerah yang disebut klien juga lokasi ("di daerah Grand Wisata" → "Grand Wisata"); jangan kosongkan hanya karena tidak
-  ada nama gedung.
+  ada nama gedung. Klien menyebut alamat lengkap (jalan, blok, kelurahan, kota) → tulis utuh, kota tetap di belakang koma terakhir.
+- maps: HANYA link yang dikirim/dikonfirmasi klien (termasuk link pencarian yang dia bilang betul). Jangan mengarang alamat lengkap
+  atau link.
+- backdrop: klien memilih backdrop cetak/banner (bukan kain polos dari Tetra, bukan dekorasi venue) → nilai WAJIB memuat kata
+  "banner", mis. "Cetak banner (desain klien)" + ukuran kalau disebut; jangan ditulis "dekorasi klien" saja. Warna kain basic →
+  tulis warnanya saja.
 - instansi, logo, tema, pose: isi kalau kunci itu ada di daftar KUNCI YANG BOLEH dan nilainya disebut klien (logo cukup "ada" atau
   nama file; pose = jumlah pose/layout).
 - paket: SELALU sertakan nama layanannya (Photobooth, Videobooth 360, Photo Stage, Magazine Box, atau gabungannya) + durasi,
@@ -45,7 +53,11 @@ Susun permintaan quotation photobooth dari chat WhatsApp. Keluaran HANYA objek J
 - Isi hanya yang disebut/disepakati di chat; yang tidak ada tulis null (atau array kosong). Jangan menebak, jangan isi harga atau diskon.
 - Lokasi dicari di SELURUH chat: venue = nama gedung/tempat ATAU daerah yang klien sebut ("di daerah Grand Wisata" → "Grand
   Wisata"); kota = kota/kabupaten tempat itu kalau jelas dari chat atau dari nama tempatnya yang terkenal (Grand Wisata →
-  Bekasi, Sentul → Bogor).
+  Bekasi, Sentul → Bogor). Klien menyebut alamat lengkap (jalan, blok, kelurahan) → tulis utuh di venue, jangan dipersingkat.
+- Ukuran cetak/format dan backdrop yang belum diputuskan klien → null; JANGAN menahan atau menunda quotation karena ukuran belum
+  final: harga sama untuk ukuran apa pun selama durasinya sama.
+- Backdrop cetak banner dari klien: tulis di catatan dengan kata "banner" (mis. "backdrop cetak banner, desain klien"); nilai
+  backdrop hanya untuk kain/dekorasi yang memang dipilih klien.
 - format hanya untuk photobooth; jam = durasi layanan dalam jam (bilangan bulat). qty = jumlah unit/booth layanan itu di acara
   yang sama ("2 booth", "x 2 unit"); tidak disebut = 1; jumlah tamu atau jam BUKAN qty.
 - addons[].nama WAJIB persis salah satu dari "DAFTAR ADD-ON RESMI" di data tugas; add-on yang tidak ada di daftar masukkan ke catatan.
