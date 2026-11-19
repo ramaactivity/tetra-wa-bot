@@ -464,7 +464,8 @@ async function catatBalasanProspek(nomor, teks, nama, otomatis) {
   const jam = jamWib();
   const baris = `Balasan WA ${otomatis ? 'otomatis ' : ''}${jam} dari ${nomor}${nama ? ` (${nama})` : ''}: "${String(teks).replace(/\s+/g, ' ').slice(0, 600)}"`;
   const patch = { catatan: [p.catatan, baris].filter(Boolean).join('\n'), updated_at: new Date().toISOString() };
-  if (!otomatis && ['disapa', 'follow_up'].includes(p.status)) patch.status = 'membalas';
+  // `berhenti` (3× tak dibalas, 19 Nov) hidup lagi kalau lead membalas sungguhan; tolak/jangan_hubungi tidak.
+  if (!otomatis && ['disapa', 'follow_up', 'berhenti'].includes(p.status)) patch.status = 'membalas';
   const { error } = await supa.from('prospek').update(patch).eq('id', p.id);
   if (error) throw new Error(error.message);
   // Klien lama = pelanggan Tetra: balasannya dilayani CS (dengan konteks acara lamanya, tanpa pricelist).

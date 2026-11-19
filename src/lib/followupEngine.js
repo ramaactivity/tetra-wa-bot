@@ -12,6 +12,7 @@
 // dengan jeda minimal 1 hari dan maksimal 1 pesan per 7 hari per kontak.
 const path = require('path');
 const supa = require('./supa');
+const { postOps } = require('./availability');
 const { getAIResponse, nilaiFollowup, RE_PENUTUP } = require('./ai');
 const lampiranLib = require('./lampiran');
 const undangVendor = require('./undangVendor');
@@ -339,6 +340,18 @@ async function followupProspek(sock, paused, sudah) {
     const lama = state[orang];
     // N2: hitungan mulai dari pesan MANUSIA terakhir; sambutan otomatis tidak mereset apa pun.
     const s = lama?.sejak === lastManusiaT ? lama : { sejak: lastManusiaT };
+    // N3: aturan Rama "kalau udah 3x ga dibalas yaudah jangan di followup lagi" ditulis ke Tetra Ops (status berhenti) supaya SEMUA jalur
+    // (tombol Follow-up, Bruno/MCP, statistik) ikut berhenti. Sekali per "pesan manusia terakhir"; lead yang membalas lagi hidup kembali.
+    const tertunda = riw.slice(riw.findLastIndex((x) => x.role !== 'user') + 1).some((x) => !prospekWa.otomatis(x.content));
+    if (!tertunda && takDibalas(riw) >= MAKS_TAK_DIBALAS && s.berhentiOps !== lastManusiaT) {
+      const nomorB = getProspek(jid)?.nomor || nomorDari(jid);
+      const r = nomorB ? await postOps('/api/bot/prospek/berhenti', { nomor: nomorB, alasan: 'tak_dibalas_3x', catatan: `${takDibalas(riw)} pesan kita tak dibalas manusia (bot WA)` }) : { ok: false, status: 'tanpa nomor' };
+      if (r.ok) {
+        s.berhentiOps = lastManusiaT;
+        state[orang] = s;
+        console.log(`[followup-lead] ${orang}: berhenti di Tetra Ops (tak dibalas ${takDibalas(riw)}×) — diubah ${r.json.diubah?.length || 0}, tetap ${r.json.tetap?.length || 0}`);
+      } else console.error(`[followup-lead] ${orang}: gagal tandai berhenti (HTTP ${r.status}) — dicoba siklus berikutnya`);
+    }
     const jenis = jenisProspek(riw, s, now);
     if (!jenis) continue;
     // 'balas' yang isinya hanya sambutan otomatis = susulan juga (bukan menjawab manusia).
@@ -348,8 +361,9 @@ async function followupProspek(sock, paused, sudah) {
     const nomor = p0.nomor || nomorDari(jid) || await prospekWa.nomorPengirim(sock, { key: { remoteJid: jid } }).catch(() => '');
     const pr = await supa.cariProspek(nomor).catch(() => null);
     const p = { ...p0, nomor, segmen: p0.segmen || pr?.segmen };
-    if (pr && (['tolak', 'jangan_hubungi', 'berhenti'].includes(pr.status) || /DIPEGANG RAMA/.test(pr.catatan || '') ||
-      (!menjawabManusia && /dialihkan ke/.test(pr.catatan || '')))) {
+    // berhenti hanya menghentikan SUSULAN; lead berhenti yang membalas sungguhan tetap dijawab (audit §5.2).
+    if (pr && (['tolak', 'jangan_hubungi'].includes(pr.status) || /DIPEGANG RAMA/.test(pr.catatan || '') ||
+      (!menjawabManusia && (pr.status === 'berhenti' || /dialihkan ke/.test(pr.catatan || ''))))) {
       state[orang] = { ...s, stop: true }; // PIC sudah disapa / lead menolak / berhenti: jangan dikejar lagi
       continue;
     }
