@@ -6,7 +6,7 @@
 const live = require('../lib/liveConfig');
 const supa = require('../lib/supa');
 const { proto, downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu } = require('../lib/store');
+const { HANDOFF_AI_MS, getRiwayat, getRingkasan, tambahRiwayat, getProspek, tandaiProspek, gabungSejarah, sudahSejarah, rangkumBilaPerlu, catatAlias, nomorDari } = require('../lib/store');
 const { syncToSheet } = require('../lib/sheetSync');
 const { extractText } = require('../lib/rules');
 const { botSentIds } = require('../lib/botMessages');
@@ -169,6 +169,8 @@ function phoneDigits(msg) {
     // Baileys 7: nomor HP ada di remoteJidAlt (senderPn = nama lama di 6.x).
     const pn = msg.key?.remoteJidAlt || msg.key?.senderPn;
     if (pn && pn.includes('@')) return pn.split('@')[0];
+    const hp = nomorDari(jid); // pasangan LID→HP yang sudah tercatat (pesan admin/fromMe sering tanpa remoteJidAlt)
+    if (hp) return hp;
   }
   return jid.split('@')[0];
 }
@@ -534,11 +536,10 @@ function registerMessageHandler(sock) {
     try {
       const b = booking.get(jid);
       const sebelum = b.lengkap;
-      const pesan = getRiwayat(jid).slice(-16);
+      const pesan = getRiwayat(jid).slice(-24);
       if (teksBaru) pesan.push({ role: 'user', content: teksBaru });
-      const ringkasan = getRingkasan(jid);
-      if (ringkasan) pesan.unshift({ role: 'assistant', content: `CATATAN KLIEN: ${ringkasan}` });
-      booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD));
+      // Ringkasan = fakta klien dari chat lama, blok terpisah (dulu bubble TETRA "CATATAN KLIEN:" → dianggap catatan bot, form Yessi kosong).
+      booking.perbarui(jid, await ekstrakBooking(b.data, pesan, booking.FIELD, getRingkasan(jid)));
       await booking.sinkronOps(jid);
       await booking.laporBilaBerubah(sock, jid, sebelum);
       if (konfirmasi) await booking.kirimKonfirmasi(sock, jid, pembukaRekap(jid));
@@ -553,7 +554,7 @@ function registerMessageHandler(sock) {
   // (skill form-booking); form resmi (label & isian data sistem) ditempel Node di posisi penanda [KIRIM: form]. Tanpa ambang di
   // Node: dulu klien yang sudah mengirim datanya sendiri tetap dapat template panjang (…2977, …4035, …5611).
   const mulaiBooking = async (jid, msg, sumber, { situasi, cadangan, pesanKlien = '' }, judulAdmin) => {
-    const b = booking.mulai(jid, sumber, msg?.pushName, msg ? phoneDigits(msg) : null);
+    const b = booking.mulai(jid, sumber, msg?.pushName, nomorDari(jid)); // null kalau nomor HP belum diketahui, bukan digit LID
     b.jenis = smart.parseLeadDetails(fullUserText(jid, '')).jenisAcara || '';
     await perbaruiBooking(jid, null, false);
     const isian = booking.barisForm(b).map((x) => `- ${x.label}: ${x.asli || '(kosong)'}`).join('\n');
@@ -827,7 +828,7 @@ function registerMessageHandler(sock) {
           tambahRiwayat(jid, 'user', originalText);
           if (booking.aktif(jid)) {
             const b = booking.get(jid);
-            b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
+            b.nama = b.nama || msg.pushName; b.phone = nomorDari(jid) || b.phone;
             await perbaruiBooking(jid, null);
             const ack = wajibHermes()
               ? await aiLib.kalimatHermes(`Klien mengirim ${soalBayar ? 'bukti bayar/pelunasan' : 'file/gambar'} di tahap booking. Sistem sudah meneruskannya ke tim untuk dicek. Jangan bilang pembayaran sudah diterima.`,
@@ -903,7 +904,7 @@ function registerMessageHandler(sock) {
       // ── 5. AI dengan konteks lead ──
       if (booking.aktif(jid)) {
         const b = booking.get(jid);
-        b.nama = b.nama || msg.pushName; b.phone = b.phone || phoneDigits(msg);
+        b.nama = b.nama || msg.pushName; b.phone = nomorDari(jid) || b.phone;
         await perbaruiBooking(jid, originalText);
       }
       const kBooking = lead || vendor ? '' : await klienBooking.konteks(phoneDigits(msg));
@@ -1084,6 +1085,7 @@ function registerMessageHandler(sock) {
     if (type !== 'notify') return;
     for (const msg of messages) {
       const jid = msg.key?.remoteJid;
+      catatAlias(jid, msg.key?.remoteJidAlt || msg.key?.senderPn); // LID ↔ nomor HP = satu orang (store.js)
       // Stub CIPHERTEXT (2) = pesan gagal didekripsi (Bad MAC). Dicatat per JID
       // supaya ketahuan apakah pesan klien yang hilang atau cuma grup/status.
       if (msg.messageStubType === 2) {

@@ -76,15 +76,74 @@ const RIWAYAT_TTL_MS = 90 * 24 * 3600 * 1000;
 
 const aktif = (jid) => riwayat[jid] && Date.now() - riwayat[jid].ts <= RIWAYAT_TTL_MS;
 
+// ---------- satu orang = satu riwayat (LID + nomor HP) ----------
+// WhatsApp memberi satu kontak dua alamat: LID (id privasi, "...@lid") dan nomor HP ("62...@s.whatsapp.net"). Riwayat disimpan per
+// alamat, jadi chat Yessi (19 Nov) terbelah: obrolan acara di LID, invoice di nomor HP → form & Booking Masuk kosong, client_wa null.
+// Rancangan Hermes (kartu t_8843a9c1 A1.1): pembacaan riwayat/ringkasan/profil menggabungkan kedua alamat; PENYIMPANAN tetap per
+// alamat (tujuan kirim & data lama tidak berubah). Pasangan alamat hanya dari Baileys: remoteJidAlt/senderPn pesan masuk (catatAlias)
+// atau file lid-mapping-* yang ditulis Baileys di auth_info (dibaca saja). data/jid-alias.json = cache supaya tetap ingat setelah
+// pairing ulang menghapus auth_info. Tidak pernah menebak nomor.
+const ALIAS_FILE = path.join(DATA_DIR, 'jid-alias.json');
+const AUTH_DIR = path.join(DATA_DIR, '..', 'auth_info');
+const alias = loadJson(ALIAS_FILE); // lid -> nomor HP (digit)
+const RE_HP = /^\d{8,15}$/;
+const idDari = (jid) => String(jid || '').split('@')[0].split(':')[0];
+
+function simpanAlias(lid, pn) {
+  if (!RE_HP.test(lid) || !RE_HP.test(pn) || alias[lid] === pn) return;
+  alias[lid] = pn;
+  saveJson(ALIAS_FILE, alias);
+}
+function dariAuth(nama) {
+  try { return String(JSON.parse(fs.readFileSync(path.join(AUTH_DIR, nama), 'utf-8'))); } catch { return ''; }
+}
+function pnDariLid(lid) {
+  if (!alias[lid]) simpanAlias(lid, dariAuth(`lid-mapping-${lid}_reverse.json`));
+  return alias[lid] || null;
+}
+function lidDariPn(pn) {
+  const ada = Object.keys(alias).filter((l) => alias[l] === pn);
+  if (ada.length) return ada;
+  const lid = dariAuth(`lid-mapping-${pn}.json`);
+  simpanAlias(lid, pn);
+  return alias[lid] === pn ? [lid] : [];
+}
+// Dari pesan masuk/keluar: remoteJid LID + remoteJidAlt/senderPn nomor HP (atau sebaliknya).
+function catatAlias(jid, alt) {
+  const [a, b] = [String(jid || ''), String(alt || '')];
+  if (a.endsWith('@lid') && b.endsWith('@s.whatsapp.net')) simpanAlias(idDari(a), idDari(b));
+  else if (b.endsWith('@lid') && a.endsWith('@s.whatsapp.net')) simpanAlias(idDari(b), idDari(a));
+}
+// Nomor HP (digit) sebuah jid, null kalau belum diketahui (LID tanpa pasangan, grup).
+function nomorDari(jid) {
+  const s = String(jid || '');
+  if (s.endsWith('@lid')) return pnDariLid(idDari(s));
+  return s.endsWith('@s.whatsapp.net') && RE_HP.test(idDari(s)) ? idDari(s) : null;
+}
+// Semua alamat milik orang yang sama, alamat yang ditanya duluan.
+function grup(jid) {
+  const s = String(jid || '');
+  if (s.endsWith('@lid')) { const pn = pnDariLid(idDari(s)); return pn ? [s, `${pn}@s.whatsapp.net`] : [s]; }
+  if (s.endsWith('@s.whatsapp.net')) return [s, ...lidDariPn(idDari(s)).map((l) => `${l}@lid`)];
+  return [s];
+}
+const grupAktif = (jid) => grup(jid).filter(aktif);
+const mentah = (jid) => (aktif(jid) ? riwayat[jid].pesan || [] : []); // per alamat: untuk menulis
+
 function getRiwayat(jid) {
-  return aktif(jid) ? riwayat[jid].pesan || [] : [];
+  const g = grupAktif(jid);
+  if (g.length < 2) return g.length ? mentah(g[0]) : [];
+  return g.flatMap(mentah).sort((x, y) => (x.t || 0) - (y.t || 0)); // tiap pesan hanya ditulis ke satu alamat: tidak ada dobel
 }
 
+// Ringkasan tiap alamat merangkum pesannya sendiri, jadi digabung semua.
 function getRingkasan(jid) {
-  return aktif(jid) ? riwayat[jid].ringkasan || '' : '';
+  return [...new Set(grupAktif(jid).map((k) => riwayat[k].ringkasan).filter(Boolean))].join('\n\n');
 }
 // Profil klien V2 (karakter, kebutuhan, keberatan, tahap) yang diperbarui tiap giliran; catatan internal, tidak pernah dikirim.
-const getProfil = (jid) => (aktif(jid) && riwayat[jid].profil) || '';
+// Profil ditulis ulang utuh tiap giliran (bukan per alamat), jadi diambil satu: milik alamat ini, kalau kosong milik pasangannya.
+const ambilSatu = (jid, kunci) => grupAktif(jid).map((k) => riwayat[k][kunci]).find(Boolean) || null;
+const getProfil = (jid) => ambilSatu(jid, 'profil') || '';
 const simpanProfil = (jid, profil) => simpanKontak(jid, { profil });
 
 function simpanKontak(jid, patch) {
@@ -98,13 +157,13 @@ function simpanKontak(jid, patch) {
 
 // Lead sales (bukan klien lama) yang membalas sapaan: ditandai di riwayat supaya
 // mode rekanan & follow-up lead tetap berlaku setelah restart.
-const getProspek = (jid) => (aktif(jid) && riwayat[jid].prospek) || null;
+const getProspek = (jid) => ambilSatu(jid, 'prospek'); // sapaan sales ke nomor HP, balasan sering datang dari LID
 const tandaiProspek = (jid, info) => simpanKontak(jid, { prospek: info });
 const semuaProspek = () => Object.keys(riwayat).filter((j) => getProspek(j));
 
 function tambahRiwayat(jid, role, content) {
   if (!content) return;
-  simpanKontak(jid, { pesan: [...getRiwayat(jid), { role, content, t: Date.now() }].slice(-RIWAYAT_MAKS) });
+  simpanKontak(jid, { pesan: [...mentah(jid), { role, content, t: Date.now() }].slice(-RIWAYAT_MAKS) });
 }
 
 function lupakanRiwayat(jid) {
@@ -117,7 +176,7 @@ function lupakanRiwayat(jid) {
 // entri sebelum sejakMs, dan isi-ulang Supabase "(pesan ...)" yang cuma sisi klien.
 // Halaman berikutnya (lebih tua lagi) cukup ditaruh di depan.
 function gabungSejarah(jid, lama, sejakMs, halamanPertama) {
-  let kini = getRiwayat(jid);
+  let kini = mentah(jid);
   if (halamanPertama) {
     kini = kini.filter((p) => p.t && p.t >= sejakMs && !String(p.content).startsWith('(pesan '));
   }
@@ -129,12 +188,12 @@ const sudahSejarah = (jid) => !!(aktif(jid) && riwayat[jid].sejarah);
 // Rangkum pesan lama bila riwayat kepanjangan. `fn` = ai.ringkasPercakapan,
 // disuntik dari pemanggil supaya store tidak bergantung ke modul AI.
 async function rangkumBilaPerlu(jid, fn) {
-  const pesan = getRiwayat(jid);
+  const pesan = mentah(jid); // per alamat: ringkasan alamat lain tidak ikut dilipat ke sini (getRingkasan menggabung saat dibaca)
   if (pesan.length <= RINGKAS_SETELAH) return;
   const lama = pesan.slice(0, pesan.length - SISAKAN);
-  const ringkasan = await fn(getRingkasan(jid), lama);
+  const ringkasan = await fn((aktif(jid) && riwayat[jid].ringkasan) || '', lama);
   if (!ringkasan) return;
-  simpanKontak(jid, { ringkasan, pesan: getRiwayat(jid).slice(lama.length) });
+  simpanKontak(jid, { ringkasan, pesan: mentah(jid).slice(lama.length) });
   console.log(`[riwayat] ${jid.split('@')[0]}: ${lama.length} pesan lama dirangkum jadi catatan klien`);
 }
 
@@ -174,6 +233,8 @@ module.exports = {
   getRiwayat,
   getRingkasan,
   getProfil,
+  catatAlias,
+  nomorDari,
   simpanProfil,
   tambahRiwayat,
   getProspek,

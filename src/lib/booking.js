@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 const live = require('./liveConfig');
-const { loadJson, saveJson, tambahRiwayat, getRiwayat } = require('./store');
+const { loadJson, saveJson, tambahRiwayat, nomorDari } = require('./store');
 const { rememberBotMsg } = require('./botMessages');
 const deliveryLog = require('./deliveryLog');
 const { sendDocument } = require('./sender');
@@ -190,13 +190,14 @@ async function teruskanKeAdmin(sock, msg) {
 async function sinkronOps(jid) {
   const b = semua[jid];
   if (!b) return;
+  // Hanya kunci yang terisi (Hermes t_8843a9c1: null tidak boleh menimpa data yang sudah ada di Tetra Ops) + jenis acara.
   const data = {};
-  for (const [k] of FIELD) data[k] = b.data[k] || null;
-  data.tanggal_iso = b.data.tanggal_iso || null;
+  for (const k of [...FIELD.map(([x]) => x), 'tanggal_iso']) if (b.data[k]) data[k] = b.data[k];
+  if (b.jenis) data.jenis = b.jenis;
   const body = {
     external_id: `wa:${jid}:${b.mulai}`,
     wa_jid: jid,
-    client_wa: /^\d{8,15}$/.test(String(b.phone || '')) ? String(b.phone) : null,
+    client_wa: nomorDari(jid), // nomor HP asli (LID dipetakan), null kalau belum diketahui — bukan digit LID
     client_name: b.nama || null,
     sumber: b.sumber === 'admin' ? 'admin' : 'bukti-transfer',
     dp_dilaporkan_at: new Date(b.mulai).toISOString(),
@@ -269,12 +270,9 @@ function konteksAI(jid) {
     (k.length ? `Masih kosong: ${k.map((x) => x.label).join(', ')}.` : 'Data wajib sudah lengkap.');
 }
 
-// Riwayat pendek untuk ekstraksi (pesan terbaru paling relevan).
-const riwayatUntukEkstrak = (jid) => getRiwayat(jid).slice(-16);
-
 module.exports = {
   barisForm, barisRekap, isWedding,
   FIELD, get, aktif, kurang, mulai, perbarui, teksForm, badanForm, teksKonfirmasi, kirimKonfirmasi, kirimTeks, kirimKatalog,
-  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, riwayatUntukEkstrak, teksRekap, sinkronOps,
+  teruskanKeAdmin, laporAdmin, laporBilaBerubah, konteksAI, teksRekap, sinkronOps,
   semua: () => semua, simpan,
 };

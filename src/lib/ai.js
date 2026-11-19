@@ -217,10 +217,13 @@ async function ringkasPercakapan(ringkasanLama, pesan) {
 }
 
 // Isi form data acara dari chat (klien sering mencicil). Kunci yang boleh = FIELD booking (data, bukan aturan).
-async function ekstrakBooking(dataLama, pesan, field) {
+// ringkasan = catatan klien dari chat lama: blok fakta tersendiri, bukan bubble TETRA (Hermes t_8843a9c1 A1.4).
+async function ekstrakBooking(dataLama, pesan, field, ringkasan = '') {
   const daftar = field.map(([k, label]) => `- ${k}: ${label}`).join('\n');
   return jsonDari(await tugasHermes('isi-data-booking', `HARI INI: ${hariIniWIB()}\nKUNCI YANG BOLEH:\n${daftar}\n` +
-    `- tanggal_iso: tanggal acara format YYYY-MM-DD\n\nDATA SAAT INI:\n${JSON.stringify(dataLama)}\n\nCHAT TERBARU:\n${barisChat(pesan)}`)) || {};
+    `- tanggal_iso: tanggal acara format YYYY-MM-DD\n\nDATA SAAT INI:\n${JSON.stringify(dataLama)}\n\n` +
+    `${ringkasan ? `CATATAN KLIEN (fakta dari chat sebelumnya — pakai untuk mengisi kolom):\n${ringkasan}\n\n` : ''}` +
+    `CHAT TERBARU:\n${barisChat(pesan)}`)) || {};
 }
 
 // Permintaan quotation (kontrak Tetra Ops /api/bot/quotation). Harga dihitung Tetra Ops, bukan di sini.
